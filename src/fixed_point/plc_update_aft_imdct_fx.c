@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "defines.h"
 
@@ -14,31 +15,22 @@
 
 
 
+static void processPLCcomputeStabFac(Word16 scf_q[], Word16 old_scf_q[], Word16 prev_bfi, Word16 *stab_fac);
+
 void processPLCUpdateAfterIMDCT_fx(Word16 x_fx[], Word16 q_fx_exp, Word16 concealMethod, Word16 xLen, Word16 fs_idx,
    Word16 *nbLostFramesInRow, Word16 *prev_prev_bfi, Word16 *prev_bfi, Word16 bfi, Word16 scf_q[],
    Word16 *ns_cum_alpha, AplcSetup *plcAd)
 {
-#ifdef BE_MOVED_STAB_FAC
-   Word16  oldLen, bufHistlen;
+   Word16  oldLen, usedHistlen;
    Word16  scale_fac_old, scale_fac_new, q_theo_new_old, q_theo_new_new, q_new, shift_old, shift_new;
    Word16 frontLen, pastLen;
    Word16 marginOldPast;
    Word16 scale_fac_old_dual;
    Word16   marginNewXlen, marginOldFront;
-#else
-   Word16  oldLen, bufHistlen, d;
-   Counter i;
-   Word16  scale_fac_old, scale_fac_new, q_theo_new_old, q_theo_new_new, q_new, shift_old, shift_new;
-   Word16 frontLen, pastLen;
-   Word16 marginOldPast;
-   Word16 scale_fac_old_dual;
-   Word32  tmp32;
-   Word16   marginNewXlen, marginOldFront;
-#endif
 
 #ifdef DYNMEM_COUNT
    Dyn_Mem_In("processPLCUpdateAfterIMDCT_fx", sizeof(struct {
-      Word16  oldLen, bufHistlen;
+      Word16  oldLen, usedHistlen;
       Counter i;
       Word16 scale_fac_old, scale_fac_new, q_theo_new_old, q_theo_new_new, q_new, shift_old, shift_new;
       Word16 frontLen, pastLen;
@@ -56,38 +48,32 @@ void processPLCUpdateAfterIMDCT_fx(Word16 x_fx[], Word16 q_fx_exp, Word16 concea
   
    if (plcAd)
    {
-#ifdef       NONBE_FIX_PCMHIST_LENGTHS
       /* for  short NB frames(2.5 ms)  TDC-filtering  requires  more PCM samples than  the plc_xcorr function */
-      bufHistlen = s_max(xLen,  add(M + 1, shr(xLen, 1))) ; 
-
-      bufHistlen = add(pitch_max[fs_idx], bufHistlen );       
-#else
-      bufHistlen = add(pitch_max[fs_idx], xLen);
-#endif
+      usedHistlen = plcAd->max_len_pcm_plc;
 
 
       logic16();
       IF( (sub(bfi,1)== 0 )  && sub(concealMethod, 2) == 0)
       {   /* % reduced buffering update length during concealment method 2 as Xsav_fx is stored in the  joint  q_old_fx and x_old_tot_fx buffer */
-         bufHistlen = sub(bufHistlen, sub(LprotSzPtr[fs_idx], s_min(MAX_BW_BIN, xLen)));
+         usedHistlen = sub(usedHistlen, sub(LprotSzPtr[fs_idx], s_min(MAX_BW_BIN, xLen)));
          ASSERT(xLen == (Word16)(((double)LprotSzPtr[fs_idx])*0.625)); /*/ only enter here for 10 ms cases */
 
          /* actually one can  select to always update xLen(10 ms)  less  samples of x_old_tot,  also in  TDC-PLC bfi frames ,, and for PhECU.PLC  */
       }
-      oldLen = sub(bufHistlen, xLen);
+      oldLen = sub(usedHistlen, xLen);
 
       /* update ltpf-free pcm history buffer for TD-PLC */
 
-      basop_memmove(&plcAd->x_old_tot_fx[plcAd->max_len_pcm_plc - bufHistlen],
-         &plcAd->x_old_tot_fx[plcAd->max_len_pcm_plc - bufHistlen + xLen], oldLen * sizeof(Word16));
+      basop_memmove(&plcAd->x_old_tot_fx[plcAd->max_len_pcm_plc - usedHistlen],
+         &plcAd->x_old_tot_fx[plcAd->max_len_pcm_plc - usedHistlen + xLen], oldLen * sizeof(Word16));
 
       basop_memcpy(&plcAd->x_old_tot_fx[plcAd->max_len_pcm_plc - xLen], &x_fx[0], xLen * sizeof(Word16));
 
       frontLen = sub(LprotSzPtr[fs_idx], xLen);  /*16-10 =  6ms  of the  prev_synth/xfp part  */
       pastLen = sub(oldLen, frontLen);          /* ~11.8 ms*/
 
-      marginOldPast = getScaleFactor16_0(&(plcAd->x_old_tot_fx[plcAd->max_len_pcm_plc - bufHistlen]), pastLen);
-      marginOldFront = getScaleFactor16_0(&(plcAd->x_old_tot_fx[plcAd->max_len_pcm_plc - bufHistlen + pastLen]), frontLen);
+      marginOldPast = getScaleFactor16_0(&(plcAd->x_old_tot_fx[plcAd->max_len_pcm_plc - usedHistlen]), pastLen);
+      marginOldFront = getScaleFactor16_0(&(plcAd->x_old_tot_fx[plcAd->max_len_pcm_plc - usedHistlen + pastLen]), frontLen);
 
       scale_fac_old_dual = s_min(marginOldFront, marginOldPast);
       scale_fac_old = scale_fac_old_dual;
@@ -121,10 +107,12 @@ void processPLCUpdateAfterIMDCT_fx(Word16 x_fx[], Word16 q_fx_exp, Word16 concea
 
       IF(shift_old != 0)
       {
-         Scale_sig(&plcAd->x_old_tot_fx[plcAd->max_len_pcm_plc - bufHistlen], oldLen, shift_old);
+         Scale_sig(&plcAd->x_old_tot_fx[plcAd->max_len_pcm_plc - usedHistlen], oldLen, shift_old);
          logic16();
-         if ((bfi == 1) && (sub(concealMethod, 3) == 0))
+         test();
+         IF ((sub(bfi,1) == 0) && (sub(concealMethod, 3) == 0))
          {
+            plcAd->harmonicBuf_Q -= shift_old;
             plcAd->tdc_gain_c = L_shl(plcAd->tdc_gain_c, shift_old);
          }
          move16(); /* count move to static RAM */
@@ -154,42 +142,11 @@ void processPLCUpdateAfterIMDCT_fx(Word16 x_fx[], Word16 q_fx_exp, Word16 concea
    IF(sub(bfi, 1) != 0)
    {
       /* % reset counters in GF  */
-      *nbLostFramesInRow = 0;  move16();  /*plc0,3 4 , udpate  */
-      *ns_cum_alpha = 32767;  move16();   /*plc0,  4 , udpate  */
+      *nbLostFramesInRow = 0;  move16();
+      *ns_cum_alpha = 32767;  move16();
 
       if (plcAd)
       {
-#ifndef BE_MOVED_STAB_FAC
-         /* calculate stability factor */
-         IF(sub(*prev_bfi, 1) == 0)
-         {
-            plcAd->stab_fac = 26214;  move16();
-         }
-         ELSE
-         {
-             tmp32 = 0;  move32();
-             FOR(i = 0; i < M; i++)
-             {
-                 d = sub(scf_q[i], plcAd->old_scf_q[i]);
-                 tmp32 = L_mac_sat(tmp32, d, d);
-             }
-             tmp32 = L_shl_sat(tmp32, 3);
-             IF(tmp32 > 0x7D000000 /*1.25*25*/)
-             {
-                 plcAd->stab_fac = 0;  move16();
-             }
-             ELSE IF(tmp32 < 0x19003E82 /*0.25*25*/)
-             {
-                 plcAd->stab_fac = 0x7FFF;  move16();
-             }
-             ELSE
-             {
-                 tmp32 = L_shl_pos(L_sub(0x50000000 /*1.25/2*/, Mpy_32_16(tmp32, 0x51EC /*16/25*/)), 1);
-                 plcAd->stab_fac = round_fx(tmp32);  move16();
-             }
-         }
-#endif
-
          basop_memmove(plcAd->old_old_scf_q, plcAd->old_scf_q, M * sizeof(Word16));
          basop_memmove(plcAd->old_scf_q, scf_q, M * sizeof(Word16));
 
@@ -209,9 +166,8 @@ void processPLCUpdateAfterIMDCT_fx(Word16 x_fx[], Word16 q_fx_exp, Word16 concea
 #endif
 }
 
-#ifdef BE_MOVED_STAB_FAC
 void processPLCcomputeStabFac_main(Word16 scf_q[], Word16 old_scf_q[], Word16 old_old_scf_q[], Word16 bfi, Word16 prev_bfi,
-                              Word16 prev_prev_bfi, Word16 *stab_fac)
+                                   Word16 prev_prev_bfi, Word16 *stab_fac)
 {
     IF (sub(bfi, 1) == 0)
     {
@@ -226,7 +182,7 @@ void processPLCcomputeStabFac_main(Word16 scf_q[], Word16 old_scf_q[], Word16 ol
     }
 }
 
-void processPLCcomputeStabFac(Word16 scf_q[], Word16 old_scf_q[], Word16 prev_bfi, Word16 *stab_fac)
+static void processPLCcomputeStabFac(Word16 scf_q[], Word16 old_scf_q[], Word16 prev_bfi, Word16 *stab_fac)
 {
     Counter i;
     Word32  tmp32;
@@ -273,7 +229,6 @@ void processPLCcomputeStabFac(Word16 scf_q[], Word16 old_scf_q[], Word16 prev_bf
     Dyn_Mem_Out();
 #endif
 }
-#endif /* BE_MOVED_STAB_FAC */
 
 void processPLCUpdateXFP_w_E_hist_fx(Word16 prev_bfi, Word16 bfi, Word16 *xfp_fx, Word16 xfp_exp_fx, Word16 margin_xfp, 
                                      Word16 fs_idx,

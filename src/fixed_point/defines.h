@@ -1,29 +1,20 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #ifndef DEFINES_H
 #define DEFINES_H
 
 
-/* useful for peaking at MACRO values e.g.     #pragma message(  __FILE__" "__FUNCTION__" "VAR_NAME_VALUE(PRINTF) )  */
-#define VALUE_TO_STRING(x) #x
-#define VALUE(x) VALUE_TO_STRING(x)
-#define VAR_NAME_VALUE(var) #var "=" VALUE(var)
 
-
-/* Build configuration macros */
-/* No advanced PLC in basic bluetooth version */
-#if defined(LC3_BASIC_BT)
-#define DISABLE_ADVANCED_PLC
-#endif
-
-/* FUNCTION MACROS */ /* NB, divisions in some of these MACROs, use mainly for initial setup, do not use in loops */
+/* FUNCTION MACROS */
+/* NB, divisions in some of these MACROs, use mainly for initial setup, do not use in loops */
 #define CEILING(x, y) (((x) + (y)-1) / (y))
 #define FRAME2FS_IDX(x) (x / 100) /*   80 -> 0, 160 -> 1, 240 -> 2, 320 -> 3, 480 -> 4 */
 #define FS2FS_IDX(x) (x / 10000)  /*   8000 -> 0, 16000 -> 1, 24000 -> 2, 32000 -> 3, 48000 -> 4 */
@@ -38,36 +29,30 @@
 /* For dynamic memory calculations */
 #define CODEC_FS(fs) ((fs) == 44100 ? 48000 : (fs))
 
-#define NONBE_FIX_PCMHIST_LENGTHS  /**/    /* for very short frames e.g 2.5 ,  the TDC filtering requires more historic samples than the PLC_XCORR   */
-
 #define DYN_MAX_LEN(fs) (CODEC_FS(fs) / 100)
-#define DYN_MAX_LEN_EXT(fs)                                                                                            \
-    MAX(CODEC_FS(fs) / 100, 160)   /* extension to length 160 for NB(fs=8000)    */
+#define DYN_MAX_LEN_EXT(fs) MAX(CODEC_FS(fs) / 100, 160) /* extension to length 160 for NB(fs=8000)    */
 #define DYN_MAX_LPROT(fs) ((512 * (CODEC_FS(fs) / 100)) / 320)
 
 #define DYN_MAX_PLOCS(fs) (DYN_MAX_LPROT(fs) / 4 + 1)
 #define DYN_MAX_MDCT_LEN(fs) (DYN_MAX_LEN(fs) - (180 * DYN_MAX_LEN(fs) / 480))
 
-#define  MAX_PITCH_FS(fs) (CEILING((MAX_PITCH_12K8 * CODEC_FS(fs)), (12800)))
+#define MAX_PITCH_FS(fs) (CEILING((MAX_PITCH_12K8 * CODEC_FS(fs)), (12800)))
 
-#ifdef NONBE_FIX_PCMHIST_LENGTHS
 /*  get the maximum buffer size assuming 10 ms framing */
 /*  MAX_PITCH was previously always  the highest fs in the current  SUBSET , i.e. typically 48 kHz  */
 /*  now fs(from incoming wav file)  adaptive  MAX_PITCH_FS(fs) is used instead  */
+#define DYN_MAX_LEN_PCM_PLC_CLASSIFIER(fs)                                                                             \
+    (MAX_PITCH_FS(fs) + DYN_MAX_LEN(fs)) /* CLASSIFIER PCM memory requirement   */
+#define DYN_MAX_LEN_PCM_PLC_TDCAPPLYFILTER(fs)                                                                         \
+    ((M + 1) + MAX_PITCH_FS(fs) + (DYN_MAX_LEN(fs) / 2)) /* TDC filtering PCM memory requirement */
+#define DYN_MAX_LEN_PCM_PLC(fs) MAX(DYN_MAX_LEN_PCM_PLC_CLASSIFIER(fs), DYN_MAX_LEN_PCM_PLC_TDCAPPLYFILTER(fs))
 
-#define  DYN_MAX_LEN_PCM_PLC_CLASSIFIER(fs) (MAX_PITCH_FS(fs) + DYN_MAX_LEN(fs))                  /* CLASSIFIER PCM memory requirement   */
-#define  DYN_MAX_LEN_PCM_PLC_TDCAPPLYFILTER(fs) ((M+1) + MAX_PITCH_FS(fs) + (DYN_MAX_LEN(fs)/2))  /* TDC filtering PCM memory requirement */
-#define  DYN_MAX_LEN_PCM_PLC(fs)  MAX(DYN_MAX_LEN_PCM_PLC_CLASSIFIER(fs), DYN_MAX_LEN_PCM_PLC_TDCAPPLYFILTER(fs) )
-
-#else
- #define DYN_MAX_LEN_PCM_PLC(fs) (MAX_PITCH + DYN_MAX_LEN(fs))
-#endif
 #define FRAME_MS_BLOCK 25
 
 /* OPTIONS */
-
 #define ENABLE_2_5MS_MODE
 #define ENABLE_5MS_MODE
+#define ENABLE_10_MS_MODE
 #define ENABLE_ADVANCED_PLC
 #define ENABLE_ADVANCED_PLC_DEFAULT
 #define ENABLE_BW_CONTROLLER
@@ -75,54 +60,17 @@
 #define ENABLE_RFRAME
 #define ENABLE_PC
 #define ENABLE_PLC
+#define ENABLE_PADDING
+/* flags */
 #define ENABLE_BANDWIDTH_FLAG
 #define ENABLE_RBANDWIDTH_FLAG
 #define ENABLE_EP_MODE_FLAG
 #define ENABLE_FRAME_MS_FLAG
-#define ENABLE_PADDING
 
-
-/* Post-release non-bitexact changes */
-#define BE_MOVED_STAB_FAC
 #ifndef NO_POST_REL_CHANGES
+/* Post-release non-bitexact changes */
 
-#define ENABLE_BW_CONTROLLER
-
-#define NONBE_FIX_NO_ATTACK_AT_HIGH_BR /* No attack detection at high bitrates */
-
-#define NONBE_PLC_LTPF_FIX                /* Fix clipping in LTPF */
-#define NONBE_PLC2_LTPF_FADEOUT_FIX  /* correction of  initial fix NONBE_PLC_LTPF_FIX  for pHECU */
-#define NONBE_PLC_PITCH_TUNING
-
-#define NONBE_DELAY_COMPENSATION /* split delay equally in encoder and decoder */
-#define NONBE_BER_DETECT         /* Add detection of bit error */
-
-#define NONBE_LOW_BR_NF_TUNING
-
-#define NON_BE_GAIN_EST_FIX
-
-#define NONBE_PLC4_BURST_TUNING /* Burst error tuning for NS (in adv. PLC) */
-#define NONBE_PLC3_FIX_DAMPING  /* Fixed damping in TDC */
-#define NONBE_PLC3_BURST_TUNING /* Burst error tuning for TDC */
-#define NONBE_PLC3_FIX_FADEOUT  /* Fix fadeout for TDC */
-#define NONBE_PLC3_NB_LPC_ORDER /* Reduce lpc order to fix problem at nb @ 2.5ms */
-#define NONBE_PLC3_GAIN_CONTROL /* Add gain control to prevent high energy increase @ 2.5 and 5ms */
-#define NONBE_PLC4_ADAP_DAMP    /* Improved adaptive damping and sign scrambling */
-/* #define NONBE_PLC2_DEBUG */  /* Switch to activate PLC2 debug code to extended parameter extraction from fixpoint */
-
-/* PLC2 NON-BE Optimization   */
-
-#define PLC2_FADEOUT_IN_MS 30    /*  0  uses original fixed values for PLC2, -1 uses TDC  PLC_FADEOUT_IN_MS  as basis for a PLC2 macro-re-calculation,   positive 30-100 uses separate setting for PLC2 */
-#define PLC_FADEOUT_IN_MS 60     /* defines the TD-PLC fadeout to zero in ms  */
-#define PLC_START_IN_MS 20       /* fading start for PLC4 */
-
-
-
-#define NONBE_PLC2_MUTING_DCSYNT_FIX /**/       /* also attenuate  DC,fs/by2 term in the PLC2 muting phase  */
-
-#define READ_G192FER /*   */        /* allow C executable to also read G192 formatted FER files */ 
-
-#endif /* Post-release changes */
+#endif /* NO_POST_REL_CHANGES Post-release changes */
 
 /* Error protection */
 #define EP_SCRATCH_SIZE 2048
@@ -133,6 +81,7 @@
 #define G192_REDUNDANCY_FRAME 0x6B22
 #define G192_ZERO 0x007F
 #define G192_ONE 0x0081
+#define READ_G192FER      /* allow C executable to also read G192 formatted FER files */
 
 #define DYNMEM_COUNT
 #define STAMEM_COUNT
@@ -151,11 +100,10 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 /* Define __forceinline as empty if ARM not activated to avoid any errors */
 #undef __forceinline
 /* The above undef is needed to compile using make_mex.m without the following warning in Matlab for windows */
-#define __forceinline  
+#define __forceinline
 
-/* SUBSETS / PROFILES */
-#if !(defined(SUBSET_NB) || defined(SUBSET_SQ) || defined(SUBSET_HQ) || defined(SUBSET_SWB) || defined(SUBSET_FB) )
-#define PROFILE "FULL_PROFILE"
+/* SUBSETS */
+#if !(defined(SUBSET_NB) || defined(SUBSET_SQ) || defined(SUBSET_HQ) || defined(SUBSET_SWB) || defined(SUBSET_FB))
 #define SUBSET_NB
 #define SUBSET_SQ
 #define SUBSET_HQ
@@ -163,9 +111,7 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #define SUBSET_FB
 #endif
 
-#ifndef PROFILE
-#define PROFILE "SUBSET"
-#endif
+#define PACK_RESBITS
 
 /* FRAME/BUFFER */
 #ifdef SUBSET_FB
@@ -181,9 +127,19 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #define MAX_LEN 80 /* = 10ms at 8kHz */
 #endif
 
+#define MAX_RESBITS MAX_LEN
+    
+/* BW Cutoff-Detection */
+#define MAX_BW_BANDS_NUMBER 5
+
+
+#define MAX_RESBITS_LEN (MAX_RESBITS)
+#define MAX_RESBITS_LEN_32BIT_ALIGN (((MAX_RESBITS_LEN + 3)/4)*4)
+
+
 #define MAX_CHANNELS 2
-#define MIN_NBYTES 20      /* 16kbps at 8/16/24/32/48kHz */
-#define MAX_NBYTES 435     /* 320kbps at 44.1kHz */
+#define MIN_NBYTES 20  /* 16kbps at 8/16/24/32/48kHz */
+#define MAX_NBYTES 435 /* 320kbps at 44.1kHz */
 #define MAX_NBYTES_RED 400 /* 320kbps at 48kHz */
 #define BYTESBUFSIZE (MAX_NBYTES * MAX_CHANNELS)
 #define MAX_BW_BIN 400
@@ -195,8 +151,7 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #define MAX_BW MAX_BW_BIN
 #endif
 
-/* BW Cutoff-Detection */
-#define MAX_BW_BANDS_NUMBER 5
+#define NUM_SAMP_FREQ 5
 
 /* SCF */
 #define M 16 /* LPC_ORDER */
@@ -210,6 +165,8 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #define SQRT_EN_MAX_FX 64 /*  table size, for fast  inv_sqrt  */
 #define N_SETA 10
 #define N_SETB (PVQ_MAX_VEC_SIZE - N_SETA)
+
+#define SNS_DAMPING 27853        /* 0.85 in Q15 */
 
 /* PVQ VQ setup */
 #define VQMODES26                                                                                                      \
@@ -274,11 +231,23 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 /* PLC */
 #define PLC_DEBUG
 
-#define MAX_PITCH_8K  (CEILING((MAX_PITCH_12K8 * 8000), (12800)))    /*NB  was a risky MACRO   at 0.5 border !!,    */
-#define MAX_PITCH_16K ((MAX_PITCH_12K8 * 16000) / (12800))           /* exact integer */
-#define MAX_PITCH_24K (CEILING((MAX_PITCH_12K8 * 24000), (12800)))  /* was a risky MACRO truncation at 0.5 border !! ,   */
-#define MAX_PITCH_32K ((MAX_PITCH_12K8 * 32000) / (12800))          /* exact integer */
-#define MAX_PITCH_48K ((MAX_PITCH_12K8 * 48000) / (12800))          /* exact integer */
+#define PLC_FADEOUT_IN_MS         60    /* fade-out to zero in ms for TD-PLC and NS, minimum value is 20 */
+#define PLC2_FADEOUT_IN_MS        30    /*  0 uses original fixed values for PLC2
+                                           -1 uses PLC_FADEOUT_IN_MS as basis for a PLC2 macro-re-calculation
+                                           30..100 uses separate setting for PLC2 */
+#define PLC4_TRANSIT_END_IN_MS PLC_FADEOUT_IN_MS    /* end   of transition time for noise substitution */
+#define PLC4_TRANSIT_START_IN_MS  20    /* begin of transition time for noise substitution for voiced signals */
+#define PLC34_ATTEN_FAC_100_FX   0x4000 /* attenuation factor for NS and TDC @ 10  ms (0.5000)*/
+#define PLC34_ATTEN_FAC_050_FX   0x5A83 /* attenuation factor for NS and TDC @ 5.0 ms (0.7071)*/
+#define PLC34_ATTEN_FAC_025_FX   0x6BA3 /* attenuation factor for NS and TDC @ 2.5 ms (0.8409)*/
+#define PLC3_HPBLENDTHROTTLE      30    /* higher numbers increase throttled blending from hp filtered to unfiltered uv excitation (0 is no throttle) */
+
+#define MAX_PITCH_8K (CEILING((MAX_PITCH_12K8 * 8000), (12800))) /*NB  was a risky MACRO   at 0.5 border !!,    */
+#define MAX_PITCH_16K ((MAX_PITCH_12K8 * 16000) / (12800))       /* exact integer */
+#define MAX_PITCH_24K                                                                                                  \
+    (CEILING((MAX_PITCH_12K8 * 24000), (12800)))           /* was a risky MACRO truncation at 0.5 border !! ,   */
+#define MAX_PITCH_32K ((MAX_PITCH_12K8 * 32000) / (12800)) /* exact integer */
+#define MAX_PITCH_48K ((MAX_PITCH_12K8 * 48000) / (12800)) /* exact integer */
 
 #ifdef SUBSET_FB
 #define MAX_PITCH MAX_PITCH_48K
@@ -293,19 +262,13 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #endif
 
 
-/*  macri MAX_LEN_PCM_PLC  is used for WC memory  size checking 
-   fs dynamic maxlen(fs) is used by static memory buffers 
+/*  macri MAX_LEN_PCM_PLC  is used for WC memory  size checking
+   DYN_MAX_LEN_PCM_PLC(fs) is used by static memory buffers
  */
-#define MAX_LEN_PCM_PLC (MAX_PITCH + 1 * MAX_LEN) /* 10 ms always needed for advanced PLC PITCH-gain analysis */
-#ifdef ONLY_5MS_MODE                             
-#define MAX_LEN_PCM_PLC                                                                                                \
-    (MAX_PITCH + 2 * (MAX_LEN)) /* 10 ms always needed for PLC PITCH-gain analysis, even for a 5 ms only mode */
-#endif
-
+#define MAX_LEN_PCM_PLC (MAX_PITCH + MAX_LEN)
 
 #define TDC_L_FIR_HP 11
 #define TDC_L_FIR_LP 11
-#define TDC_PIT_UP_SAMP 4
 
 #define BASE_LPROT 512 /* BASE Lprot set to 512 for 32 kHz sampling */
 
@@ -485,7 +448,7 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 
 /* Scratch buffer defines */
 #define scratchBuffer_ACTIVE
-#define SCRATCH_BUF_LEN_ENC (4 * MAX_LEN + 32 + 32 + 2 * MAX_LEN + 3 * MAX_LEN + MAX_LEN)
+#define SCRATCH_BUF_LEN_ENC (4 * MAX_LEN + 32 + 32 + 2 * MAX_LEN + 3 * MAX_LEN + MAX_RESBITS_LEN_32BIT_ALIGN)
 #define SCRATCH_BUF_LEN_ENC_CURRENT_SCRATCH (4 * MAX_LEN)
 
 #define SCRATCH_BUF_LEN_ENC_TOT (SCRATCH_BUF_LEN_ENC + SCRATCH_BUF_LEN_ENC_CURRENT_SCRATCH)
@@ -528,7 +491,7 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #define RAM_ALIGN
 #endif
 
-#define scratchAlign(ptr, offset) (void *)((char *)(ptr) + (offset))
+#define scratchAlign(ptr, offset) (void *)(((uintptr_t)(ptr) + (offset) + 0x3) & ~0x3)
 #define ALIGN_BUFFER_STRUCT
 
 

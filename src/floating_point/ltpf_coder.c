@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "functions.h"
 
@@ -30,26 +31,24 @@ LC3_INT searchMaxIndice(LC3_FLOAT* in, LC3_INT len)
     return max_i;
 }
 
-void process_ltpf_coder_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_INT ltpf_enable, LC3_INT pitch_ol, LC3_FLOAT pitch_ol_norm_corr, LC3_INT frame_dms,
-                           LC3_FLOAT* mem_old_x, LC3_INT memLen, LC3_FLOAT* mem_norm_corr_past, LC3_INT* mem_on, LC3_INT* mem_pitch,
+void process_ltpf_coder_fl(LC3_FLOAT* xin, LC3_INT xLen, LC3_INT ltpf_enable, LC3_INT pitch_ol, LC3_FLOAT pitch_ol_norm_corr, LC3_INT frame_dms,
+                           LC3_FLOAT* mem_old_x, LC3_INT memLen, LC3_FLOAT* mem_norm_corr_past, LC3_INT* mem_on, LC3_FLOAT* mem_pitch,
                            LC3_INT* param, LC3_FLOAT* mem_norm_corr_past_past, LC3_INT* bits)
 {
-    LC3_FLOAT buffer[MAX_LEN] = {0}, sum = 0, buf_tmp[MAX_LEN] = {0}, cor_up[MAX_LEN] = {0};
-    LC3_INT   i = 0, j = 0, k = 0, n = 0, step = 0, N = 0, L_past = 0, ltpf_active = 0, pitch_search_delta = 0,
-        pitch_search_upsamp = 0, pitch_search_L_interpol1 = 0, pitmin = 0, pitfr2 = 0, pitfr1 = 0, pitmax = 0,
+    LC3_FLOAT buffer[LTPF_MEMIN_LEN + LEN_12K8 + 1 + (LEN_12K8 >> 2)] = {0}, sum = 0, buf_tmp[MAX_LEN] = {0}, cor_up[MAX_LEN] = {0}, *x;
+    LC3_INT   i = 0, j = 0, k = 0, n = 0, step = 0, N = 0, ltpf_active = 0, pitch_search_delta = 0,
+        pitch_search_upsamp = 0, pitch_search_L_interpol1 = 0,
         t0_min = 0, t0_max = 0, t_min = 0, t_max = 0, temp2 = 0, t1 = 0, pitch_int = 0, pitch_fr = 0, midpoint = 0,
-        delta_up = 0, delta_down = 0, pitch_index = 0, pitch = 0, enc_inter_len = 2, len_frame = 0, gain = 0, NN = 0;
-    LC3_FLOAT norm_corr = 0, cor[MAX_LEN] = {0}, cor_int[MAX_LEN] = {0}, currFrame[MAX_LEN] = {0}, predFrame[MAX_LEN] = {0},
-          sum1 = 0, sum2 = 0, sum3 = 0;
+        delta_up = 0, delta_down = 0, pitch_index = 0, gain = 0, acflen = 0;
+    LC3_FLOAT norm_corr = 0, cor[MAX_LEN] = {0}, cor_int[MAX_LEN] = {0}, currFrame[MAX_LEN] = {0}, predFrame[MAX_LEN] = {0}, sum1 = 0, sum2 = 0, sum3 = 0;
+    LC3_FLOAT pitch = 0;
 
     /* Signal Buffer */
-    L_past = memLen;
-    N      = xLen - 1;
+    N = xLen - 1;
+    x = &buffer[memLen];
 
     move_float(buffer, mem_old_x, memLen);
-
-    move_float(&buffer[memLen], x, xLen);
-
+    move_float(x, xin, xLen);
     move_float(mem_old_x, &buffer[N], xLen + memLen - N);
 
     ltpf_active = 0;
@@ -58,31 +57,49 @@ void process_ltpf_coder_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_INT ltpf_enable, LC3_
     pitch_search_delta       = 4;
     pitch_search_upsamp      = 4;
     pitch_search_L_interpol1 = 4;
-    pitmin                   = 32;
-    pitfr2                   = 127;
-    pitfr1                   = 157;
-    pitmax                   = 228;
-    enc_inter_len            = 2;
 
     if (pitch_ol_norm_corr > 0.6) {
         /* Search Bounds */
         t0_min = pitch_ol - pitch_search_delta;
         t0_max = pitch_ol + pitch_search_delta;
-        t0_min = MAX(t0_min, pitmin);
-        t0_max = MIN(t0_max, pitmax);
+        t0_min = MAX(t0_min, MIN_PITCH_12K8);
+        t0_max = MIN(t0_max, MAX_PITCH_12K8);
+        acflen = N;
+        
+        if (frame_dms == 25)
+        {
+            acflen = 2 * N;
+            x = x - N;
+        }
 
         /* Cross-Correlation Bounds */
         t_min = t0_min - pitch_search_L_interpol1;
         t_max = t0_max + pitch_search_L_interpol1;
 
+        /* Compute norm */
+        sum1 = sum2 = 0;
+        for (j = 0; j < acflen; j++) {
+            sum1 += x[j] * x[j];
+            sum2 += x[j - t_min] * x[j - t_min];
+        }
+
         /* Compute Cross-Correlation */
         for (i = t_min; i <= t_max; i++) {
             sum = 0;
-            for (j = L_past; j < L_past + N; j++) {
-                sum += buffer[j] * buffer[j - i];
+            for (j = 0; j < acflen; j++) {
+                sum += x[j] * x[j - i];
             }
 
-            cor[i - t_min] = sum;
+            if (i > t_min) {
+                sum2 = sum2 + x[-i]*x[-i]
+                            - x[acflen - 1 - ( i - 1 )]*x[acflen - 1 - ( i - 1 )];
+            }
+            sum3      = LC3_SQRT(sum1 * sum2) + LC3_POW(10, -5);
+            norm_corr = sum / sum3;
+            
+            norm_corr = MAX(0, norm_corr);
+            cor[i - t_min] = norm_corr;
+
         }
 
         /* Find Integer Pitch-Lag */
@@ -98,7 +115,7 @@ void process_ltpf_coder_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_INT ltpf_enable, LC3_
         assert(t1 >= t0_min && t1 <= t0_max);
 
         /* Find Fractional Pitch-Lag */
-        if (t1 >= pitfr1) {
+        if (t1 >= RES2_PITCH_12K8) {
             pitch_int = t1;
             pitch_fr  = 0;
         } else {
@@ -121,7 +138,7 @@ void process_ltpf_coder_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_INT ltpf_enable, LC3_
                 cor_int[i] = sum;
             }
 
-            if (t1 >= pitfr2) {
+            if (t1 >= RES4_PITCH_12K8) {
                 step = 2;
             } else {
                 step = 1;
@@ -153,59 +170,47 @@ void process_ltpf_coder_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_INT ltpf_enable, LC3_
             }
         }
 
-        assert((pitch_int <= pitmax && pitch_int >= pitfr1 && pitch_fr == 0) ||
-               (pitch_int < pitfr1 && pitch_int >= pitfr2 && (pitch_fr == 0 || pitch_fr == 2)) ||
-               (pitch_int < pitfr2 && pitch_int >= pitmin &&
+        assert((pitch_int <= MAX_PITCH_12K8 && pitch_int >= RES2_PITCH_12K8 && pitch_fr == 0) ||
+               (pitch_int < RES2_PITCH_12K8 && pitch_int >= RES4_PITCH_12K8 && (pitch_fr == 0 || pitch_fr == 2)) ||
+               (pitch_int < RES4_PITCH_12K8 && pitch_int >= MIN_PITCH_12K8 &&
                 (pitch_fr == 0 || pitch_fr == 1 || pitch_fr == 2 || pitch_fr == 3)));
         
-        if (pitch_int < pitfr2) {
-            pitch_index = pitch_int * 4 + pitch_fr - (pitmin * 4);
-        } else if (pitch_int < pitfr1) {
-            pitch_index = pitch_int * 2 + floor(pitch_fr / 2) - (pitfr2 * 2) + ((pitfr2 - pitmin) * 4);
+        if (pitch_int < RES4_PITCH_12K8) {
+            pitch_index = pitch_int * 4 + pitch_fr - (MIN_PITCH_12K8 * 4);
+        } else if (pitch_int < RES2_PITCH_12K8) {
+            pitch_index = pitch_int * 2 + floor(pitch_fr / 2) - (RES4_PITCH_12K8 * 2) + ((RES4_PITCH_12K8 - MIN_PITCH_12K8) * 4);
         } else {
-            pitch_index = pitch_int - pitfr1 + ((pitfr2 - pitmin) * 4) + ((pitfr1 - pitfr2) * 2);
+            pitch_index = pitch_int - RES2_PITCH_12K8 + ((RES4_PITCH_12K8 - MIN_PITCH_12K8) * 4) + ((RES2_PITCH_12K8 - RES4_PITCH_12K8) * 2);
         }
 
         assert(pitch_index >= 0 && pitch_index < 512);
-        pitch = pitch_int + pitch_fr / 4;
+        pitch = (LC3_FLOAT) pitch_int + (LC3_FLOAT) pitch_fr / 4.0;
         
-        NN = 10 * N / ((LC3_FLOAT) frame_dms / 10.0);
-        
+
+        for (n = 0; n < acflen; n++)
         {
-            for (n = -NN + N; n < N; n++) {
-                sum = 0;
-                j   = 0;
+            currFrame[n] = x[n + 1] * enc_inter_filter[0][0] +
+                           x[n]     * enc_inter_filter[0][1] +
+                           x[n - 1] * enc_inter_filter[0][2];
 
-                for (i = L_past + n + enc_inter_len - 1; i >= L_past + n - enc_inter_len; i--) {
-                    sum += buffer[i] * enc_inter_filter[0][j];
-                    j++;
-                }
-                currFrame[n + NN - N] = sum;
-
-                sum = 0;
-                j   = 0;
-
-                for (i = L_past + n - pitch_int + enc_inter_len - 1; i >= L_past + n - pitch_int - enc_inter_len;
-                     i--) {
-                    sum += buffer[i] * enc_inter_filter[pitch_fr][j];
-                    j++;
-                }
-                predFrame[n + NN - N] = sum;
-            }
+            predFrame[n] = x[n - pitch_int + 1] * enc_inter_filter[pitch_fr][0] +
+                           x[n - pitch_int]     * enc_inter_filter[pitch_fr][1] +
+                           x[n - pitch_int - 1] * enc_inter_filter[pitch_fr][2] +
+                           x[n - pitch_int - 2] * enc_inter_filter[pitch_fr][3];
         }
 
         /* Normalized Correlation */
-        len_frame = NN;
+        sum1 = sum2 = sum3 = 0;
 
-        for (i = 0; i < len_frame; i++) {
+        for (i = 0; i < acflen; i++) {
             sum1 += currFrame[i] * predFrame[i];
         }
 
-        for (i = 0; i < len_frame; i++) {
+        for (i = 0; i < acflen; i++) {
             sum2 += currFrame[i] * currFrame[i];
         }
 
-        for (i = 0; i < len_frame; i++) {
+        for (i = 0; i < acflen; i++) {
             sum3 += predFrame[i] * predFrame[i];
         }
 
@@ -223,17 +228,13 @@ void process_ltpf_coder_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_INT ltpf_enable, LC3_
             if ((*mem_on == 0 && (frame_dms == 100 || *mem_norm_corr_past_past > 0.94) && *mem_norm_corr_past > 0.94 &&
                  norm_corr > 0.94) ||
                 (*mem_on == 1 && norm_corr > 0.9) ||
-                (*mem_on == 1 && abs(pitch - *mem_pitch) < 2 && (norm_corr - *mem_norm_corr_past) > -0.1 &&
+                (*mem_on == 1 && LC3_FABS(pitch - *mem_pitch) < 2 && (norm_corr - *mem_norm_corr_past) > -0.1 &&
                  norm_corr > 0.84)) {
                 ltpf_active = 1;
             }
         }
 
-        if (frame_dms < 100 && norm_corr < 0.68) {
-            gain = 0;
-        } else {
-            gain = 4;
-        }
+        gain = 4;
 
     } else {
         gain      = 0;

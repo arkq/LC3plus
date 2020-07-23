@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "functions.h"
 
@@ -17,6 +18,7 @@ static void Enc_LC3_Channel_fl(LC3_Enc* encoder, int channel, int32_t* s_in, uin
         quantizedGainMin = 0, nbits = 0, nbits2 = 0, lastnz = 0, lsbMode = 0, gainChange = 0, bp_side = 0,
         mask_side = 0, fac_ns_idx = 0, numResBits = 0, tns_order[2] = {0}, i = 0;
     LC3_FLOAT normcorr = 0, gain = 0;
+    
 
     LC3_FLOAT d_fl[MAX_LEN]                        = {0};
     LC3_INT   q_d[MAX_LEN]                         = {0};
@@ -41,8 +43,8 @@ static void Enc_LC3_Channel_fl(LC3_Enc* encoder, int channel, int32_t* s_in, uin
 
     /* MDCT */
     processMdct_fl(h_EncSetup->s_in_scaled, d_fl, &h_EncSetup->mdctStruct);
-    
-	/* 12.8 kHz resampler */
+
+    /* 12.8 kHz resampler */
 	process_resamp12k8_fl(h_EncSetup->s_in_scaled, encoder->frame_length, h_EncSetup->r12k8_mem_in,
 						  encoder->r12k8_mem_in_len, h_EncSetup->r12k8_mem_50, h_EncSetup->r12k8_mem_out,
 						  encoder->r12k8_mem_out_len, h_EncSetup->s_12k8, &s_12k8_len, encoder->fs_idx,
@@ -50,7 +52,7 @@ static void Enc_LC3_Channel_fl(LC3_Enc* encoder, int channel, int32_t* s_in, uin
 
 	/* Pitch estimation */
 	processOlpa_fl(h_EncSetup->s_12k8, h_EncSetup->olpa_mem_s12k8, h_EncSetup->olpa_mem_s6k4,
-				   &h_EncSetup->olpa_mem_pitch, &T0_out, &normcorr, s_12k8_len);
+				   &h_EncSetup->olpa_mem_pitch, &T0_out, &normcorr, s_12k8_len, encoder->frame_dms);
 
 	/* LTPF encoder */
 	process_ltpf_coder_fl(h_EncSetup->s_12k8, s_12k8_len + 1, h_EncSetup->ltpf_enable, T0_out, normcorr,
@@ -60,27 +62,24 @@ static void Enc_LC3_Channel_fl(LC3_Enc* encoder, int channel, int32_t* s_in, uin
 						  &ltpfBits);
 
     /* Attack detector */
-    attack_detector_fl(h_EncSetup->s_in_scaled, encoder->frame_length, &h_EncSetup->attdec_position,
+    attack_detector_fl(h_EncSetup->s_in_scaled, encoder->frame_length, encoder->fs, &h_EncSetup->attdec_position,
                        &h_EncSetup->attdec_acc_energy, &h_EncSetup->attdec_detected, h_EncSetup->attdec_filter_mem,
-                       h_EncSetup->attack_handling);
+                       h_EncSetup->attack_handling, encoder->attdec_nblocks, encoder->attdec_hangover_thresh);
 
     /* Per-band energy */
     processPerBandEnergy_fl(encoder->bands_number, encoder->bands_offset, h_EncSetup->ener, d_fl);
     
     /* Bandwidth cut-off detection */
-#ifdef ENABLE_HR_MODE
     /* No BW Cutoff for 8 kHz and 96 kHz */
     if (encoder->fs_idx > 0 && encoder->hrmode == 0) {
-#else
-    if (encoder->fs_idx > 0) {
-#endif
         processDetectCutoffWarped_fl(h_EncSetup->ener, encoder->fs_idx, encoder->frame_dms, &BW_cutoff_idx);
     } else {
         BW_cutoff_idx = encoder->fs_idx;
     }
 
+
     processSnsComputeScf_fl(h_EncSetup->ener, encoder->tilt, encoder->bands_number, h_EncSetup->scf,
-                            h_EncSetup->attdec_detected, encoder->sns_damping);
+                            h_EncSetup->attdec_detected, encoder->sns_damping, encoder->attdec_damping);
 
     /* SNS Quantizer */
     process_snsQuantizesScf_Enc(h_EncSetup->scf, h_EncSetup->L_scf_idx, h_EncSetup->scf_q, h_EncSetup->dct2StructSNS);
@@ -90,7 +89,7 @@ static void Enc_LC3_Channel_fl(LC3_Enc* encoder, int channel, int32_t* s_in, uin
 
     /* MDCT shaping */
     processMdctShaping_fl(d_fl, h_EncSetup->int_scf, encoder->bands_offset, encoder->bands_number);
-
+        
     /* Bandwidth controller */
     if (encoder->bandwidth) {
         process_cutoff_bandwidth(d_fl, encoder->yLen, encoder->bw_ctrl_cutoff_bin);
@@ -108,18 +107,14 @@ static void Enc_LC3_Channel_fl(LC3_Enc* encoder, int channel, int32_t* s_in, uin
     processEstimateGlobalGain_fl(d_fl, encoder->yLen, h_EncSetup->targetBitsQuant, &gain, &quantizedGain,
                                  &quantizedGainMin, h_EncSetup->quantizedGainOff, &h_EncSetup->targetBitsOff,
                                  &h_EncSetup->mem_targetBits, h_EncSetup->mem_specBits
-#ifdef ENABLE_HR_MODE
                                  , encoder->hrmode, h_EncSetup->regBits, encoder->frame_ms
-#endif
 
     );
 
     /* 1. Quantization */
     processQuantizeSpec_fl(d_fl, gain, q_d, encoder->yLen, h_EncSetup->total_bits, &nbits, &nbits2, encoder->fs,
                            &lastnz, h_EncSetup->codingdata, &lsbMode, -1, h_EncSetup->targetBitsQuant
-#ifdef ENABLE_HR_MODE
 		, encoder->hrmode
-#endif
     );
 
     h_EncSetup->mem_specBits = nbits;
@@ -132,9 +127,7 @@ static void Enc_LC3_Channel_fl(LC3_Enc* encoder, int channel, int32_t* s_in, uin
     if (gainChange) {
         processQuantizeSpec_fl(d_fl, gain, q_d, encoder->yLen, h_EncSetup->total_bits, &nbits, &nbits2, encoder->fs,
                                &lastnz, h_EncSetup->codingdata, &lsbMode, 0, h_EncSetup->targetBitsQuant
-#ifdef ENABLE_HR_MODE
 		, encoder->hrmode
-#endif
         );
     }
 
@@ -147,9 +140,7 @@ static void Enc_LC3_Channel_fl(LC3_Enc* encoder, int channel, int32_t* s_in, uin
     if (lsbMode == 0) {
         processResidualCoding_fl(d_fl, q_d, gain, encoder->yLen, h_EncSetup->targetBitsQuant, nbits2,
                                  h_EncSetup->resBits, &numResBits
-#ifdef ENABLE_HR_MODE
 								 , encoder->hrmode
-#endif
         );
     } else {
         numResBits = 0;
@@ -165,6 +156,7 @@ static void Enc_LC3_Channel_fl(LC3_Enc* encoder, int channel, int32_t* s_in, uin
     processAriEncoder_fl(bytes, bp_side, mask_side, q_d, tns_order, tns_numfilters, indexes, lastnz,
                          h_EncSetup->codingdata, h_EncSetup->resBits, numResBits, lsbMode, h_EncSetup->targetBitsAri,
                          h_EncSetup->enable_lpc_weighting);
+        
 }
 
 int Enc_LC3_fl(LC3_Enc* encoder, void** input, uint8_t* output, int bps)
@@ -177,6 +169,6 @@ int Enc_LC3_fl(LC3_Enc* encoder, void** input, uint8_t* output, int bps)
         lc3buf += encoder->channel_setup[ch]->targetBytes;
         output_size += encoder->channel_setup[ch]->targetBytes;
     }
-
+    
     return output_size;
 }

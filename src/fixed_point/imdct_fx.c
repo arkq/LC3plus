@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "functions.h"
 
@@ -27,7 +28,8 @@ void ProcessingIMDCT(
     Word16     prev_bfi,          /* i:   previous bad frame indicator */
     Word16     nbLostFramesInRow, /* i: number of consecutive lost frames */
     AplcSetup *plcAd,             /* i: advanced plc struct */
-    Word8 *scratchBuffer)
+    Word8 *scratchBuffer
+)
 {
     Counter i;
     Word16  o, z, m, s;
@@ -61,17 +63,19 @@ void ProcessingIMDCT(
         o      = m - z;
         max_bw = 0;
 
-        SWITCH (frame_dms)
         {
-        case 25:
-            max_bw = MAX_BW >> 2; move16();
-            BREAK;
-        case 50:
-            max_bw = MAX_BW >> 1; move16();
-            BREAK;
+            SWITCH (frame_dms)
+            {
+            case 25:
+                max_bw = MAX_BW >> 2; move16();
+                BREAK;
+            case 50:
+                max_bw = MAX_BW >> 1; move16();
+                BREAK;
         case 100:
             max_bw = MAX_BW; move16();
             BREAK;
+			}
         }
         
         if (N > max_bw)
@@ -175,7 +179,6 @@ void ProcessingIMDCT(
 #endif
 }
 /* End Processing */
-
 
 void Processing_ITDA_WIN_OLA(
     Word32       L_x_tda[], /* i:     X_TDA buffer data   =  "y"  DCT-IV output */

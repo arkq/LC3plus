@@ -1,15 +1,16 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "functions.h"
 
-void processSnsComputeScf_fl(LC3_FLOAT* x, LC3_INT tilt, LC3_INT xLen, LC3_FLOAT* gains, LC3_INT smooth, LC3_FLOAT sns_damping)
+void processSnsComputeScf_fl(LC3_FLOAT* x, LC3_INT tilt, LC3_INT xLen, LC3_FLOAT* gains, LC3_INT smooth, LC3_FLOAT sns_damping, LC3_FLOAT attdec_damping_factor)
 {
     LC3_INT   bands_number = 0, d = 0, i = 0, j = 0, n = 0, n2 = 0, n4 = 0, mapping[64] = {0};
     LC3_FLOAT tmp[64] = {0}, x_tmp1[MAX_LEN] = {0}, x_tmp2[MAX_LEN] = {0}, sum = 0, mean = 0, xl4[16] = {0}, nf = 0, xl[64] = {0}, gains_smooth[M] = {0}, ratio = 0;
@@ -169,7 +170,7 @@ void processSnsComputeScf_fl(LC3_FLOAT* x, LC3_INT tilt, LC3_INT xLen, LC3_FLOAT
         mean = sum / (LC3_FLOAT)M;
 
         for (i = 0; i < M; i++) {
-            gains[i] = 0.5 * (gains_smooth[i] - mean);
+            gains[i] = attdec_damping_factor * (gains_smooth[i] - mean);
         }
     }
 }

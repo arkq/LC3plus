@@ -1,19 +1,18 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #ifndef __BASOP_UTIL_ROM_H__
 #define __BASOP_UTIL_ROM_H__
 
-#ifndef COUNT_ROM
+#include "basop_util.h"
 #include "functions.h"
-#endif
-#include "typedef.h"
 
 #define LD_INT_TAB_LEN 120
 #define INV_TABLE_SIZE 256
@@ -59,6 +58,8 @@ extern const Word16 InvIntTable[32];
 extern const PWord16 SineTable480[241];
 extern const PWord16 SineTable320[161];
 
+extern const PWord16 SineTable960[481];
+
 /**
  * \ brief Lookup for sine tables and windows.
  */
@@ -78,21 +79,26 @@ extern const Word32 RealFFT384_twid[98];
 extern const Word32 RealFFT512_twid[130];
 extern const Word32 RealFFT768_twid[194];
 
+#define RotVector_15_6 NULL
 extern const Word32 RotVector_32_32[2 * 20];
 extern const Word32 RotVector_40_32[2 * 28];
 extern const Word16 RotVector_320[2 * (320 - 20)];
-extern const Word16 RotVector_360[2 * (360 - 30)];
+#define RotVector_360 NULL
 extern const Word16 RotVector_480[2 * (480 - 30)];
 extern const Word16 RotVector_32_8[2 * (256 - 32)];
+#if defined(SUBSET_HQ) || defined(SUBSET_SWB) || defined(SUBSET_FB)
 extern const Word16 RotVector_32_12[2 * (384 - 32)];
+#else
+#define RotVector_32_12 NULL
+#endif
 
 extern const Word32 isqrt_table[128 + 2];
 
 extern const Word32 Log2_16_table1[16];
 extern const Word16 Log2_16_table2[16];
 
-extern const Word32 InvLog2_16_table1[64];
-extern const Word16 InvLog2_16_table2[64];
+extern const Word32  InvLog2_16_table1[64];
+extern const Word16  InvLog2_16_table2[64];
 
 extern const UWord8  gf16_mult_table[256];
 extern const UWord8  rs16_elp_deg2_table[256];

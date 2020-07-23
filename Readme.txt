@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
-*                        Software Version V1.4.2                              *
+*                        Software Version V1.4.10ETSI                         *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-
 
 
 Description
@@ -32,10 +31,14 @@ The following structure outlines the content of this package.
 
 Please refer to the respective Readme files for more information.
 
-Features:
+
+Features
 --------
     - Supported sampling rates: 8 kHz, 16 kHz, 24 kHz, 32 kHz, 44.1 kHz,
                                       48 kHz, 96 kHz
+    - Supported bit rates: 20 bytes ... 400 bytes per frame per channel
+    - Multichannel support by multi-mono coding
+    - Support of audio sample depth: 16 bits and 24 bits
     - Frame duration of 10 ms, 5 ms and 2.5 ms
     - Supported bit rates:
         - frame duration 10 ms:  16 kbps ... 320 kbps per channel
@@ -53,7 +56,6 @@ Features:
 
     - Packet loss concealment as defined in ETSI TS 103 634
 
-
 The fixed-point source code currently has limited support for the
 following functions:
     - High resolution mode
@@ -64,12 +66,34 @@ following functions:
     - Error protection (LC3plus channel coder)
     - Partial concealment
 
-Changelog:
----------
 
+Changelog
+---------
   Latest non-bitexact changes are encapsulated in defines listed in defines.h
   for review.
 
+    - V1.4.10ETSI 2020-07-23 (ETSI TS 103 634 V1.2.1)
+       - General
+            - Accepted CR2 defines
+    - V1.4.9E 2020-03-23 (ETSI TS 103 634 V1.1.3)
+        - General
+            - Fix PLC fade-out for frame lengths < 10ms, implemented
+              under define CR2_B_NONBE_PLC3_ENHANCEMENTS
+        - Channel Coder
+            - added epok_flags according to CR2_G, implemented
+              under define CR2_G_EPOK_FLAGS
+            - fixed incorrect value of error_report for
+              certain cases with bfi=1 according to CR2_J, implemented
+              under define CR2_J_NONBE_ERROR_REPORT_FIX
+    - V1.4.6E 2020-01-22 (ETSI TS 103 634 V1.1.2)
+        - General
+            - Renamed NONBE defines according to corresponding change in CR
+
+    - V1.4.5E 2020-01-10 (ETSI TS 103 634 V1.1.2)
+        - General
+            - Added Channel Coder Converter
+            - Several Packet Loss Concealment simplifications
+            - Aligned LTPF normcorr window
 
     - V1.4.2 2019-07-25 (ETSI TS 103 634 V1.1.1)
         - General
@@ -82,10 +106,8 @@ Changelog:
             - Changed setup struct size defines to actual maximum values
 
 
-
 Building
 --------
-
     Unix platforms:
         - Go to src/fixed_point or src/floating_point folder
         - Call "make"
@@ -104,10 +126,11 @@ precision floating point format to represent data and perform mathematical
 operations. Double precision floating point format can be acitivated by enabling
 the define LC3_DOUBLE_PRECISION.
 
+
 Usage
 -----
     The following example commands explain the usage of the LC3plus binary. A
-    complete list is available by calling ./LCplus -h.
+    complete list is available by calling ./LC3plus -h.
 
     To call encoder+decoder at the same time
         ./LC3plus INPUT.wav OUTPUT.wav BITRATE
@@ -118,10 +141,47 @@ Usage
     To call decoder only
         ./LC3plus -D INPUT.bin OUTPUT.wav
 
+    To specify output bits per sample
+        ./LC3plus -bps NUM INPUT.wav OUTPUT.wav BITRATE
+    where NUM is either 16 (default) or 24.
+
+    To specify bitrate switching file instead of fixed bitrate
+        ./LC3plus -swf FILE INPUT.wav OUTPUT.wav BITRATE
+    where FILE is a binary file containing the bitrate as a
+    sequence of 64-bit values.
+
+    To specify delay compensation
+        ./LC3plus -dc DC INPUT.wav OUTPUT.wav BITRATE
+    where DC is 0, 1 (default) or 2 meaning that:
+        0: Don't use delay compensation
+        1: Compensate delay in decoder (default)
+        2: Split delay equally in encoder and decoder
+
+    To disable frame counter (quiet mode)
+        ./LC3plus -q INPUT.wav OUTPUT.wav BITRATE
+
+    To activate verbose mode (print switching commands)
+        ./LC3plus -v INPUT.wav OUTPUT.wav BITRATE
+
+    To use the G192 bitstream format
+        ./LC3plus -E -formatG192 INPUT.wav OUTPUT.g192 BITRATE
+    Note that an additional file OUTPUT.cfg will be created containing
+    the decoder information. To specify the configuration file,
+    the flag -cfgG192 FILE can be used where FILE is the path to the
+    configuration file.
+    Note that the same flags (-formatG192 and -cfgG192) shall be used for decoding,
+    if the G192 format was chosen for encoding.
+
     To call decoder with frame loss simulations
         ./LC3plus -D -epf patternfile INPUT.bin OUTPUT.wav
         where the patternfile is a binary file containing a sequence of
         16-bit values, non-zero values indicating a frame loss
+
+    To write error detection pattern (from arithmetic decoder) into a 16-bit binary file
+        ./LC3plus -D -edf patternfile INPUT.bin OUTPUT.wav
+        where the patternfile is a binary file containing a sequence of
+        16-bit values, non-zero values indicating a detected frame loss
+
 
     The high-resolution mode is only available in the floating-point source code.
     It is mandatory for usage with 96 kHz sampling frequency and can also be used
@@ -158,8 +218,9 @@ Usage
          with NUM one of the following: 0 = off, 1 = on. The channel-decoder
          identifies the error protection mode by itself
 
-    The paramter bitrate, bandwidth and epmode also allow the usage of switching
-    files instead of a fixed number. If the switching file is shorter than the
+    The parameter bitrate, bandwidth and epmode also allow the usage of switching
+    files instead of a fixed number.
+    If the switching file is shorter than the
     input it is looped from the beginning. The switching files contain data stored
     as little-endian 64-bit values.
 
@@ -222,13 +283,35 @@ Usage
     10                 |  16                   |  320
     -------------------------------------------------------------------
 
+    The software package also includes a Channel Coder Converter (CCC) which converts unprotected
+    and protected LC3plus payloads within each other.
+
+    Building:
+    On Unix:
+        - make ccConvert
+
+    On Windows:
+        - Go to src/fixed_point/msvc_ccc
+        - Open up solution file ccConvert.sln and build it
+        - Standard config executable path and name ".\Win32\Release\ccConvert.exe"
+
+    Usage:
+    The CCC can be used as follows:
+    Pack mode (convert to protected):     ./ccConvert -pack gross_bytes ep_mode in.lc3 out.lc3
+    Unpack mode (convert to unprotected): ./ccConvert -unpack in.lc3 out.lc3
+
+    where gross_bytes is the gross number of bytes available and ep_mode the error protection
+    mode which is one of 0,1,2,3,4.
+    For G.192 format, the filename extension should be ".g192".
+
+
 Binary File Format
--------------------
+------------------
     Note: The binary file format is intended only for testing purposes. It is
     not standardized and may change in the future.
     The file starts with a config header structure as follows.
 
-    Field         Bytes   Contens
+    Field         Bytes   Content
     ------------------------------------------------------------
     file_id       2       file identifier, value 0xcc1c
     header_size   2       total config header size in bytes
@@ -248,5 +331,4 @@ Binary File Format
     The header is immediately followed by a series of coded audio frames, where
     each frame consists of a two-byte frame length information and the current
     coded frame.
-
 

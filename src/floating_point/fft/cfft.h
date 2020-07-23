@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 
 #include "../functions.h"
@@ -13,10 +14,9 @@
 #ifndef CFFT_H
 #define CFFT_H
 
-typedef struct
-{
-    LC3_INT len;
-    LC3_INT sign;
+typedef struct {
+    LC3_INT    len;
+    LC3_INT    sign;
     LC3_FLOAT* table;
 } Cfft;
 
@@ -41,7 +41,7 @@ typedef struct
 void LC3_cfft(LC3_FLOAT* re, LC3_FLOAT* im, LC3_INT sizeOfFft, LC3_INT stride, LC3_INT sign);
 
 LC3_INT LC3_cfft_plan(Cfft* handle, LC3_INT length, LC3_INT sign);
-void LC3_cfft_apply(Cfft* handle, LC3_FLOAT* re, LC3_FLOAT* im, LC3_INT stride);
-void LC3_cfft_free(Cfft* handle);
+void    LC3_cfft_apply(Cfft* handle, LC3_FLOAT* re, LC3_FLOAT* im, LC3_INT stride);
+void    LC3_cfft_free(Cfft* handle);
 
 #endif /* FFT_RADIX2_H */

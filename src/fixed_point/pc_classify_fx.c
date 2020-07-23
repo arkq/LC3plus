@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "defines.h"
 
@@ -20,7 +21,7 @@
 void peakDetector_fx(Word16 in_sig[], Word16 yLen, Word16 *xover);
 
 void processPCclassify_fx(Word16 pitch_present, Word16 frame_dms, Word16 q_old_d_fx[], Word16 q_old_res_fx[],
-                          Word16 yLen, Word16 spec_inv_idx, Word16 stab_fac, Word16 prev_bfi, Word16 *bfi)
+                          Word16 yLen, Word16 spec_inv_idx, Word16 stab_fac, Word16 *bfi)
 {
     Dyn_Mem_Deluxe_In(
         Word16  maxPitchBin, xover;
@@ -29,12 +30,8 @@ void processPCclassify_fx(Word16 pitch_present, Word16 frame_dms, Word16 q_old_d
         Word32  full_nrg, part_nrg;
     );
 
-    IF (sub(prev_bfi, 1) == 0)
-    {
-        *bfi = 1;
-    }
-    /* Apply classifier only if lower than 2khz signal */
-    ELSE IF (sub(i_mult(spec_inv_idx, 10), shl_pos(frame_dms, 2)) < 0 )
+    /* Apply classifier only if lower than 2kHz signal */
+    IF (sub(i_mult(spec_inv_idx, 10), shl_pos(frame_dms, 2)) < 0 )
     {
         IF (sub(stab_fac, 16384 /* 0.5 */) < 0)
         {

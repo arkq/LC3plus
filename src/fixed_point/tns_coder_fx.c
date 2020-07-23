@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 
 #include "functions.h"
@@ -19,18 +20,13 @@ static Word32 FIRLattice(Word16 order, const Word16 *parCoeff /*Q15*/, Word32 *s
 
 void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cutoff_idx, Word16 order[],
                         Word16 *numfilters, Word16 enable_lpc_weighting, Word16 nSubdivisions, Word16 frame_dms,
-                        Word16 maxLen, Word8 *scratchBuffer)
+                        Word16 maxLen, Word8 *scratchBuffer
+)
 {
-    Dyn_Mem_Deluxe_In(
-        Word16 *      tmpbuf;
-        Word32 *      rxx, epsP, *state, L_tmp, *A, predictionGain, alpha;
-        Word16 *      RC, inv;
-        Word16        n, n2, headroom, shift, tmp, shifts, facs, facs_e, stopfreq, xLen, maxOrder;
-        Word16        startfreq[TNS_NUMFILTERS_MAX];
-        const Word16 *subdiv_startfreq, *subdiv_stopfreq;
-        Counter       i, j, iSubdivisions, lag;
-        Word8 *       LevinsonBuffer;
-    );
+    Dyn_Mem_Deluxe_In(Word16 * tmpbuf; Word32 * rxx, epsP, *state, L_tmp, *A, predictionGain, alpha; Word16 * RC, inv;
+                      Word16 n, n2, headroom, shift, tmp, shifts, facs, facs_e, stopfreq, xLen, maxOrder;
+                      Word16 startfreq[TNS_NUMFILTERS_MAX]; const Word16 *subdiv_startfreq, *subdiv_stopfreq;
+                      Counter i, j, iSubdivisions, lag; Word8 * LevinsonBuffer;);
 
     /* Buffer alignment */
     tmpbuf = (Word16 *)scratchAlign(scratchBuffer, 0); /* Size = 2 * MAX_LEN */
@@ -46,31 +42,54 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
     LevinsonBuffer = (Word8 *)scratchAlign(RC, sizeof(*RC) * (MAXLAG)); /* Size = 4 * (M_LTPF + 1) = 100 bytes */
 
     /* Init */
-    *bits       = 0;                                move16();
-    maxOrder    = MAXLAG;                           move16();
-    *numfilters = 1;                                move16();
-    xLen        = BW_cutoff_bin_all[BW_cutoff_idx]; move16();
+    *bits = 0;
+    move16();
+    maxOrder = MAXLAG;
+    move16();
+    *numfilters = 1;
+    move16();
+
+    {
+        xLen = BW_cutoff_bin_all[BW_cutoff_idx];
+    }
+    move16();
 
     SWITCH (frame_dms)
     {
     case 25:
-        startfreq[0]     = 3;                                         move16();
-        subdiv_startfreq = tns_subdiv_startfreq_2_5ms[BW_cutoff_idx]; move16();
-        subdiv_stopfreq  = tns_subdiv_stopfreq_2_5ms[BW_cutoff_idx];  move16();
-        xLen             = shr_pos(xLen, 2);
-        maxOrder         = 4; move16();
+        startfreq[0] = 3;
+        move16();
+        {
+            subdiv_startfreq = tns_subdiv_startfreq_2_5ms[BW_cutoff_idx];
+            move16();
+            subdiv_stopfreq = tns_subdiv_stopfreq_2_5ms[BW_cutoff_idx];
+            move16();
+        }
+        xLen     = shr_pos(xLen, 2);
+        maxOrder = 4;
+        move16();
         BREAK;
     case 50:
-        startfreq[0]     = 6;                                       move16();
-        subdiv_startfreq = tns_subdiv_startfreq_5ms[BW_cutoff_idx]; move16();
-        subdiv_stopfreq  = tns_subdiv_stopfreq_5ms[BW_cutoff_idx];  move16();
-        xLen             = shr_pos(xLen, 1);
-        maxOrder         = 4;
+        startfreq[0] = 6;
+        move16();
+        {
+            subdiv_startfreq = tns_subdiv_startfreq_5ms[BW_cutoff_idx];
+            move16();
+            subdiv_stopfreq = tns_subdiv_stopfreq_5ms[BW_cutoff_idx];
+            move16();
+        }
+        xLen     = shr_pos(xLen, 1);
+        maxOrder = 4;
         BREAK;
-    default:                                                    /* 100 */
-        startfreq[0]     = 12;                                  move16();
-        subdiv_startfreq = tns_subdiv_startfreq[BW_cutoff_idx]; move16();
-        subdiv_stopfreq  = tns_subdiv_stopfreq[BW_cutoff_idx];  move16();
+    default: /* 100 */
+        startfreq[0] = 12;
+        move16();
+        {
+            subdiv_startfreq = tns_subdiv_startfreq[BW_cutoff_idx];
+            move16();
+            subdiv_stopfreq = tns_subdiv_stopfreq[BW_cutoff_idx];
+            move16();
+        }
         BREAK;
     }
 
@@ -106,7 +125,8 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
 
             IF (L_tmp == 0)
             {
-                rxx[0] = 0x7FFFFFFF; move32();
+                rxx[0] = 0x7FFFFFFF;
+                move32();
                 basop_memset(&rxx[1], 0, (maxOrder) * sizeof(*rxx));
                 BREAK;
             }
@@ -133,8 +153,8 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
 
             FOR (i = 0; i < n; i++)
             {
-                tmpbuf[i] = round_fx_sat(
-                    L_shl_sat(x[subdiv_startfreq[nSubdivisions * j + iSubdivisions] + i], shifts)); move16();
+                tmpbuf[i] = round_fx_sat(L_shl_sat(x[subdiv_startfreq[nSubdivisions * j + iSubdivisions] + i], shifts));
+                move16();
             }
 
             FOR (lag = 0; lag <= maxOrder; lag++)
@@ -151,7 +171,8 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
                 L_tmp = Mpy_32_16(L_tmp, facs);
                 L_tmp = L_shl(L_tmp, facs_e);
 
-                rxx[lag] = L_add(rxx[lag], L_tmp); move32();
+                rxx[lag] = L_add(rxx[lag], L_tmp);
+                move32();
             }
         }
 
@@ -175,10 +196,12 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
                 L_tmp = alpha;
                 FOR (i = 1; i < maxOrder; i++)
                 {
-                    A[i]  = Mpy_32_32(A[i], L_tmp); move32();
+                    A[i] = Mpy_32_32(A[i], L_tmp);
+                    move32();
                     L_tmp = Mpy_32_32(L_tmp, alpha);
                 }
-                A[maxOrder] = Mpy_32_32(A[maxOrder], L_tmp); move32();
+                A[maxOrder] = Mpy_32_32(A[maxOrder], L_tmp);
+                move32();
 
                 /* LPC -> RC */
                 lpc2rc(A, RC, maxOrder);
@@ -201,13 +224,15 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
             {
                 L_tmp = L_add(L_tmp, L_deposit_l(ac_tns_coef_bits[i][indexes[MAXLAG * j + i]]));
             }
-            *bits = add(*bits, add(2, extract_l(L_shr_pos(L_sub(L_tmp, 1), 11)))); move16();
+            *bits = add(*bits, add(2, extract_l(L_shr_pos(L_sub(L_tmp, 1), 11))));
+            move16();
 
             /* Unquantize Reflection Coefficients */
             Index2Parcor(&indexes[MAXLAG * j], RC, order[j]);
 
             /* Stop frequency */
-            stopfreq = xLen; move16();
+            stopfreq = xLen;
+            move16();
             IF (sub(*numfilters, 2) == 0 && j == 0)
             {
                 stopfreq = startfreq[1];
@@ -216,7 +241,8 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
             /* Filter */
             FOR (i = startfreq[j]; i < stopfreq; i++)
             {
-                x[i] = FIRLattice(order[j], RC, state, x[i]); move32();
+                x[i] = FIRLattice(order[j], RC, state, x[i]);
+                move32();
             }
         }
         ELSE
@@ -234,15 +260,12 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
 
 static void Parcor2Index(const Word16 parCoeff[] /*Q15*/, Word16 index[], Word16 order)
 {
-    Dyn_Mem_Deluxe_In(
-        Counter i;
-        Word16  iIndex;
-        Word16  x;
-    );
+    Dyn_Mem_Deluxe_In(Counter i; Word16 iIndex; Word16 x;);
 
     FOR (i = 0; i < order; i++)
     {
-        move16(); move16();
+        move16();
+        move16();
         iIndex = 1;
         x      = parCoeff[i];
 
@@ -250,7 +273,8 @@ static void Parcor2Index(const Word16 parCoeff[] /*Q15*/, Word16 index[], Word16
         {
             iIndex = add(iIndex, 1);
         }
-        index[i] = sub(iIndex, 1); move16();
+        index[i] = sub(iIndex, 1);
+        move16();
     }
 
     Dyn_Mem_Deluxe_Out();
@@ -261,16 +285,14 @@ static void Index2Parcor(const Word16 index[], Word16 parCoeff[], Word16 order)
     Counter i;
     FOR (i = 0; i < order; i++)
     {
-        parCoeff[i] = tnsQuantPts[index[i]]; move16();
+        parCoeff[i] = tnsQuantPts[index[i]];
+        move16();
     }
 }
 
 static Word32 FIRLattice(Word16 order, const Word16 *parCoeff /*Q15*/, Word32 *state, Word32 x /* Q0 */)
 {
-    Dyn_Mem_Deluxe_In(
-        Counter i;
-        Word32  tmpSave, tmp;
-    );
+    Dyn_Mem_Deluxe_In(Counter i; Word32 tmpSave, tmp;);
 
     tmpSave = L_add(x, 0);
 
@@ -278,13 +300,15 @@ static Word32 FIRLattice(Word16 order, const Word16 *parCoeff /*Q15*/, Word32 *s
     {
         tmp      = L_add(state[i], Mpy_32_16(x, parCoeff[i]));
         x        = L_add(x, Mpy_32_16(state[i], parCoeff[i])); /* exponent: 31+0 */
-        state[i] = tmpSave;                                    move32();
-        tmpSave  = L_add(tmp, 0);
+        state[i] = tmpSave;
+        move32();
+        tmpSave = L_add(tmp, 0);
     }
 
     /* last stage: only need half operations */
     x                = L_add(x, Mpy_32_16(state[order - 1], parCoeff[order - 1]));
-    state[order - 1] = tmpSave; move32();
+    state[order - 1] = tmpSave;
+    move32();
     Dyn_Mem_Deluxe_Out();
     return x;
 }

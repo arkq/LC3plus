@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 
 #include "functions.h"
@@ -16,7 +17,8 @@ static Word32 IIRLattice(Word16 order, const Word16 *parCoeff, Word32 *state, Wo
 /*************************************************************************/
 
 void processTnsDecoder_fx(Word16 rc_idx[], Word32 x[], Word16 xLen, Word16 order[], Word16 *x_e, Word16 BW_stopband_idx,
-                          Word16 frame_dms, Word8 *scratchBuffer)
+                          Word16 frame_dms, Word8 *scratchBuffer
+)
 {
     Dyn_Mem_Deluxe_In(
         Word32 *state;
@@ -29,7 +31,9 @@ void processTnsDecoder_fx(Word16 rc_idx[], Word32 x[], Word16 xLen, Word16 order
     rc    = (Word16 *)scratchAlign(state, sizeof(*state) * MAXLAG); /* Size = MAXLAG */
 
     numfilters  = 1;
-    BW_stopband = BW_cutoff_bin_all[BW_stopband_idx]; move16();
+    {
+        BW_stopband = BW_cutoff_bin_all[BW_stopband_idx]; move16();
+    }
 
     SWITCH (frame_dms)
     {

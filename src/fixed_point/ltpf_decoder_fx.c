@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 
 #include "functions.h"
@@ -26,14 +27,14 @@ void process_ltpf_decoder_fx(Word16 *x_e, Word16 L_frame, Word16 old_x_len, Word
                              Word16 damping, Word16 *old_scale_fac_idx, Word8 *scratchBuffer)
 {
     Counter i;
-    Word16  gain, s, s0, s1, pitch, pitch_int, pitch_fr;
+    Word16  gain, s, s0, s1, pitch, pitch_int, pitch_fr, N4, N34;
     Word16 *x, *y;
     Word16 *z;
 
 #ifdef DYNMEM_COUNT
     Dyn_Mem_In("process_ltpf_decoder_fx", sizeof(struct {
                    Counter i;
-                   Word16  gain, s, s0, s1, pitch, pitch_int, pitch_fr;
+                   Word16  gain, s, s0, s1, pitch, pitch_int, pitch_fr, N4, N34;
                    Word16 *x, *y;
                    Word16 *z;
                }));
@@ -42,21 +43,14 @@ void process_ltpf_decoder_fx(Word16 *x_e, Word16 L_frame, Word16 old_x_len, Word
     z = (Word16 *)scratchAlign(scratchBuffer, 0); /* Size = MAX_LEN / 4 + 10 */
 
 
-#ifdef NONBE_PLC2_LTPF_FADEOUT_FIX
     test();
     IF ((sub(bfi, 1) == 0) && (concealMethod == 0))
-#else
-    test(); test();
-    IF (sub(bfi, 1) == 0 && (sub(concealMethod, 2) == 0 || concealMethod == 0))
-#endif
     {
         ltpf        = 0; move16();
         ltpf_active = 0; move16();
-
-#ifndef NONBE_PLC_LTPF_FIX
-        *mem_ltpf_active = 0; move16();
-        bfi              = 0; move16();
-#endif
+        pitch_int = 0; move16();
+        pitch_fr  = 0; move16();
+        gain      = 0; move16();
     }
 
     /* Filter parameters */
@@ -107,7 +101,7 @@ void process_ltpf_decoder_fx(Word16 *x_e, Word16 L_frame, Word16 old_x_len, Word
             gain = gain_scale_fac[scale_fac_idx]; move16();
         }
     }
-    ELSE
+    ELSE IF (concealMethod > 0)
     {
         /* fix to avoid not initialized filtering for concelament 
            might be necessary in case of bit errors or rate switching */
@@ -119,13 +113,13 @@ void process_ltpf_decoder_fx(Word16 *x_e, Word16 L_frame, Word16 old_x_len, Word
         }
         
         ltpf_active = *mem_ltpf_active; move16();
-#ifdef NONBE_PLC2_LTPF_FADEOUT_FIX
+
         if ((sub(concealMethod, 2) == 0))
         { /* always start fade off to save filtering WMOPS for the remaining 7.5 ms  */
             assert(bfi == 1);
             ltpf_active = 0; move16(); /*always start fade off , still maintain  *mem_ltpf_active */
         }
-#endif
+
         pitch_int = *old_pitch_int;
         pitch_fr  = *old_pitch_fr;
         gain      = mult_r(*old_gain, damping);
@@ -192,9 +186,11 @@ void process_ltpf_decoder_fx(Word16 *x_e, Word16 L_frame, Word16 old_x_len, Word
         /* Input/Output buffers */
         x = old_x + old_x_len;
         y = old_y + old_y_len;
+		
+		N4  = ltpf_overlap_len[fs_idx]; move16();
+		N34 = sub(L_frame, N4);         move16();
 
         /* Input */
-
         basop_memmove(x, x_in, (L_frame) * sizeof(Word16));
 
         /* Scaling */
@@ -221,41 +217,39 @@ void process_ltpf_decoder_fx(Word16 *x_e, Word16 L_frame, Word16 old_x_len, Word
         /* Filtering */
         IF (ltpf_active == 0)
         {
-            ltpf_synth_filter(y, x, L_frame / 4, *old_pitch_int, *old_pitch_fr, *old_gain, *old_scale_fac_idx, fs_idx,
+            ltpf_synth_filter(y, x, N4, *old_pitch_int, *old_pitch_fr, *old_gain, *old_scale_fac_idx, fs_idx,
                               -1);
         }
         ELSE IF (*mem_ltpf_active == 0)
         {
-            ltpf_synth_filter(y, x, L_frame / 4, pitch_int, pitch_fr, gain, scale_fac_idx, fs_idx, 1);
+            ltpf_synth_filter(y, x, N4, pitch_int, pitch_fr, gain, scale_fac_idx, fs_idx, 1);
         }
         ELSE IF (sub(pitch_int, *old_pitch_int) == 0 && sub(*old_pitch_fr, pitch_fr) == 0)
         {
-            ltpf_synth_filter(y, x, L_frame / 4, pitch_int, pitch_fr, gain, scale_fac_idx, fs_idx, 0);
+            ltpf_synth_filter(y, x, N4, pitch_int, pitch_fr, gain, scale_fac_idx, fs_idx, 0);
         }
         ELSE
         {
-            ltpf_synth_filter(y, x, L_frame / 4, *old_pitch_int, *old_pitch_fr, *old_gain, *old_scale_fac_idx, fs_idx,
+            ltpf_synth_filter(y, x, N4, *old_pitch_int, *old_pitch_fr, *old_gain, *old_scale_fac_idx, fs_idx,
                               -1);
-            basop_memmove(z, y - tilt_filter_len[fs_idx], (L_frame / 4 + tilt_filter_len[fs_idx]) * sizeof(Word16));
-            ltpf_synth_filter(y, z + tilt_filter_len[fs_idx], L_frame / 4, pitch_int, pitch_fr, gain, scale_fac_idx,
+            basop_memmove(z, y - tilt_filter_len[fs_idx], (N4 + tilt_filter_len[fs_idx]) * sizeof(Word16));
+            ltpf_synth_filter(y, z + tilt_filter_len[fs_idx], N4, pitch_int, pitch_fr, gain, scale_fac_idx,
                               fs_idx, 1);
         }
         IF (ltpf_active > 0)
         {
-            ltpf_synth_filter(y + L_frame / 4, x + L_frame / 4, 3 * L_frame / 4, pitch_int, pitch_fr, gain,
+            ltpf_synth_filter(y + N4, x + N4, N34, pitch_int, pitch_fr, gain,
                               scale_fac_idx, fs_idx, 0);
         }
         ELSE
         {
-            basop_memmove(&y[L_frame / 4], &x[L_frame / 4], (3 * L_frame / 4) * sizeof(Word16));
+            basop_memmove(&y[N4], &x[N4], N34 * sizeof(Word16));
         }
 
         /* Output */
-
         basop_memmove(y_out, y, (L_frame) * sizeof(Word16));
 
         /* Update */
-
         basop_memmove(old_x, &old_x[L_frame], (old_x_len) * sizeof(Word16));
 
         basop_memmove(old_y, &old_y[L_frame], (old_y_len) * sizeof(Word16));
@@ -312,25 +306,9 @@ static void ltpf_synth_filter(Word16 *synth_ltp, Word16 *synth, Word16 length, W
         }
 
 /* step = 1.f/(float)(length); */
-        if (sub(length, 5) == 0)
-        {
-            step = 6553 /*1.f/5.f Q15*/; move16();
-        }
-        if (sub(length, 10) == 0)
-        {
-            step = 3276 /*1.f/10.f Q15*/; move16();
-        }
-        if (sub(length, 15) == 0)
-        {
-            step = 2184 /*1.f/15.f Q15*/; move16();
-        }
         if (sub(length, 20) == 0)
         {
             step = 1638 /*1.f/20.f Q15*/; move16();
-        }
-        if (sub(length, 30) == 0)
-        {
-            step = 1092 /*1.f/30.f Q15*/; move16();
         }
         if (sub(length, 40) == 0)
         {

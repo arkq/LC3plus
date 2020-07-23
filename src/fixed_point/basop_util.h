@@ -1,20 +1,18 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #ifndef __BASOP_UTIL_H__
 #define __BASOP_UTIL_H__
 
-#include "basop32.h"
-#include "basop_mpy.h"
 #include "defines.h"
-#include "stl.h"
-#include "typedef.h"
+#include "functions.h"
 #include <assert.h>
 #include <string.h>
 
@@ -276,6 +274,7 @@ void Copy_Scale_sig(const Word16 x[], /* i  : signal to scale input           Qx
                     const Word16 exp0 /* i  : exponent: x = round(x << exp)   Qx ?exp  */
 );
 
+
 Word32 Isqrt(Word32  x,  /* (i)   Q31: normalized value (1.0 > x >= 0.5) */
              Word16 *x_e /* (i/o) Q0 : pointer to exponent */
 );
@@ -288,7 +287,7 @@ Word16 BASOP_Util_InvLog2_16(Word16 x, Word16 *y_e);
 void fft16(Word32 *re, Word32 *im, Word16 s);
 #endif
 
-#define BASOP_CFFT_MAX_LENGTH 384
+#define BASOP_CFFT_MAX_LENGTH 480
 void BASOP_cfft(Word32 *re, Word32 *im, Word16 sizeOfFft, Word16 s, Word16 *scale, Word32 *x);
 void BASOP_rfftN(Word32 *re, Word16 sizeOfFft, Word16 *scale, Word8 *scratchBuffer);
 void BASOP_irfftN(Word32 *re, Word16 sizeOfFft, Word16 *scale, Word8 *scratchBuffer);

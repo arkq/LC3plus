@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 /* guard against unindended includes */
 #ifndef INCLUDED_FROM_IISFFT_C
@@ -39,18 +40,18 @@ static void fft240(LC3_FLOAT* in)
         3,   19,  35,  51,  67,  83,  99,  115, 131, 147, 163, 179, 210, 226, 2,   18,  34,  50,  66,  82,  98,  114,
         130, 146, 162, 178, 194, 225, 1,   17,  33,  49,  65,  81,  97,  113, 129, 145, 161, 177, 193, 209};
 
-    const LC3_INT L = 240;
-    const LC3_INT A = 15;
-    const LC3_INT B = 16;
+    const LC3_INT  L    = 240;
+    const LC3_INT  A    = 15;
+    const LC3_INT  B    = 16;
     const LC3_INT* idx1 = table1;
     const LC3_INT* idx2 = table2;
 
-    LC3_INT k, l;
+    LC3_INT   k, l;
     LC3_FLOAT temp[32], out[480];
 
     for (k = 0; k < A; k++) {
         for (l = 0; l < B; l++) {
-            temp[2 * l] = in[2 * *idx1];
+            temp[2 * l]     = in[2 * *idx1];
             temp[2 * l + 1] = in[2 * *idx1 + 1];
             idx1 += A;
         }
@@ -59,7 +60,7 @@ static void fft240(LC3_FLOAT* in)
         idx1 -= L;
 
         for (l = 0; l < B; l++) {
-            in[2 * *idx1] = temp[2 * l];
+            in[2 * *idx1]     = temp[2 * l];
             in[2 * *idx1 + 1] = temp[2 * l + 1];
             idx1 += A;
         }
@@ -71,14 +72,14 @@ static void fft240(LC3_FLOAT* in)
 
     for (k = 0; k < B; k++) {
         for (l = 0; l < A; l++) {
-            temp[2 * l] = in[2 * *idx1];
+            temp[2 * l]     = in[2 * *idx1];
             temp[2 * l + 1] = in[2 * *idx1++ + 1];
         }
 
         fft15(temp); /* 15-point FFT */
 
         for (l = 0; l < A; l++) {
-            out[2 * *idx2] = temp[2 * l];
+            out[2 * *idx2]       = temp[2 * l];
             out[2 * *idx2++ + 1] = temp[2 * l + 1];
         }
     }
@@ -136,18 +137,18 @@ static void fft480(LC3_FLOAT* in)
         115, 147, 179, 211, 243, 275, 307, 339, 371, 403, 450, 2,   34,  66,  98,  130, 162, 194, 226, 258, 290, 322,
         354, 386, 418, 465, 17,  49,  81,  113, 145, 177, 209, 241, 273, 305, 337, 369, 401, 433};
 
-    const LC3_INT L = 480;
-    const LC3_INT A = 15;
-    const LC3_INT B = 32;
+    const LC3_INT  L    = 480;
+    const LC3_INT  A    = 15;
+    const LC3_INT  B    = 32;
     const LC3_INT* idx1 = table1;
     const LC3_INT* idx2 = table2;
 
-    LC3_INT k, l;
+    LC3_INT   k, l;
     LC3_FLOAT temp[64], out[960];
 
     for (k = 0; k < A; k++) {
         for (l = 0; l < B; l++) {
-            temp[2 * l] = in[2 * *idx1];
+            temp[2 * l]     = in[2 * *idx1];
             temp[2 * l + 1] = in[2 * *idx1 + 1];
             idx1 += A;
         }
@@ -156,7 +157,7 @@ static void fft480(LC3_FLOAT* in)
         idx1 -= L;
 
         for (l = 0; l < B; l++) {
-            in[2 * *idx1] = temp[2 * l];
+            in[2 * *idx1]     = temp[2 * l];
             in[2 * *idx1 + 1] = temp[2 * l + 1];
             idx1 += A;
         }
@@ -168,14 +169,14 @@ static void fft480(LC3_FLOAT* in)
 
     for (k = 0; k < B; k++) {
         for (l = 0; l < A; l++) {
-            temp[2 * l] = in[2 * *idx1];
+            temp[2 * l]     = in[2 * *idx1];
             temp[2 * l + 1] = in[2 * *idx1++ + 1];
         }
 
         fft15(temp); /* 15-point FFT */
 
         for (l = 0; l < A; l++) {
-            out[2 * *idx2] = temp[2 * l];
+            out[2 * *idx2]       = temp[2 * l];
             out[2 * *idx2++ + 1] = temp[2 * l + 1];
         }
     }

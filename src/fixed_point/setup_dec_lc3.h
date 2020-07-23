@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #ifndef SETUP_DEC_LC3_H
 #define SETUP_DEC_LC3_H
@@ -21,14 +22,16 @@ typedef struct
     Word16 *PhECU_plocs;       /* MAX_PLOCS */
     Word16 *PhECU_fg_wintaper; /* MDCT_MEM_LEN_MAX */
     Word16 *PhECU_win_pre_tda; /* MAX_WIN_PRE_TDA */
-    Word16  tdc_gain_p;
     Word32  tdc_gain_c;
     Word16  stab_fac;
     Word16  tdc_fract;
     Word16  tdc_seed;
-    Word16  tdc_cum_damp;
     Word16  tdc_preemph_fac;
     Word16  tdc_lpc_order;
+    Word16  cum_fflcAtten;
+    Word16  harmonicBuf_fx[MAX_PITCH] ALIGN_BUFFER_STRUCT;
+    Word16  harmonicBuf_Q;
+    Word16  synthHist_fx[M] ALIGN_BUFFER_STRUCT;
     Word16  cum_fading_slow;
     Word16  cum_fading_fast;
     Word16  PhECU_LprotOrg_fx; /* needed to change the Prot size  adaptively  */
@@ -83,8 +86,8 @@ typedef struct
     Word16     q_old_fx_exp;
     Word16     ns_seed;
     Word16     ns_cum_alpha;
-    Word16  pc_seed;
     Word16  pc_nbLostFramesInRow;
+    Word16  pc_seed;
     Word16 *q_old_res_fx;
     Word16  q_old_res_fx_exp;
     Word16  prev_gg;

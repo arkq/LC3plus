@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "functions.h"
 
@@ -29,9 +30,7 @@ LC3_FLOAT array_max_abs(LC3_FLOAT* x, LC3_INT len)
 void processEstimateGlobalGain_fl(LC3_FLOAT x[], LC3_INT lg, LC3_INT nbitsSQ, LC3_FLOAT* gain, LC3_INT* quantizedGain,
                                   LC3_INT* quantizedGainMin, LC3_INT quantizedGainOff, LC3_FLOAT* targetBitsOff,
                                   LC3_INT* old_targetBits, LC3_INT old_specBits
-#ifdef ENABLE_HR_MODE
                                   , LC3_INT hrmode , LC3_INT regBits, LC3_FLOAT frame_ms
-#endif
 )
 {
 
@@ -52,7 +51,6 @@ void processEstimateGlobalGain_fl(LC3_FLOAT x[], LC3_INT lg, LC3_INT nbitsSQ, LC
 
     x_max = array_max_abs(x, lg);
 
-#ifdef ENABLE_HR_MODE
     if (hrmode && regBits > 0)
     {
         LC3_FLOAT M0 = 1e-5, M1 = 1e-5, rB_offset;
@@ -66,22 +64,17 @@ void processEstimateGlobalGain_fl(LC3_FLOAT x[], LC3_INT lg, LC3_INT nbitsSQ, LC
         rB_offset = 8 * (1 - MIN(M1/M0, thresh) / thresh);
         reg_val = x_max * LC3_POW(2,-regBits - rB_offset);
     }
-#endif
 
     if (x_max == 0) {
         ind_min         = quantizedGainOff;
         ind             = 0;
         *old_targetBits = -1;
     } else {
-#ifdef ENABLE_HR_MODE
         if (hrmode == 1) {
         	g_min = x_max / (32768 * 256 - 2);
         } else {
             g_min = x_max / (32768 - 0.375);
         }
-#else
-        g_min = x_max / (32768 - 0.375);
-#endif
         ind_min = ceil(28.0 * LC3_LOG10(g_min));
         assert(ind_min <= (255 + quantizedGainOff));
 

@@ -1,14 +1,16 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
-#include "basop_mpy.h"
-#include "stl.h"
+#include "defines.h"
+
+#include "functions.h"
 
 
 Word32 Mpy_32_16(Word32 x, Word16 y)

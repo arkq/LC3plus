@@ -1,16 +1,17 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "defines.h"
 
 
-#include "basic_op/typedefs.h"
+#include "functions.h"
 #include "rom_basop_util.h"
 #include <assert.h>
 #include <stdio.h>
@@ -39,6 +40,13 @@
 #define FEC_TOTAL_ERROR_SIZE (FEC_N_ERR_SYMB_MAX * FEC_N_MODES * FEC_N_MODE_DETECTION_CW)
 #define FEC_TOTAL_DEG_ELP_SIZE (FEC_N_MODES * FEC_N_MODE_DETECTION_CW)
 
+#define ERROR_REPORT_BEC_MASK   ((0x0FFF)>>1)
+#define ERROR_REPORT_EP1_OK     ((0x1000)>>1)
+#define ERROR_REPORT_EP2_OK     ((0x2000)>>1)
+#define ERROR_REPORT_EP3_OK     ((0x4000)>>1)
+#define ERROR_REPORT_EP4_OK     ((0x8000)>>1)                    
+#define ERROR_REPORT_ALL_OK (ERROR_REPORT_EP1_OK | ERROR_REPORT_EP2_OK | ERROR_REPORT_EP3_OK | ERROR_REPORT_EP4_OK)
+
 /* debugging switches */
 
 /* constants concerning mode detection */
@@ -56,6 +64,7 @@
  * Behind this is the assumption that one would store GF16 elements in Word16 for strict BASOP
  * implementation.
  */
+
 #define GF16_MUL(a, b) (UWord8)(move16(), gf16_mult_table[s_or((a), shl((b), 4))])
 #define GF16_MUL0(a, b) (UWord8)(move16(), gf16_mult_table[s_or((a), (b))])
 #define GF16_ADD(a, b) (UWord8) s_xor((a), (b))
@@ -717,14 +726,14 @@ int fec_decoder(UWord8 *iobuf, Word16 slot_bytes, int *data_bytes, Word16 *epmr,
 
     IF (*bfi == 1)
     {
-    	Dyn_Mem_Deluxe_Out();
+        Dyn_Mem_Deluxe_Out();
         return -1;
     }
 
     if (slot_bytes < FEC_SLOT_BYTES_MIN || slot_bytes > FEC_SLOT_BYTES_MAX)
     {
-    	*bfi = 1;
-    	return -1;
+        *bfi = 1;
+        return -1;
     }
 
     my_scratch = (UWord8 *)scratch; move32();
@@ -754,10 +763,22 @@ int fec_decoder(UWord8 *iobuf, Word16 slot_bytes, int *data_bytes, Word16 *epmr,
 #ifndef APPLY_MAX_ERRORS
     IF (sub(slot_bytes, 40) == 0 && mode > 0)
     {
-        IF (sub(error_report, low_br_max_bit_errors_by_mode[mode]) > 0)
+        IF (sub(error_report & ERROR_REPORT_BEC_MASK, low_br_max_bit_errors_by_mode[mode]) > 0)
         {
+            error_report &= ERROR_REPORT_BEC_MASK;
             mode = -1; move16();
             *bfi = 1;  move32();
+        }
+        ELSE
+        {
+            IF (sub(error_report & ERROR_REPORT_BEC_MASK, low_br_max_bit_errors_by_mode[2]) > 0)
+            {
+                error_report &= ~ERROR_REPORT_EP2_OK;
+            }
+            IF (sub(error_report & ERROR_REPORT_BEC_MASK, low_br_max_bit_errors_by_mode[3])>0)
+            {
+                error_report &= ~ERROR_REPORT_EP3_OK;
+            }
         }
     }
 #endif
@@ -908,7 +929,7 @@ FEC_STATIC Word16 fec_estimate_epmr_from_cw0(UWord8 *cw0, Word8 *t, UWord8 *synd
     IF (s_or(syndromes[SYNDROME_IDX(0, 0)], syndromes[SYNDROME_IDX(0, 0) + 1]) == 0 ||
         s_or(syndromes[SYNDROME_IDX(1, 0)], syndromes[SYNDROME_IDX(1, 0) + 1]) == 0)
     {
-    	epmr_lowest_risk_exp = risk_table_f[1][0].exponent; move16();
+        epmr_lowest_risk_exp = risk_table_f[1][0].exponent; move16();
     }
     /* test if first code word decodes in mode 2 or 3 with lower risk */
     IF (sub(deg_elp[DEG_ELP_IDX(2, 0)], t[2]) <= 0)
@@ -953,7 +974,7 @@ FEC_STATIC Word16 fec_estimate_epmr_from_cw0(UWord8 *cw0, Word8 *t, UWord8 *synd
                                     deg_elp[DEG_ELP_IDX(mode_counter, 0)], sub(first_codeword_length, 1)))
             {
                 /* code word is decodable with error correction */
-            	epmr_lowest_risk_exp = risk_table_f[mode_counter][deg_elp[DEG_ELP_IDX(mode_counter, 0)]].exponent;
+                epmr_lowest_risk_exp = risk_table_f[mode_counter][deg_elp[DEG_ELP_IDX(mode_counter, 0)]].exponent;
 
                 rs16_calculate_errors(err_symb + ERR_SYMB_IDX(mode_counter, 0), err_pos + ERR_POS_IDX(mode_counter, 0),
                                       syndromes + SYNDROME_IDX(mode_counter, 0), deg_elp[DEG_ELP_IDX(mode_counter, 0)],
@@ -973,11 +994,11 @@ FEC_STATIC Word16 fec_estimate_epmr_from_cw0(UWord8 *cw0, Word8 *t, UWord8 *synd
 
     IF (add(epmr_lowest_risk_exp, 16) > 0)
     {
-    	epmr = add(epmr, 4); move16();
+        epmr = add(epmr, 4); move16();
     }
     IF (add(epmr_lowest_risk_exp, 8) > 0)
     {
-    	epmr = add(epmr, 4); move16();
+        epmr = add(epmr, 4); move16();
     }
 
     Dyn_Mem_Deluxe_Out();
@@ -1002,6 +1023,8 @@ FEC_STATIC int rs16_detect_and_correct(UWord8 *iobuf, int n_symb, int n_codeword
         Word16       codeword_length;
         Word16       mode;
         Word16       mode_candidates[4];
+        Word16       mode_broken[4];
+        Word16       error_report_ep_ok[4];
         Word16       n_mode_candidates;
         Word16       broken_cw, n_broken_cw;
         Word16       j, idx_min;
@@ -1023,6 +1046,14 @@ FEC_STATIC int rs16_detect_and_correct(UWord8 *iobuf, int n_symb, int n_codeword
     blacklist[1]        = 0; move16();
     blacklist[2]        = 0; move16();
     blacklist[3]        = 0; move16();
+    mode_broken[0]        = 0; move16();
+    mode_broken[1]        = 0; move16();
+    mode_broken[2]        = 0; move16();
+    mode_broken[3]        = 0; move16();
+    error_report_ep_ok[0] = ERROR_REPORT_EP1_OK;
+    error_report_ep_ok[1] = ERROR_REPORT_EP2_OK;
+    error_report_ep_ok[2] = ERROR_REPORT_EP3_OK;
+    error_report_ep_ok[3] = ERROR_REPORT_EP4_OK;
     my_scratch          = (UWord8 *)scratch;
     hamming_distance    = &hamming_distance_by_mode0[1];
     mode                = -1;                      move16();
@@ -1032,13 +1063,13 @@ FEC_STATIC int rs16_detect_and_correct(UWord8 *iobuf, int n_symb, int n_codeword
     
     IF (n_symb <= 80)
     {
-	ep_risk_thresh.mantissa = EP_RISK_THRESH_NS_M; move16();
-	ep_risk_thresh.exponent = EP_RISK_THRESH_NS_E; move16();
+        ep_risk_thresh.mantissa = EP_RISK_THRESH_NS_M; move16();
+        ep_risk_thresh.exponent = EP_RISK_THRESH_NS_E; move16();
     }
     ELSE
     {
-	ep_risk_thresh.mantissa = EP_RISK_THRESH_OS_M; move16();
-	ep_risk_thresh.exponent = EP_RISK_THRESH_OS_E; move16();
+        ep_risk_thresh.mantissa = EP_RISK_THRESH_OS_M; move16();
+        ep_risk_thresh.exponent = EP_RISK_THRESH_OS_E; move16();
     }
     
     syndr_calc[0] = &rs16_calculate_two_syndromes;
@@ -1047,7 +1078,7 @@ FEC_STATIC int rs16_detect_and_correct(UWord8 *iobuf, int n_symb, int n_codeword
     
     FOR (i = 0; i < FEC_N_MODES; i++)
     {
-	t[i] = (Word8)shr(sub(hamming_distance[i], 1), 1); move16();
+        t[i] = (Word8)shr(sub(hamming_distance[i], 1), 1); move16();
     }
     
     syndromes = my_scratch;
@@ -1073,26 +1104,26 @@ FEC_STATIC int rs16_detect_and_correct(UWord8 *iobuf, int n_symb, int n_codeword
     
     IF (s_or(syndromes[0 + SYNDROME_IDX(0, 0)], syndromes[1 + SYNDROME_IDX(0, 0)]) == 0)
     {
-	
-	/* data validation for fec mode 1 */
-	*epmr = cw0_get_epmr(iobuf, epmr_position);
-	
-	dw0_bitswap(iobuf + 2, 1, n_symb / 2);
-	
-	IF (!crc1(iobuf + 8, sub(n_symb, 8), *epmr, iobuf + 2, 3, 1))
-	{
-	    mode = 0; move16();
-	    
-	    Dyn_Mem_Deluxe_Out();
-	    return add(mode, 1);
-	}
-	ELSE
-	{
-	    /* reverse bit swap */
-	    dw0_bitswap(iobuf + 2, 1, n_symb / 2);
-	    
-	    *epmr = add(*epmr, 4); move16();
-	}
+        
+        /* data validation for fec mode 1 */
+        *epmr = cw0_get_epmr(iobuf, epmr_position);
+        
+        dw0_bitswap(iobuf + 2, 1, n_symb / 2);
+        
+        IF (!crc1(iobuf + 8, sub(n_symb, 8), *epmr, iobuf + 2, 3, 1))
+        {
+            mode = 0; move16();
+            *error_report |= ERROR_REPORT_ALL_OK;
+            Dyn_Mem_Deluxe_Out();
+            return add(mode, 1);
+        }
+        ELSE
+        {
+            /* reverse bit swap */
+            dw0_bitswap(iobuf + 2, 1, n_symb / 2);
+            
+            *epmr = add(*epmr, 4); move16();
+        }
     }
     
     blacklist[0] = 1; move16();
@@ -1104,296 +1135,328 @@ FEC_STATIC int rs16_detect_and_correct(UWord8 *iobuf, int n_symb, int n_codeword
     
     FOR (cw_counter = 0; cw_counter < 6; cw_counter++)
     {
-	codeword_length = get_codeword_length(n_codewords, n_symb, cw_counter);
-	
-	rs16_calculate_six_syndromes(syndromes + SYNDROME_IDX(1, cw_counter), iobuf + cw_offset,
-				     sub(codeword_length, 1));
-	
-	cw_offset = add(cw_offset, codeword_length);
-	
-	FOR (mode_counter = FEC_N_MODES - 1; mode_counter >= 1; mode_counter--)
-	{
-	    FOR (i = 0; i < sub(hamming_distance[mode_counter], 1); i++)
-	    {
-		syndromes[SYNDROME_IDX(mode_counter, cw_counter) + i] = GF16_ADD(
-		    syndromes[SYNDROME_IDX(1, cw_counter) + i], sig_poly_syndr[mode_counter][i]); move16();
-	    }
-	}
+        codeword_length = get_codeword_length(n_codewords, n_symb, cw_counter);
+        
+        rs16_calculate_six_syndromes(syndromes + SYNDROME_IDX(1, cw_counter), iobuf + cw_offset,
+                                     sub(codeword_length, 1));
+        
+        cw_offset = add(cw_offset, codeword_length);
+        
+        FOR (mode_counter = FEC_N_MODES - 1; mode_counter >= 1; mode_counter--)
+        {
+            FOR (i = 0; i < sub(hamming_distance[mode_counter], 1); i++)
+            {
+                syndromes[SYNDROME_IDX(mode_counter, cw_counter) + i] = GF16_ADD(
+                    syndromes[SYNDROME_IDX(1, cw_counter) + i], sig_poly_syndr[mode_counter][i]); move16();
+            }
+        }
     }
 
     /* check for valid code words */
     FOR (mode_counter = 1; mode_counter < FEC_N_MODES; mode_counter++)
     {
-	n_broken_cw = 0;
-	FOR (cw_counter = 0; cw_counter < 6; cw_counter++)
-	{
-	    broken_cw = 0;
-	    FOR (i = 0; i < sub(hamming_distance[mode_counter], 1); i++)
-	    {
-		broken_cw = s_or(broken_cw, syndromes[SYNDROME_IDX(mode_counter, cw_counter) + i]); move16();
-	    }
-	    IF (broken_cw != 0)
-	    {
-		n_broken_cw = add(n_broken_cw, 1);
-	    }
-	}
-	
-	IF (n_broken_cw == 0)
-	{
-	    mode      = mode_counter; move16();
-	    cw_offset = 0;            move16();
-	    
-	    *epmr = cw0_get_epmr(iobuf, epmr_position);
-	    
-	    FOR (cw_counter = 0; cw_counter < 6; cw_counter++)
-	    {
-		codeword_length = get_codeword_length(n_codewords, n_symb, cw_counter);
-		FOR (i = 0; i <= EP_SIG_POLY_DEG; i++)
-		{
-		    iobuf[cw_offset + i] = GF16_ADD(iobuf[cw_offset + i], sig_polys[mode][i]);
-		}
-		cw_offset = add(cw_offset, codeword_length);
-	    }
-	}
+        n_broken_cw = 0;
+        FOR (cw_counter = 0; cw_counter < 6; cw_counter++)
+        {
+            broken_cw = 0;
+            FOR (i = 0; i < sub(hamming_distance[mode_counter], 1); i++)
+            {
+                broken_cw = s_or(broken_cw, syndromes[SYNDROME_IDX(mode_counter, cw_counter) + i]); move16();
+            }
+            IF (broken_cw != 0)
+            {
+                n_broken_cw = add(n_broken_cw, 1);
+            }
+        }
+        
+        IF (n_broken_cw == 0)
+        {
+            mode      = mode_counter; move16();
+            cw_offset = 0;            move16();
+            
+            *epmr = cw0_get_epmr(iobuf, epmr_position);
+            
+            FOR (cw_counter = 0; cw_counter < 6; cw_counter++)
+            {
+                codeword_length = get_codeword_length(n_codewords, n_symb, cw_counter);
+                FOR (i = 0; i <= EP_SIG_POLY_DEG; i++)
+                {
+                    iobuf[cw_offset + i] = GF16_ADD(iobuf[cw_offset + i], sig_polys[mode][i]);
+                }
+                cw_offset = add(cw_offset, codeword_length);
+            }
+        }
     }
     
     IF (mode < 0) /* mode hasn't been detected so far -> errors occurred in transmission */
     {
-	/* calculate error locator polynomials for code words 0 to 5 */
-	FOR (mode_counter = 1; mode_counter < FEC_N_MODES; mode_counter++)
-	{
-	    FOR (cw_counter = 0; cw_counter < 6; cw_counter++)
-	    {
-		deg_elp[DEG_ELP_IDX(mode_counter, cw_counter)] = rs16_calculate_elp(
-		    elp + ELP_IDX(mode_counter, cw_counter), syndromes + SYNDROME_IDX(mode_counter, cw_counter),
-		    t[mode_counter]); move16();
-		IF (sub(deg_elp[DEG_ELP_IDX(mode_counter, cw_counter)], t[mode_counter]) > 0)
-		{
-		    blacklist[mode_counter] = 1; move16();
-		    BREAK;
-		}
-	    }
-	}
-	
-	/* risk analysis for mode candidate selection */
-	FOR (mode_counter = 1; mode_counter < FEC_N_MODES; mode_counter++)
-	{
-	    dec_risk_f[mode_counter].mantissa = SIMPLE_FLOAT_1_MANTISSA; move16();
-	    dec_risk_f[mode_counter].exponent = 0;                       move16();
-	    
-	    IF (blacklist[mode_counter] == 0)
-	    {
-		FOR (cw_counter = 0; cw_counter < 6; cw_counter++)
-		{
-		    dec_risk_f[mode_counter] = simple_float_mul(
-			dec_risk_f[mode_counter],
-			risk_table_f[mode_counter][deg_elp[DEG_ELP_IDX(mode_counter, cw_counter)]]); move16();
-		}
-		
-		IF (simple_float_cmp(dec_risk_f[mode_counter], ep_risk_thresh) <= 0)
-		{
-		    mode_candidates[n_mode_candidates++] = mode_counter; move16();
-		}
-		
-		IF (simple_float_cmp(dec_risk_f[mode_counter], risk_min_f) < 0)
-		{
-		    risk_min_f = dec_risk_f[mode_counter]; move16();
-		}
-	    }
-	}
-	assert(n_mode_candidates <= 4); // suppress false gcc warning when OPTIM=3
-	
-	/* sort mode candidates by risk */
-	FOR (i = 0; i < n_mode_candidates; i++)
-	{
-	    idx_min   = i;                              move16();
-	    val_min_f = dec_risk_f[mode_candidates[i]]; move16();
-	    
-	    FOR (j = i + 1; j < n_mode_candidates; j++)
-	    {
-		IF (simple_float_cmp(dec_risk_f[mode_candidates[j]], val_min_f) < 0)
-		{
-		    val_min_f = dec_risk_f[mode_candidates[j]]; move16();
-		    idx_min   = j;                              move16();
-		}
-	    }
-	    
-	    IF (sub(idx_min, i) > 0)
-	    {	
-		tmp                      = mode_candidates[i];       move16();
-		mode_candidates[i]       = mode_candidates[idx_min]; move16();
-		mode_candidates[idx_min] = tmp;                      move16();
-	    }
-	}
-	
-	/* try out candidate modes */
-	FOR (i = 0; i < n_mode_candidates; i++)
-	{
-	    mode = mode_candidates[i]; move16();
-	    
-	    FOR (cw_counter = 0; cw_counter < 6; cw_counter++)
-	    {
-		codeword_length = get_codeword_length(n_codewords, n_symb, cw_counter);
-		
-		IF (deg_elp[DEG_ELP_IDX(mode, cw_counter)])
-		{
-		    IF (rs16_factorize_elp(err_pos + ERR_POS_IDX(mode, cw_counter), elp + ELP_IDX(mode, cw_counter),
-					   deg_elp[DEG_ELP_IDX(mode, cw_counter)], sub(codeword_length, 1)))
-		    {
-			/* elp did not split into distinct linear factors or error position was out of range */
-			mode = -1; move16();
-			BREAK;
-		    }
-		}
-	    }
-	    IF (mode > 0)
-	    {
-		/* decodable mode with lowest risk has been found */
-		BREAK;
-	    }
-	}
-	
-	IF (mode < 0)
-	{
-	    /* no decodable mode has been found */
-	    *error_report = -1; move16();
-	    *bfi          = 1;  move32();
-	    mode          = -1; move16();
-	    
-	    *epmr = fec_estimate_epmr_from_cw0(iobuf, t, syndromes, elp, deg_elp, err_pos, err_symb, n_codewords,
-					       n_symb);
-	    
-	    Dyn_Mem_Deluxe_Out();
-	    return mode;
-	}
-	
-	/* perform error correction */
-	cw_offset     = 0; move16();
-	*error_report = 0; move16();
-	FOR (cw_counter = 0; cw_counter < 6; cw_counter++)
-	{
-	    codeword_length = get_codeword_length(n_codewords, n_symb, cw_counter);
-	    
-	    IF (deg_elp[DEG_ELP_IDX(mode, cw_counter)])
-	    {
-		rs16_calculate_errors(
-		    err_symb + ERR_SYMB_IDX(mode, cw_counter), err_pos + ERR_POS_IDX(mode, cw_counter),
-		    syndromes + SYNDROME_IDX(mode, cw_counter), deg_elp[DEG_ELP_IDX(mode, cw_counter)], t[mode]);
-		
-		/* correct errors and sum up number of corrected bits */
-		FOR (i = 0; i < deg_elp[DEG_ELP_IDX(mode, cw_counter)]; i++)
-		{
-		    iobuf[err_pos[ERR_POS_IDX(mode, cw_counter) + i] + cw_offset] =
-			GF16_ADD(iobuf[err_pos[ERR_POS_IDX(mode, cw_counter) + i] + cw_offset],
-				 err_symb[ERR_SYMB_IDX(mode, cw_counter) + i]);
-		    *error_report = add(*error_report,
-			    rs16_bit_count_table[err_symb[ERR_SYMB_IDX(mode, cw_counter) + i]]); move16();
-		}
-	    }
-	    
-	    FOR (i = 0; i <= EP_SIG_POLY_DEG; i++)
-	    {
-		iobuf[cw_offset + i] = GF16_ADD(iobuf[cw_offset + i], sig_polys[mode][i]);
-	    }
-	    cw_offset = add(cw_offset, codeword_length);
-	}
-	
-	/* set epmr according to risk value of cw0 */
-	epmr_dec_fail_increment = 8;
-	
-	IF (add(risk_table_f[mode][deg_elp[DEG_ELP_IDX(mode, 0)]].exponent, 8) <= 0)
-	{
-	    epmr_dec_fail_increment = sub(epmr_dec_fail_increment, 4);
-	}
-	IF (add(risk_table_f[mode][deg_elp[DEG_ELP_IDX(mode, 0)]].exponent, 16) <= 0)
-	{
-	    epmr_dec_fail_increment = sub(epmr_dec_fail_increment, 4);
-	}
-	
-	*epmr = cw0_get_epmr(iobuf, epmr_position) + epmr_dec_fail_increment;
+        /* calculate error locator polynomials for code words 0 to 5 */
+        FOR (mode_counter = 1; mode_counter < FEC_N_MODES; mode_counter++)
+        {
+            FOR (cw_counter = 0; cw_counter < 6; cw_counter++)
+            {
+                deg_elp[DEG_ELP_IDX(mode_counter, cw_counter)] = rs16_calculate_elp(
+                    elp + ELP_IDX(mode_counter, cw_counter), syndromes + SYNDROME_IDX(mode_counter, cw_counter),
+                    t[mode_counter]); move16();
+                IF (sub(deg_elp[DEG_ELP_IDX(mode_counter, cw_counter)], t[mode_counter]) > 0)
+                {
+                    blacklist[mode_counter] = 1; move16();
+                    BREAK;
+                }
+            }
+        }
+        
+        /* risk analysis for mode candidate selection */
+        FOR (mode_counter = 1; mode_counter < FEC_N_MODES; mode_counter++)
+        {
+            dec_risk_f[mode_counter].mantissa = SIMPLE_FLOAT_1_MANTISSA; move16();
+            dec_risk_f[mode_counter].exponent = 0;                       move16();
+            
+            IF (blacklist[mode_counter] == 0)
+            {
+                FOR (cw_counter = 0; cw_counter < 6; cw_counter++)
+                {
+                    dec_risk_f[mode_counter] = simple_float_mul(
+                        dec_risk_f[mode_counter],
+                        risk_table_f[mode_counter][deg_elp[DEG_ELP_IDX(mode_counter, cw_counter)]]); move16();
+                }
+                
+                IF (simple_float_cmp(dec_risk_f[mode_counter], ep_risk_thresh) <= 0)
+                {
+                    mode_candidates[n_mode_candidates++] = mode_counter; move16();
+                }
+                
+                IF (simple_float_cmp(dec_risk_f[mode_counter], risk_min_f) < 0)
+                {
+                    risk_min_f = dec_risk_f[mode_counter]; move16();
+                }
+            }
+        }
+        assert(n_mode_candidates <= 4); // suppress false gcc warning when OPTIM=3
+        
+        /* sort mode candidates by risk */
+        FOR (i = 0; i < n_mode_candidates; i++)
+        {
+            idx_min   = i;                              move16();
+            val_min_f = dec_risk_f[mode_candidates[i]]; move16();
+            
+            FOR (j = i + 1; j < n_mode_candidates; j++)
+            {
+                IF (simple_float_cmp(dec_risk_f[mode_candidates[j]], val_min_f) < 0)
+                {
+                    val_min_f = dec_risk_f[mode_candidates[j]]; move16();
+                    idx_min   = j;                              move16();
+                }
+            }
+            
+            IF (sub(idx_min, i) > 0)
+            {   
+                tmp                      = mode_candidates[i];       move16();
+                mode_candidates[i]       = mode_candidates[idx_min]; move16();
+                mode_candidates[idx_min] = tmp;                      move16();
+            }
+        }
+        
+        /* try out candidate modes */
+        FOR (i = 0; i < n_mode_candidates; i++)
+        {
+            mode = mode_candidates[i]; move16();
+            
+            FOR (cw_counter = 0; cw_counter < 6; cw_counter++)
+            {
+                codeword_length = get_codeword_length(n_codewords, n_symb, cw_counter);
+                
+                IF (deg_elp[DEG_ELP_IDX(mode, cw_counter)])
+                {
+                    IF (rs16_factorize_elp(err_pos + ERR_POS_IDX(mode, cw_counter), elp + ELP_IDX(mode, cw_counter),
+                                           deg_elp[DEG_ELP_IDX(mode, cw_counter)], sub(codeword_length, 1)))
+                    {
+                        /* elp did not split into distinct linear factors or error position was out of range */
+                        mode = -1; move16();
+                        BREAK;
+                    }
+                }
+            }
+            IF (mode > 0)
+            {
+                /* decodable mode with lowest risk has been found */
+                BREAK;
+            }
+        }
+        
+        IF (mode < 0)
+        {
+            /* no decodable mode has been found */
+            *error_report = ERROR_REPORT_BEC_MASK; move16();
+            *bfi          = 1;  move32();
+            mode          = -1; move16();
+            
+            *epmr = fec_estimate_epmr_from_cw0(iobuf, t, syndromes, elp, deg_elp, err_pos, err_symb, n_codewords,
+                                               n_symb);
+            
+            Dyn_Mem_Deluxe_Out();
+            return mode;
+        }
+        
+        /* perform error correction */
+        cw_offset     = 0; move16();
+        *error_report = 0; move16();
+        FOR (cw_counter = 0; cw_counter < 6; cw_counter++)
+        {
+            codeword_length = get_codeword_length(n_codewords, n_symb, cw_counter);
+            
+            IF (deg_elp[DEG_ELP_IDX(mode, cw_counter)])
+            {
+                rs16_calculate_errors(
+                    err_symb + ERR_SYMB_IDX(mode, cw_counter), err_pos + ERR_POS_IDX(mode, cw_counter),
+                    syndromes + SYNDROME_IDX(mode, cw_counter), deg_elp[DEG_ELP_IDX(mode, cw_counter)], t[mode]);
+                
+                /* correct errors and sum up number of corrected bits */
+                FOR (i = 0; i < deg_elp[DEG_ELP_IDX(mode, cw_counter)]; i++)
+                {
+                    iobuf[err_pos[ERR_POS_IDX(mode, cw_counter) + i] + cw_offset] =
+                        GF16_ADD(iobuf[err_pos[ERR_POS_IDX(mode, cw_counter) + i] + cw_offset],
+                                 err_symb[ERR_SYMB_IDX(mode, cw_counter) + i]);
+                    *error_report = add(*error_report,
+                            rs16_bit_count_table[err_symb[ERR_SYMB_IDX(mode, cw_counter) + i]]); move16();
+                }
+
+                FOR (i = 0; i < mode; i ++)
+                {
+                    IF(deg_elp[DEG_ELP_IDX(mode, cw_counter)] > i)
+                    {
+                        mode_broken[i] = 1;
+                    }
+                }
+            }
+            
+            FOR (i = 0; i <= EP_SIG_POLY_DEG; i++)
+            {
+                iobuf[cw_offset + i] = GF16_ADD(iobuf[cw_offset + i], sig_polys[mode][i]);
+            }
+            cw_offset = add(cw_offset, codeword_length);
+        }
+        
+        /* set epmr according to risk value of cw0 */
+        epmr_dec_fail_increment = 8;
+        
+        IF (add(risk_table_f[mode][deg_elp[DEG_ELP_IDX(mode, 0)]].exponent, 8) <= 0)
+        {
+            epmr_dec_fail_increment = sub(epmr_dec_fail_increment, 4);
+        }
+        IF (add(risk_table_f[mode][deg_elp[DEG_ELP_IDX(mode, 0)]].exponent, 16) <= 0)
+        {
+            epmr_dec_fail_increment = sub(epmr_dec_fail_increment, 4);
+        }
+        
+        *epmr = cw0_get_epmr(iobuf, epmr_position) + epmr_dec_fail_increment;
     }
     
     /* mode has been successfully detected -> now check and try to correct remaining code words*/
     *n_pccw = fec_get_n_pccw(n_symb / 2, mode + 1, ccc_flag);
     IF (ccc_flag == 0)
     {
-	n_pccw0 = fec_get_n_pccw(n_symb / 2, mode + 1, ccc_flag);
-	*n_pccw = n_pccw0;
+        n_pccw0 = fec_get_n_pccw(n_symb / 2, mode + 1, ccc_flag);
+        *n_pccw = n_pccw0;
     }
     ELSE
     {
-	n_pccw0 = 0;
+        n_pccw0 = 0;
     }
     
     FOR (cw_counter = 6; cw_counter < n_codewords; cw_counter++)
     {
-	/* usual error correction scheme: syndromes -> elp's, errors, etc. */
-	codeword_length                              = get_codeword_length(n_codewords, n_symb, cw_counter);
-	array_of_trust[n_codewords - 1 - cw_counter] = 1; move16();
-	
-	syndr_calc[sub(t[mode], 1)](syndromes, iobuf + cw_offset, sub(codeword_length, 1));
-	
-	deg_elp[0] = rs16_calculate_elp(elp, syndromes, t[mode]); move16();
-	
-	IF (sub(deg_elp[0], t[mode]) > 0)
-	{
-	    cw_offset = add(cw_offset, codeword_length);
-	    IF (cw_counter < n_codewords - n_pccw0)
-	    {
-		*error_report = -1; move16();
-		mode          = -1; move16();
-		*bfi          = 1;  move32();
-		
-		BREAK;
-	    }
-	    ELSE
-	    {
-		*bfi                                         = 2; move32();
-		array_of_trust[n_codewords - 1 - cw_counter] = 0; move16();
-		CONTINUE;
-	    }
-	}
-	
-	IF (deg_elp[0])
-	{
-	    IF (rs16_factorize_elp(err_pos, elp, deg_elp[0], sub(codeword_length, 1)))
-	    {
-		cw_offset = add(cw_offset, codeword_length);
-		IF (add(n_pccw0, sub(cw_counter, n_codewords)) < 0)
-		{
-		    mode = -1; move16();
-		    *bfi = 1;  move32();
-		    
-		    BREAK;
-		}
-		ELSE
-		{
-		    *bfi                                         = 2; move32();
-		    array_of_trust[n_codewords - 1 - cw_counter] = 0; move16();
-		    CONTINUE;
-		}
-	    }
-	    
-	    rs16_calculate_errors(err_symb, err_pos, syndromes, deg_elp[0], t[mode]);
-	    
-	    /* correct errors and sum up number of corrected bits */
-	    FOR (i = 0; i < deg_elp[0]; i++)
-	    {
-		iobuf[err_pos[i] + cw_offset] = GF16_ADD(iobuf[err_pos[i] + cw_offset], err_symb[i]);
-		*error_report                 = add(*error_report, rs16_bit_count_table[err_symb[i]]);
-	    }
-	}
-	cw_offset = add(cw_offset, codeword_length);
-	if (add(risk_table_f[mode][deg_elp[0]].exponent, 16) > 0)
-	{
-	    array_of_trust[n_codewords - 1 - cw_counter] = 0; move16();
-	}
+        /* usual error correction scheme: syndromes -> elp's, errors, etc. */
+        codeword_length                              = get_codeword_length(n_codewords, n_symb, cw_counter);
+        array_of_trust[n_codewords - 1 - cw_counter] = 1; move16();
+        
+        syndr_calc[sub(t[mode], 1)](syndromes, iobuf + cw_offset, sub(codeword_length, 1));
+        
+        deg_elp[0] = rs16_calculate_elp(elp, syndromes, t[mode]); move16();
+
+        FOR (i = 0; i < mode; i ++)
+        {
+            IF(deg_elp[0] > i)
+            {
+                mode_broken[i] = 1;
+            }
+        }
+        IF (sub(deg_elp[0], t[mode]) > 0)
+        {
+            FOR (i = 0; i < 4; i ++)
+            {
+                mode_broken[i] = 1;
+            }
+            cw_offset = add(cw_offset, codeword_length);
+            IF (cw_counter < n_codewords - n_pccw0)
+            {
+                *error_report = ERROR_REPORT_BEC_MASK; move16();
+                mode          = -1; move16();
+                *bfi          = 1;  move32();
+                
+                BREAK;
+            }
+            ELSE
+            {
+                *bfi                                         = 2; move32();
+                array_of_trust[n_codewords - 1 - cw_counter] = 0; move16();
+                CONTINUE;
+            }
+        }
+        
+        IF (deg_elp[0])
+        {
+            IF (rs16_factorize_elp(err_pos, elp, deg_elp[0], sub(codeword_length, 1)))
+            {
+                cw_offset = add(cw_offset, codeword_length);
+                FOR (i = 0; i < 4; i ++)
+                {
+                    mode_broken[i] = 1;
+                }
+                IF (add(n_pccw0, sub(cw_counter, n_codewords)) < 0)
+                {
+                    mode = -1; move16();
+                    *bfi = 1;  move32();
+                    
+                    BREAK;
+                }
+                ELSE
+                {
+                    *bfi                                         = 2; move32();
+                    array_of_trust[n_codewords - 1 - cw_counter] = 0; move16();
+                    CONTINUE;
+                }
+            }
+            
+            rs16_calculate_errors(err_symb, err_pos, syndromes, deg_elp[0], t[mode]);
+            
+            /* correct errors and sum up number of corrected bits */
+            FOR (i = 0; i < deg_elp[0]; i++)
+            {
+                iobuf[err_pos[i] + cw_offset] = GF16_ADD(iobuf[err_pos[i] + cw_offset], err_symb[i]);
+                *error_report                 = add(*error_report, rs16_bit_count_table[err_symb[i]]);
+            }
+        }
+        cw_offset = add(cw_offset, codeword_length);
+        if (add(risk_table_f[mode][deg_elp[0]].exponent, 16) > 0)
+        {
+            array_of_trust[n_codewords - 1 - cw_counter] = 0; move16();
+        }
     }
-    
+
+    *error_report &= ERROR_REPORT_BEC_MASK;
+    FOR (i = 0; i < 4; i ++)
+    {
+        IF (!mode_broken[i])
+        {
+            *error_report |= error_report_ep_ok[i];
+        }
+    }
+
     Dyn_Mem_Deluxe_Out();
     IF (mode >= 0)
     {
-	return add(mode, 1);
+        return add(mode, 1);
     }
     
     return -1;
@@ -2024,6 +2087,7 @@ FEC_STATIC void rs16_calculate_errors(UWord8 *err_symb, UWord8 *err_pos, UWord8 
     );
 
     assert(deg_elp <= t);
+    UNUSED(t);
 
     SWITCH (deg_elp)
     {

@@ -26,5 +26,4 @@ long funcid_total_wmops_at_last_call_to_else;
 int call_occurred = 1;
 #endif
 
-
 /* end of file */

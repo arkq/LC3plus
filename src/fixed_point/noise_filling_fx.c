@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "functions.h"
 
@@ -14,7 +15,8 @@
 
 
 void processNoiseFilling_fx(Word32 xq[], Word16 nfseed, Word16 xq_e, Word16 fac_ns_idx, Word16 BW_cutoff_idx,
-                            Word16 frame_dms, Word16 fac_ns_pc, Word16 spec_inv_idx, Word8 *scratchBuffer)
+                            Word16 frame_dms, Word16 fac_ns_pc, Word16 spec_inv_idx, Word8 *scratchBuffer
+)
 {
     Dyn_Mem_Deluxe_In(
         Counter k;
@@ -26,7 +28,11 @@ void processNoiseFilling_fx(Word32 xq[], Word16 nfseed, Word16 xq_e, Word16 fac_
     ind = (Word16 *)scratchAlign(scratchBuffer, 0); /* Size = 2 * MAX_LEN bytes */
 
     c = 0;                                move16();
-    N = BW_cutoff_bin_all[BW_cutoff_idx]; move16();
+    
+    {
+        N = BW_cutoff_bin_all[BW_cutoff_idx];
+        move16();
+    }
 
     SWITCH (frame_dms)
     {

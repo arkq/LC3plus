@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 
 #include "functions.h"
@@ -41,15 +42,14 @@ LC3_Error FillEncSetup(LC3_Enc *encoder, int samplerate, int channels)
     memset(encoder, 0, lc3_enc_get_size(samplerate, channels));
     alloc_encoder(encoder, samplerate, channels);
 
-    encoder->fs                = CODEC_FS(samplerate);
-    encoder->fs_in             = samplerate;
-    encoder->fs_idx            = FS2FS_IDX(encoder->fs);
-    encoder->channels          = channels;
-    encoder->frame_dms         = 100;
-    encoder->envelope_bits     = 38;
-    encoder->global_gain_bits  = 8;
-    encoder->noise_fac_bits    = 3;
-    encoder->BW_cutoff_bits    = BW_cutoff_bits_all[encoder->fs_idx];
+    encoder->fs     = CODEC_FS(samplerate);
+    encoder->fs_in  = samplerate;
+    encoder->fs_idx = FS2FS_IDX(encoder->fs);
+    encoder->channels         = channels;
+    encoder->frame_dms        = 100;
+    encoder->envelope_bits    = 38;
+    encoder->global_gain_bits = 8;
+    encoder->noise_fac_bits   = 3;
     encoder->r12k8_mem_in_len  = extract_l(L_shr_pos(Mpy_32_16(encoder->fs, 20972), 9));
     encoder->r12k8_mem_out_len = 24;
     encoder->epmr = LC3_EPMR_ZERO;
@@ -68,44 +68,60 @@ LC3_Error FillEncSetup(LC3_Enc *encoder, int samplerate, int channels)
 /* set frame config params */
 void set_enc_frame_params(LC3_Enc *encoder)
 {
-    
+
     encoder->frame_length = extract_l(L_shr_pos(Mpy_32_16(encoder->fs, 20972), 6)); /* fs * 0.01*2^6 */
+    {
+        encoder->BW_cutoff_bits = BW_cutoff_bits_all[encoder->fs_idx];
+    }
+
     SWITCH (encoder->frame_dms)
     {
     case 25:
         encoder->frame_length       = shr_pos(encoder->frame_length, 2);
-        encoder->yLen               = s_min(MAX_BW >> 2, encoder->frame_length);
-        encoder->W_fx               = LowDelayShapes_n960_2_5ms[encoder->fs_idx];
-        encoder->W_size             = LowDelayShapes_n960_len_2_5ms[encoder->fs_idx];
         encoder->la_zeroes          = LowDelayShapes_n960_la_zeroes_2_5ms[encoder->fs_idx];
         encoder->stEnc_mdct_mem_len = sub(encoder->frame_length, encoder->la_zeroes);
-        encoder->bands_number       = bands_number_2_5ms[encoder->fs_idx];
-        encoder->bands_offset       = bands_offset_2_5ms[encoder->fs_idx];
         encoder->nSubdivisions      = 2;
-        encoder->ltpf_mem_in_len    = LTPF_MEMIN_LEN + 3 * (LEN_12K8 >> 2);
+        encoder->ltpf_mem_in_len    = LTPF_MEMIN_LEN + (LEN_12K8 >> 2);
+        {
+            encoder->yLen         = s_min(MAX_BW >> 2, encoder->frame_length);
+            encoder->W_fx         = LowDelayShapes_n960_2_5ms[encoder->fs_idx];
+            encoder->W_size       = LowDelayShapes_n960_len_2_5ms[encoder->fs_idx];
+            encoder->bands_number = bands_number_2_5ms[encoder->fs_idx];
+            encoder->bands_offset = bands_offset_2_5ms[encoder->fs_idx];
+        }
+
         BREAK;
     case 50:
         encoder->frame_length       = shr_pos(encoder->frame_length, 1);
-        encoder->yLen               = s_min(MAX_BW >> 1, encoder->frame_length);
-        encoder->W_fx               = LowDelayShapes_n960_5ms[encoder->fs_idx];
-        encoder->W_size             = LowDelayShapes_n960_len_5ms[encoder->fs_idx];
         encoder->la_zeroes          = LowDelayShapes_n960_la_zeroes_5ms[encoder->fs_idx];
         encoder->stEnc_mdct_mem_len = sub(encoder->frame_length, encoder->la_zeroes);
-        encoder->bands_number       = bands_number_5ms[encoder->fs_idx];
-        encoder->bands_offset       = bands_offset_5ms[encoder->fs_idx];
         encoder->nSubdivisions      = 2;
         encoder->ltpf_mem_in_len    = LTPF_MEMIN_LEN + (LEN_12K8 >> 1);
+        {
+            encoder->yLen         = s_min(MAX_BW >> 1, encoder->frame_length);
+            encoder->W_fx         = LowDelayShapes_n960_5ms[encoder->fs_idx];
+            encoder->W_size       = LowDelayShapes_n960_len_5ms[encoder->fs_idx];
+            encoder->bands_number = bands_number_5ms[encoder->fs_idx];
+            encoder->bands_offset = bands_offset_5ms[encoder->fs_idx];
+        }
+        encoder->ltpf_mem_in_len    = LTPF_MEMIN_LEN;
         BREAK;
     case 100:
-        encoder->yLen               = s_min(MAX_BW, encoder->frame_length);
-        encoder->W_fx               = LowDelayShapes_n960[encoder->fs_idx];
-        encoder->W_size             = LowDelayShapes_n960_len[encoder->fs_idx];
         encoder->la_zeroes          = LowDelayShapes_n960_la_zeroes[encoder->fs_idx];
         encoder->stEnc_mdct_mem_len = sub(encoder->frame_length, encoder->la_zeroes);
         encoder->bands_number       = 64;
-        encoder->bands_offset       = bands_offset[encoder->fs_idx];
         encoder->nSubdivisions      = 3;
         encoder->ltpf_mem_in_len    = LTPF_MEMIN_LEN;
+        encoder->attdec_nblocks         = 4;
+        encoder->attdec_damping         = 16384;
+        encoder->attdec_hangover_thresh = 2;
+        
+        {
+            encoder->yLen         = s_min(MAX_BW, encoder->frame_length);
+            encoder->W_fx         = LowDelayShapes_n960[encoder->fs_idx];
+            encoder->W_size       = LowDelayShapes_n960_len[encoder->fs_idx];
+            encoder->bands_offset = bands_offset[encoder->fs_idx];
+        }
         BREAK;
     }
 }
@@ -113,12 +129,19 @@ void set_enc_frame_params(LC3_Enc *encoder)
 /* change encoder bitrate */
 LC3_Error update_enc_bitrate(LC3_Enc *encoder, int bitrate)
 {
-    int ch = 0, max_bytes = 0;
-    int totalBytes = 0, maxBR = 0, minBR = 0;
+    int ch = 0;
+    int totalBytes = 0, maxBR = 0, minBR = 0, max_bytes = 0;
     int channel_bytes = 0;
 
-    minBR = MIN_NBYTES * 8 * (10000 / encoder->frame_dms) * encoder->channels   ;
-    maxBR = (encoder->fs_in == 44100 ? MAX_NBYTES : MAX_NBYTES_RED) * 8 * (10000 / encoder->frame_dms) * encoder->channels;
+    {
+        minBR = MIN_NBYTES * 8.0 * (10000.0 / encoder->frame_dms) * 
+                (encoder->fs_in == 44100 ? 441. / 480 : 1);
+        maxBR = MAX_NBYTES_RED * 8.0 * (10000.0 / encoder->frame_dms) * 
+                (encoder->fs_in == 44100 ? 441. / 480 : 1);
+    }
+
+    minBR *= encoder->channels;
+    maxBR *= encoder->channels;
 
     if (bitrate < minBR || bitrate > maxBR)
     {
@@ -151,7 +174,7 @@ LC3_Error update_enc_bitrate(LC3_Enc *encoder, int bitrate)
     if (encoder->combined_channel_coding)
     {
         totalBytes = fec_get_data_size(encoder->epmode, encoder->combined_channel_coding,
-                                          bitrate * (Word32)encoder->frame_length / (8 * encoder->fs_in));
+                                       bitrate * (Word32)encoder->frame_length / (8 * encoder->fs_in));
 
         encoder->channel_setup[0]->n_pccw =
             fec_get_n_pccw(bitrate * (Word32)encoder->frame_length / (8 * encoder->fs_in), encoder->epmode,
@@ -177,18 +200,11 @@ LC3_Error update_enc_bitrate(LC3_Enc *encoder, int bitrate)
         else
         {
             setup->targetBytes = fec_get_data_size(encoder->epmode, encoder->combined_channel_coding, channel_bytes);
-            setup->n_pccw = fec_get_n_pccw(channel_bytes, encoder->epmode, encoder->combined_channel_coding);
-            setup->n_pc = fec_get_n_pc(encoder->epmode, setup->n_pccw, channel_bytes);
+            setup->n_pccw      = fec_get_n_pccw(channel_bytes, encoder->epmode, encoder->combined_channel_coding);
+            setup->n_pc        = fec_get_n_pc(encoder->epmode, setup->n_pccw, channel_bytes);
         }
 
-        if (encoder->fs_in == 44100)
-        {
-            max_bytes = MAX_NBYTES;
-        }
-        else
-        {
-            max_bytes = MAX_NBYTES_RED;
-        }
+        max_bytes = MAX_NBYTES;
 
         if (setup->targetBytes < MIN_NBYTES || setup->targetBytes > max_bytes)
         {
@@ -232,14 +248,19 @@ LC3_Error update_enc_bitrate(LC3_Enc *encoder, int bitrate)
 
         setup->quantizedGainOff =
             -(s_min(115, setup->total_bits / (10 * (encoder->fs_idx + 1))) + 105 + 5 * (encoder->fs_idx + 1));
-        if (encoder->frame_dms == 100 && ((encoder->fs_in >= 44100 && setup->targetBytes >= 100) ||
-                                          (encoder->fs_in == 32000 && setup->targetBytes >= 81))
-#ifdef NONBE_FIX_NO_ATTACK_AT_HIGH_BR
+
+        if (encoder->frame_dms == 100 &&
+            ((encoder->fs_in >= 44100 && setup->targetBytes >= 100) ||
+             (encoder->fs_in == 32000 && setup->targetBytes >= 81))
             && setup->targetBytes < 340
-#endif
-            )
+        )
         {
             setup->attack_handling = 1;
+        }
+        else if (encoder->frame_dms == 75 && ((encoder->fs_in >= 44100 && setup->targetBytes >= 75) ||
+        		(encoder->fs_in == 32000 && setup->targetBytes >= 61)) && setup->targetBytes < 150)
+        {
+        	setup->attack_handling = 1;
         }
         else
         {

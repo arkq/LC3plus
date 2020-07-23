@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #ifndef SETUP_DEC_LC3_FL_H
 #define SETUP_DEC_LC3_FL_H
@@ -18,38 +19,40 @@ typedef struct {
     LC3_INT  total_bits;
     LC3_INT  enable_lpc_weighting;
     LC3_INT  targetBytes;
-    LC3_INT  ltpf_mem_active;
     LC3_INT  quantizedGainOff;
-    LC3_INT  nbLostFramesInRow;
     LC3_INT  ltpf_param[3];
     LC3_INT  ltpf_param_mem[3];
     LC3_INT  ltpf_mem_pitch;
     LC3_INT  ltpf_mem_pitch_fr;
     LC3_INT  ltpf_mem_beta_idx;
-    LC3_INT  ltpf_mem_x_len;
-    LC3_INT  ltpf_mem_y_len;
-    LC3_INT  nbLostCmpt;
     LC3_INT  ltpf_conf_beta_idx;
     LC3_INT  spec_inv_idx;
     LC3_INT  concealMethod;
+    LC3_INT  last_size;
+    LC3_INT  BW_cutoff_idx_nf;
+    LC3_INT  prev_BW_cutoff_idx_nf;
+    LC3_INT  fs_red_tns;
+    LC3_INT  N_red_tns;
     LC3_INT  scf_idx[SCF_MAX_PARAM];
     uint8_t  resBits[MAX_RESBITS_LEN];
     LC3_INT  tns_idx[TNS_NUMFILTERS_MAX * MAXLAG];
 
+    LC3_FLOAT prev_fac_ns;
     LC3_FLOAT ltpf_mem_x[3 * MAX_LEN];
     LC3_FLOAT ltpf_mem_y[3 * MAX_LEN];
     LC3_FLOAT ltpf_mem_gain;
-    LC3_FLOAT plc_spec_prev[MAX_LEN];
     LC3_FLOAT ltpf_conf_beta;
-    LC3_FLOAT plc_cum_alpha;
     LC3_FLOAT sqQdec_fl[MAX_LEN];
     LC3_FLOAT scf_q[M];
     LC3_FLOAT int_scf[MAX_BANDS_NUMBER];
     LC3_FLOAT x_fl[MAX_LEN];
     LC3_FLOAT imdct_mem[MAX_LEN];
+    LC3_FLOAT alpha;
 
     Dct4 dct4structImdct;
-    LC3_INT plc_seed;
+    
+    PlcSetup    PlcSetup;
+    PlcNsSetup  PlcNsSetup;
     
 } DecSetup;
 
@@ -86,10 +89,11 @@ struct LC3_Dec {
     LC3_INT plcMeth;
     LC3_INT tilt;
     
-#ifdef ENABLE_HR_MODE
     LC3_INT hrmode;
     LC3_INT specflip;
-#endif
+    
+    const LC3_INT* bands_offsetPLC;
+    LC3_INT n_bandsPLC;
     
 };
 

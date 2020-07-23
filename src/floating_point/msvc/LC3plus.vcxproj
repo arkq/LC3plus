@@ -158,10 +158,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\adjust_global_gain.c" />
+    <ClCompile Include="..\al_fec_fl.c" />
     <ClCompile Include="..\apply_global_gain.c" />
     <ClCompile Include="..\ari_codec.c" />
     <ClCompile Include="..\attack_detector.c" />
     <ClCompile Include="..\codec_exe.c" />
+    <ClCompile Include="..\plc_compute_stab_fac.c" />
     <ClCompile Include="..\constants.c" />
     <ClCompile Include="..\cutoff_bandwidth.c" />
     <ClCompile Include="..\dct4.c" />
@@ -181,9 +183,20 @@
     <ClCompile Include="..\noise_factor.c" />
     <ClCompile Include="..\noise_filling.c" />
     <ClCompile Include="..\olpa.c" />
+    <ClCompile Include="..\pc_apply.c" />
+    <ClCompile Include="..\pc_classify.c" />
+    <ClCompile Include="..\pc_main.c" />
+    <ClCompile Include="..\pc_update.c" />
     <ClCompile Include="..\per_band_energy.c" />
-    <ClCompile Include="..\plc.c" />
+    <ClCompile Include="..\plc_classify.c" />
+    <ClCompile Include="..\plc_damping_scrambling.c" />
+    <ClCompile Include="..\plc_main.c" />
+    <ClCompile Include="..\plc_noise_substitution.c" />
+    <ClCompile Include="..\plc_noise_substitution0.c" />
+    <ClCompile Include="..\plc_tdc_tdac.c" />
+    <ClCompile Include="..\plc_update.c" />
     <ClCompile Include="..\quantize_spec.c" />
+    <ClCompile Include="..\reorder_bitstream.c" />
     <ClCompile Include="..\resamp12k8.c" />
     <ClCompile Include="..\residual_coding.c" />
     <ClCompile Include="..\residual_decoding.c" />
@@ -192,6 +205,7 @@
     <ClCompile Include="..\sns_compute_scf.c" />
     <ClCompile Include="..\sns_interpolate_scf.c" />
     <ClCompile Include="..\sns_quantize_scf.c" />
+    <ClCompile Include="..\plc_tdc.c" />
     <ClCompile Include="..\tns_coder.c" />
     <ClCompile Include="..\tns_decoder.c" />
   </ItemGroup>

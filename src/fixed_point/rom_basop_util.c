@@ -1,14 +1,16 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "rom_basop_util.h"
-#include "stl.h"
+#include "basop_util.h"
+#include "functions.h"
 
 
 /* clang-format off */
@@ -204,7 +206,7 @@ const PWord16 SineTable480[] = {
 };
 
 
-const PWord16 SineTable320[] = {
+const PWord16                                                       SineTable320[] = {
     STCP(0x7fffffff, 0x00000000), STCP(0x7fff9aef, 0x00a0d951), STCP(0x7ffe6bbf, 0x0141b1a5),
     STCP(0x7ffc726f, 0x01e287fc), STCP(0x7ff9af04, 0x02835b5a), STCP(0x7ff62182, 0x03242abf),
     STCP(0x7ff1c9ef, 0x03c4f52f), STCP(0x7feca851, 0x0465b9aa), STCP(0x7fe6bcb0, 0x05067734),
@@ -261,6 +263,7 @@ const PWord16 SineTable320[] = {
     STCP(0x5af3eee6, 0x5a107561), STCP(0x5a82799a, 0x5a82799a),
 };
 
+
 /*
  Sine windows
  */
@@ -282,7 +285,7 @@ const PWord16 SineWindow40[20] = {
     WTCP(0x5fae5a55, 0x55063951), WTCP(0x5c44ee40, 0x58b71632),
 };
 
-const PWord16 SineWindow60[30] = {
+const PWord16                            SineWindow60[30] = {
     WTCP(0x7ffd3153, 0x1aceb7c),  WTCP(0x7fe6bcaf, 0x5067734),  WTCP(0x7fb9d758, 0x85f2136),
     WTCP(0x7f76892e, 0xbb65336),  WTCP(0x7f1cde00, 0xf0b7727),  WTCP(0x7eace589, 0x125df75b),
     WTCP(0x7e26b370, 0x15ad3e9a), WTCP(0x7d8a5f3f, 0x18f8b83c), WTCP(0x7cd80464, 0x1c3fd045),
@@ -295,7 +298,7 @@ const PWord16 SineWindow60[30] = {
     WTCP(0x603c496c, 0x54657194), WTCP(0x5dfe47ad, 0x56e2f15d), WTCP(0x5bafc836, 0x595132a2),
 };
 
-const PWord16 SineWindow80[40] = {
+const PWord16                                                       SineWindow80[40] = {
     WTCP(0x7ffe6bbf, 0x0141b1a5), WTCP(0x7ff1c9ef, 0x03c4f52f), WTCP(0x7fd8878e, 0x0647d97c),
     WTCP(0x7fb2a71b, 0x08ca1f1b), WTCP(0x7f802c52, 0x0b4b86a8), WTCP(0x7f411c2f, 0x0dcbd0d5),
     WTCP(0x7ef57cea, 0x104abe71), WTCP(0x7e9d55fc, 0x12c8106f), WTCP(0x7e38b017, 0x154387e6),
@@ -312,7 +315,7 @@ const PWord16 SineWindow80[40] = {
     WTCP(0x5b64d492, 0x599de2ee),
 };
 
-const PWord16 SineWindow120[60] = {
+const PWord16                          SineWindow120[60] = {
     WTCP(0x7fff4c54, 0x00d676eb), WTCP(0x7ff9af04, 0x02835b5a), WTCP(0x7fee74a2, 0x0430238f),
     WTCP(0x7fdd9dad, 0x05dcbcbe), WTCP(0x7fc72ae2, 0x07891418), WTCP(0x7fab1d3d, 0x093516d4),
     WTCP(0x7f8975f9, 0x0ae0b22c), WTCP(0x7f62368f, 0x0c8bd35e), WTCP(0x7f3560b9, 0x0e3667ad),
@@ -360,7 +363,7 @@ const PWord16 SineWindow128[64] = {
     WTCP(0x5b1035cf, 0x59f3de12),
 };
 
-const PWord16 SineWindow160[80] = {
+const PWord16                                                       SineWindow160[80] = {
     WTCP(0x7fff9aef, 0x00a0d951), WTCP(0x7ffc726f, 0x01e287fc), WTCP(0x7ff62182, 0x03242abf),
     WTCP(0x7feca851, 0x0465b9aa), WTCP(0x7fe00716, 0x05a72ccf), WTCP(0x7fd03e23, 0x06e87c3f),
     WTCP(0x7fbd4dda, 0x0829a00c), WTCP(0x7fa736b4, 0x096a9049), WTCP(0x7f8df93c, 0x0aab450d),
@@ -435,7 +438,7 @@ const PWord16 SineWindow240[120] = {
 };
 
 #if defined(SUBSET_SWB) || defined(SUBSET_FB)
-const PWord16 SineWindow320[160] = {
+const PWord16                                                       SineWindow320[160] = {
     WTCP(0x7fffe6bc, 0x00506cb9), WTCP(0x7fff1c9b, 0x00f145ab), WTCP(0x7ffd885a, 0x01921d20),
     WTCP(0x7ffb29fd, 0x0232f21a), WTCP(0x7ff80186, 0x02d3c39b), WTCP(0x7ff40efa, 0x037490a5),
     WTCP(0x7fef5260, 0x0415583b), WTCP(0x7fe9cbc0, 0x04b6195d), WTCP(0x7fe37b22, 0x0556d30f),
@@ -493,7 +496,7 @@ const PWord16 SineWindow320[160] = {
 };
 
 
-const PWord16 SineWindow480[240] = {
+const PWord16                                                       SineWindow480[240] = {
     WTCP(0x7ffff4c5, 0x00359dd2), WTCP(0x7fff9aef, 0x00a0d951), WTCP(0x7ffee744, 0x010c1460),
     WTCP(0x7ffdd9c4, 0x01774eb2), WTCP(0x7ffc726f, 0x01e287fc), WTCP(0x7ffab147, 0x024dbff4),
     WTCP(0x7ff8964d, 0x02b8f64e), WTCP(0x7ff62182, 0x03242abf), WTCP(0x7ff352e8, 0x038f5cfb),
@@ -577,7 +580,6 @@ const PWord16 SineWindow480[240] = {
 };
 #endif /* defined(SUBSET_SWB) || defined(SUBSET_FB) */
 
-
 //    fs  48  32  24  16  8
 // ms   +--------------------
 // 10.0 | 480 320 240 160 80
@@ -590,50 +592,77 @@ void BASOP_getTables(const PWord16 **twiddle, const PWord16 **sin, Word16 *sin_s
     SWITCH (length)
     {
     case 20:
-        *sin      = SineTable320; move16();
-        *sin_step = 32;           move16();
-        *twiddle  = SineWindow20; move16();
+        *sin = SineTable320;
+        move16();
+        *sin_step = 32;
+        move16();
+        *twiddle = SineWindow20;
+        move16();
         BREAK;
     case 40:
-        *sin      = SineTable320; move16();
-        *sin_step = 16;           move16();
-        *twiddle  = SineWindow40; move16();
+        *sin = SineTable320;
+        move16();
+        *sin_step = 16;
+        move16();
+        *twiddle = SineWindow40;
+        move16();
         BREAK;
     case 60:
-        *sin      = SineTable480; move16();
-        *sin_step = 16;           move16();
-        *twiddle  = SineWindow60; move16();
+        *sin = SineTable480;
+        move16();
+        *sin_step = 16;
+        move16();
+        *twiddle = SineWindow60;
+        move16();
         BREAK;
     case 80:
-        *sin      = SineTable320; move16();
-        *sin_step = 8;            move16();
-        *twiddle  = SineWindow80; move16();
+        *sin = SineTable320;
+        move16();
+        *sin_step = 8;
+        move16();
+        *twiddle = SineWindow80;
+        move16();
         BREAK;
     case 120:
-        *sin      = SineTable480;  move16();
-        *sin_step = 8;             move16();
-        *twiddle  = SineWindow120; move16();
+        *sin = SineTable480;
+        move16();
+        *sin_step = 8;
+        move16();
+        *twiddle = SineWindow120;
+        move16();
         BREAK;
     case 160:
-        *sin      = SineTable320;  move16();
-        *sin_step = 4;             move16();
-        *twiddle  = SineWindow160; move16();
+        *sin = SineTable320;
+        move16();
+        *sin_step = 4;
+        move16();
+        *twiddle = SineWindow160;
+        move16();
         BREAK;
     case 240:
-        *sin      = SineTable480;  move16();
-        *sin_step = 4;             move16();
-        *twiddle  = SineWindow240; move16();
+        *sin = SineTable480;
+        move16();
+        *sin_step = 4;
+        move16();
+        *twiddle = SineWindow240;
+        move16();
         BREAK;
 #if defined SUBSET_SWB || defined SUBSET_FB
     case 320:
-        *sin      = SineTable320;  move16();
-        *sin_step = 2;             move16();
-        *twiddle  = SineWindow320; move16();
+        *sin = SineTable320;
+        move16();
+        *sin_step = 2;
+        move16();
+        *twiddle = SineWindow320;
+        move16();
         BREAK;
     case 480:
-        *sin      = SineTable480;  move16();
-        *sin_step = 2;             move16();
-        *twiddle  = SineWindow480; move16();
+        *sin = SineTable480;
+        move16();
+        *sin_step = 2;
+        move16();
+        *twiddle = SineWindow480;
+        move16();
         BREAK;
 #endif /* defined(SUBSET_SWB) || defined(SUBSET_FB) */
     default: ASSERT(0);
@@ -877,7 +906,8 @@ const Word16 RotVector_480[2 * (480 - 30)] = {
 };
 
 
-const Word16 RotVector_320[2 * (320 - 20)] = {
+
+const Word16                                                        RotVector_320[2 * (320 - 20)] = {
     SHC(0x7fff), SHC(0x0000), SHC(0x7fe7), SHC(0xfafa), SHC(0x7f9b), SHC(0xf5f5), SHC(0x7f1d), SHC(0xf0f5), SHC(0x7e6d),
     SHC(0xebfa), SHC(0x7d8a), SHC(0xe707), SHC(0x7c77), SHC(0xe21e), SHC(0x7b32), SHC(0xdd41), SHC(0x79bc), SHC(0xd872),
     SHC(0x7817), SHC(0xd3b2), SHC(0x7642), SHC(0xcf04), SHC(0x743e), SHC(0xca69), SHC(0x720d), SHC(0xc5e4), SHC(0x6fae),

@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "defines.h"
 
@@ -71,6 +72,7 @@ void plc_phEcu_peak_locator_fx(const Word16 *inp, /* i: vector with values >=0  
    cand_pairs_buf  = (Word16 *)scratchAlign(sc_idx, sizeof(*sc_idx) * (1+inp_len+1)); /* ByteSize = 2 * (1+ 1+ inp_len+1   ) */
    fsc_idx         = (Word16 *)scratchAlign(cand_pairs_buf , sizeof(*cand_pairs_buf) * (1+ 1+ inp_len+1));  /* ByteSize = 2 * ( 1+ inp_len + 1) */
    ASSERT((4 * maxLprot_Red) >= 3 * (1 + 1 + inp_len + 1)); /* basic buffer check */
+   UNUSED(maxLprot_Red);
 
    inp_len_minus1 = sub(inp_len, 1);  /* size of delta=derivative array ,and last index in inp */
     

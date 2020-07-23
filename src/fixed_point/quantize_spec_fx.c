@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "functions.h"
 
@@ -13,7 +14,8 @@
 
 void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word16 gain, Word16 gain_e, Word16 xq[], Word16 nt, Word16 target,
                             Word16 totalBits, Word16 *nBits, Word16 *nBits2, Word16 fs_idx, Word16 *lastnzout,
-                            Word16 *codingdata, Word16 *lsbMode, Word16 mode)
+                            Word16 *codingdata, Word16 *lsbMode, Word16 mode
+)
 {
 
     Word16  a1, b1, a1_i, b1_i;
@@ -50,38 +52,56 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word16 gain, Word16 gain_e, 
     /* Quantization */
     gain = Inv16(gain, &gain_e);
     s    = sub(add(x_e, gain_e), 15);
-
+     
     FOR (i = 0; i < nt; i++)
     {
-        offs32 = Mpy_32_16(L_abs(x[i]), gain); /* multiply */
-        offs32 = L_shl(offs32, s);             /* convert to 15Q16 */
-        tmp16  = mac_r(offs32, -4096, 1);      /* add offset and truncate */
+        offs32 = Mpy_32_16(L_abs(x[i]), gain);   /* multiply */
+        offs32 = L_shl(offs32, s);               /* convert to 15Q16 */
+        tmp16  = mac_r(offs32, -4096, 1); /* add offset and truncate */
+
         if (x[i] < 0)
             tmp16 = negate(tmp16); /* restore sign */
 
-        xq[i] = tmp16; move16();
+        /* Normal quantization: xq[i] =  x[i] / gg + sign(x[i]) * 0.375
+           quant_offset is -0.125 in Q15 and round adds 0.5 in Q16. Hence
+           mac_r results in abs(x[i])/gain - 0.125 + 0.5 = abs(x[i])/gain + 0.375.
+           Due to the abs and negate combination this achieves the same result
+           as spec.
+        */
+
+        xq[i] = tmp16;
+        move16();
     }
 
     /* Rate flag */
-    rateFlag = 0; move16();
+    rateFlag = 0;
+    move16();
     if (sub(totalBits, add(160, i_mult(fs_idx, 160))) > 0)
     {
-        rateFlag = 2 << NBITS_CONTEXT; move16();
+        rateFlag = 2 << NBITS_CONTEXT;
+        move16();
     }
 
     /* Init */
-    nt_half   = shr_pos(nt, 1);
-    c         = 0; move16();
-    t         = 0; move16();
-    a1_i      = 0; move16();
-    b1_i      = 1; move16();
-    target32  = L_shl_pos(L_deposit_l(target), SYM_BITS_Q);
-    nbits32   = L_negate(target32);
-    nbits232  = 0; move32();
-    nbits_lsb = 0; move16();
+    nt_half = shr_pos(nt, 1);
+    c       = 0;
+    move16();
+    t = 0;
+    move16();
+    a1_i = 0;
+    move16();
+    b1_i = 1;
+    move16();
+    target32 = L_shl_pos(L_deposit_l(target), SYM_BITS_Q);
+    nbits32  = L_negate(target32);
+    nbits232 = 0;
+    move32();
+    nbits_lsb = 0;
+    move16();
     IF (mode == 0 && sub(totalBits, add(480, i_mult(fs_idx, 160))) >= 0)
     {
-        mode = 1; move16();
+        mode = 1;
+        move16();
     }
 
     /* Find last non-zero tuple */
@@ -107,7 +127,8 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word16 gain, Word16 gain_e, 
             {
                 t = add(t, 1 << NBITS_CONTEXT);
             }
-            codingdata[0] = t; move16();
+            codingdata[0] = t;
+            move16();
 
             /* Init current 2-tuple encoding */
             a1     = abs_s(xq[a1_i]);
@@ -116,17 +137,21 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word16 gain, Word16 gain_e, 
 
             IF (ab_max == 0)
             {
-                codingdata[1] = -1; move16();
-                codingdata[2] = 0;  move16();
-                nbits32       = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t]][0]);
-                c             = add(shl_pos(s_and(c, 0xf), 4), 1);
+                codingdata[1] = -1;
+                move16();
+                codingdata[2] = 0;
+                move16();
+                nbits32 = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t]][0]);
+                c       = add(shl_pos(s_and(c, 0xf), 4), 1);
             }
             ELSE IF (sub(ab_max, A_THRES) < 0)
             {
-                codingdata[1] = 0; move16();
+                codingdata[1] = 0;
+                move16();
                 msb           = add(a1, shl_pos(b1, A_THRES_SHIFT));
-                codingdata[2] = msb; move16();
-                nbits32       = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t]][msb]);
+                codingdata[2] = msb;
+                move16();
+                nbits32 = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t]][msb]);
                 if (a1 != 0)
                 {
                     nbits32 = L_add(nbits32, 1 << SYM_BITS_Q);
@@ -139,14 +164,16 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word16 gain, Word16 gain_e, 
             }
             ELSE IF (sub(ab_max, 2 * A_THRES) < 0)
             {
-                codingdata[1] = 1; move16();
+                codingdata[1] = 1;
+                move16();
                 nbits32       = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t]][VAL_ESC]);
                 nbits32       = L_add(nbits32, 2 << SYM_BITS_Q);
                 a1_msb        = shr_pos_pos(a1, 1);
                 b1_msb        = shr_pos_pos(b1, 1);
                 msb           = add(a1_msb, shl_pos(b1_msb, A_THRES_SHIFT));
-                codingdata[2] = msb; move16();
-                nbits32       = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t + Tab_esc_nb[1]]][msb]);
+                codingdata[2] = msb;
+                move16();
+                nbits32 = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t + Tab_esc_nb[1]]][msb]);
                 if (a1 != 0)
                 {
                     nbits32 = L_add(nbits32, 1 << SYM_BITS_Q);
@@ -160,7 +187,8 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word16 gain, Word16 gain_e, 
             ELSE
             {
                 levmax        = sub(13, norm_s(ab_max));
-                codingdata[1] = levmax; move16();
+                codingdata[1] = levmax;
+                move16();
                 FOR (lev = 0; lev < levmax; lev++)
                 {
                     lev1    = s_min(lev, 3);
@@ -170,9 +198,10 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word16 gain, Word16 gain_e, 
                 a1_msb        = shr(a1, levmax);
                 b1_msb        = shr(b1, levmax);
                 msb           = add(a1_msb, shl_pos(b1_msb, A_THRES_SHIFT));
-                codingdata[2] = msb; move16();
-                lev1          = s_min(levmax, 3);
-                nbits32       = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t + Tab_esc_nb[lev1]]][msb]);
+                codingdata[2] = msb;
+                move16();
+                lev1    = s_min(levmax, 3);
+                nbits32 = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t + Tab_esc_nb[lev1]]][msb]);
                 if (a1 != 0)
                 {
                     nbits32 = L_add(nbits32, 1 << SYM_BITS_Q);
@@ -202,7 +231,8 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word16 gain, Word16 gain_e, 
             {
                 t = add(t, 1 << NBITS_CONTEXT);
             }
-            codingdata[0] = t; move16();
+            codingdata[0] = t;
+            move16();
 
             /* Init current 2-tuple encoding */
             a1     = abs_s(xq[a1_i]);
@@ -211,17 +241,21 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word16 gain, Word16 gain_e, 
 
             IF (ab_max == 0)
             {
-                codingdata[1] = -1; move16();
-                codingdata[2] = 0;  move16();
-                nbits32       = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t]][0]);
-                c             = add(shl_pos(s_and(c, 0xf), 4), 1);
+                codingdata[1] = -1;
+                move16();
+                codingdata[2] = 0;
+                move16();
+                nbits32 = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t]][0]);
+                c       = add(shl_pos(s_and(c, 0xf), 4), 1);
             }
             ELSE IF (sub(ab_max, A_THRES) < 0)
             {
-                codingdata[1] = 0; move16();
+                codingdata[1] = 0;
+                move16();
                 msb           = add(a1, shl_pos(b1, A_THRES_SHIFT));
-                codingdata[2] = msb; move16();
-                nbits32       = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t]][msb]);
+                codingdata[2] = msb;
+                move16();
+                nbits32 = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t]][msb]);
                 if (a1 != 0)
                 {
                     nbits32 = L_add(nbits32, 1 << SYM_BITS_Q);
@@ -236,20 +270,23 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word16 gain, Word16 gain_e, 
                 }
                 if (nbits32 <= 0)
                 {
-                    nbits232 = nbits32; move32();
+                    nbits232 = nbits32;
+                    move32();
                 }
                 c = add(shl_pos(s_and(c, 0xf), 4), add(add(a1, b1), 1));
             }
             ELSE IF (sub(ab_max, 2 * A_THRES) < 0)
             {
-                codingdata[1] = 1; move16();
+                codingdata[1] = 1;
+                move16();
                 nbits32       = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t]][VAL_ESC]);
                 nbits32       = L_add(nbits32, 2 << SYM_BITS_Q);
                 a1_msb        = shr_pos_pos(a1, 1);
                 b1_msb        = shr_pos_pos(b1, 1);
                 msb           = add(a1_msb, shl_pos(b1_msb, A_THRES_SHIFT));
-                codingdata[2] = msb; move16();
-                nbits32       = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t + Tab_esc_nb[1]]][msb]);
+                codingdata[2] = msb;
+                move16();
+                nbits32 = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t + Tab_esc_nb[1]]][msb]);
                 if (a1 != 0)
                 {
                     nbits32 = L_add(nbits32, 1 << SYM_BITS_Q);
@@ -264,14 +301,16 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word16 gain, Word16 gain_e, 
                 }
                 if (nbits32 <= 0)
                 {
-                    nbits232 = nbits32; move32();
+                    nbits232 = nbits32;
+                    move32();
                 }
                 c = add(shl_pos(s_and(c, 0xf), 4), add(shl_pos(add(a1_msb, b1_msb), 1), 1));
             }
             ELSE
             {
                 levmax        = sub(13, norm_s(ab_max));
-                codingdata[1] = levmax; move16();
+                codingdata[1] = levmax;
+                move16();
                 FOR (lev = 0; lev < levmax; lev++)
                 {
                     lev1    = s_min(lev, 3);
@@ -281,9 +320,10 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word16 gain, Word16 gain_e, 
                 a1_msb        = shr(a1, levmax);
                 b1_msb        = shr(b1, levmax);
                 msb           = add(a1_msb, shl_pos(b1_msb, A_THRES_SHIFT));
-                codingdata[2] = msb; move16();
-                lev1          = s_min(levmax, 3);
-                nbits32       = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t + Tab_esc_nb[lev1]]][msb]);
+                codingdata[2] = msb;
+                move16();
+                lev1    = s_min(levmax, 3);
+                nbits32 = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t + Tab_esc_nb[lev1]]][msb]);
                 if (a1 != 0)
                 {
                     nbits32 = L_add(nbits32, 1 << SYM_BITS_Q);
@@ -298,7 +338,8 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word16 gain, Word16 gain_e, 
                 }
                 if (nbits32 <= 0)
                 {
-                    nbits232 = nbits32; move32();
+                    nbits232 = nbits32;
+                    move32();
                 }
                 c = add(shl_pos(s_and(c, 0xf), 4), add(12, s_min(levmax, 3)));
             }
@@ -321,7 +362,8 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word16 gain, Word16 gain_e, 
             {
                 t = add(t, 1 << NBITS_CONTEXT);
             }
-            codingdata[0] = t; move16();
+            codingdata[0] = t;
+            move16();
 
             /* Init current 2-tuple encoding */
             a1     = abs_s(xq[a1_i]);
@@ -330,17 +372,21 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word16 gain, Word16 gain_e, 
 
             IF (ab_max == 0)
             {
-                codingdata[1] = -1; move16();
-                codingdata[2] = 0;  move16();
-                nbits32       = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t]][0]);
-                c             = add(shl_pos(s_and(c, 0xf), 4), 1);
+                codingdata[1] = -1;
+                move16();
+                codingdata[2] = 0;
+                move16();
+                nbits32 = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t]][0]);
+                c       = add(shl_pos(s_and(c, 0xf), 4), 1);
             }
             ELSE IF (sub(ab_max, A_THRES) < 0)
             {
-                codingdata[1] = 0; move16();
+                codingdata[1] = 0;
+                move16();
                 msb           = add(a1, shl_pos(b1, A_THRES_SHIFT));
-                codingdata[2] = msb; move16();
-                nbits32       = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t]][msb]);
+                codingdata[2] = msb;
+                move16();
+                nbits32 = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t]][msb]);
                 if (a1 != 0)
                 {
                     nbits32 = L_add(nbits32, 1 << SYM_BITS_Q);
@@ -355,19 +401,22 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word16 gain, Word16 gain_e, 
                 }
                 if (nbits32 <= 0)
                 {
-                    nbits232 = nbits32; move32();
+                    nbits232 = nbits32;
+                    move32();
                 }
                 c = add(shl_pos(s_and(c, 0xf), 4), add(add(a1, b1), 1));
             }
             ELSE IF (sub(ab_max, 2 * A_THRES) < 0)
             {
-                codingdata[1] = 1; move16();
+                codingdata[1] = 1;
+                move16();
                 nbits32       = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t]][VAL_ESC]);
                 a1_msb        = shr_pos_pos(a1, 1);
                 b1_msb        = shr_pos_pos(b1, 1);
                 msb           = add(a1_msb, shl_pos(b1_msb, A_THRES_SHIFT));
-                codingdata[2] = msb; move16();
-                nbits32       = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t + Tab_esc_nb[1]]][msb]);
+                codingdata[2] = msb;
+                move16();
+                nbits32 = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t + Tab_esc_nb[1]]][msb]);
                 if (a1_msb != 0)
                 {
                     nbits32 = L_add(nbits32, 1 << SYM_BITS_Q);
@@ -391,14 +440,16 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word16 gain, Word16 gain_e, 
                 }
                 if (nbits32 <= 0)
                 {
-                    nbits232 = nbits32; move32();
+                    nbits232 = nbits32;
+                    move32();
                 }
                 c = add(shl_pos(s_and(c, 0xf), 4), add(shl_pos(add(a1_msb, b1_msb), 1), 1));
             }
             ELSE
             {
                 levmax        = sub(13, norm_s(ab_max));
-                codingdata[1] = levmax; move16();
+                codingdata[1] = levmax;
+                move16();
                 FOR (lev = 0; lev < levmax; lev++)
                 {
                     lev1    = s_min(lev, 3);
@@ -408,11 +459,12 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word16 gain, Word16 gain_e, 
                 a1_msb        = shr(a1, levmax);
                 b1_msb        = shr(b1, levmax);
                 msb           = add(a1_msb, shl_pos(b1_msb, A_THRES_SHIFT));
-                codingdata[2] = msb; move16();
-                lev1          = s_min(levmax, 3);
-                nbits32       = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t + Tab_esc_nb[lev1]]][msb]);
-                a1_msb        = shr_pos(a1, 1);
-                b1_msb        = shr_pos(b1, 1);
+                codingdata[2] = msb;
+                move16();
+                lev1    = s_min(levmax, 3);
+                nbits32 = L_add(nbits32, ari_spec_bits[ari_spec_lookup[t + Tab_esc_nb[lev1]]][msb]);
+                a1_msb  = shr_pos(a1, 1);
+                b1_msb  = shr_pos(b1, 1);
                 if (a1_msb != 0)
                 {
                     nbits32 = L_add(nbits32, 1 << SYM_BITS_Q);
@@ -436,7 +488,8 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word16 gain, Word16 gain_e, 
                 }
                 if (nbits32 <= 0)
                 {
-                    nbits232 = nbits32; move32();
+                    nbits232 = nbits32;
+                    move32();
                 }
                 c = add(shl_pos(s_and(c, 0xf), 4), add(12, s_min(levmax, 3)));
             }
@@ -466,7 +519,8 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word16 gain, Word16 gain_e, 
     }
     ELSE
     {
-        *nBits2 = *nBits; move16();
+        *nBits2 = *nBits;
+        move16();
     }
     IF (mode > 0)
     {
@@ -484,11 +538,13 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word16 gain, Word16 gain_e, 
     test();
     IF (mode > 0 && sub(totBits, target) > 0)
     {
-        *lsbMode = 1; move16();
+        *lsbMode = 1;
+        move16();
     }
     ELSE
     {
-        *lsbMode = 0; move16();
+        *lsbMode = 0;
+        move16();
     }
 
 #ifdef DYNMEM_COUNT

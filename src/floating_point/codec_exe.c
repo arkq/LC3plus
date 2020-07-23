@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "lc3.h"
 #include "functions.h"
@@ -33,18 +34,20 @@ typedef struct {
     int   dc;
     char* bandwidth;
     int   plcMeth;
+    int   epmode;
+    char *epmode_file;
 } Arguments;
 
 /* local helper functions */
-static void    parseCmdl(int ac, char **av, Arguments *arg);
-static FILE *  open_bitstream_reader(const char *file, uint32_t *samplerate, int *bitrate, short *channels,
-                                     uint32_t *signal_len, float *frame_ms, int *epmode, int *hrmode, int g192,
-                                     const char *file_cfg);
-static FILE *  open_bitstream_writer(const char *file, uint32_t samplerate, int bitrate, short channels,
+static void    parseCmdl(int ac, char** av, Arguments* arg);
+static FILE*   open_bitstream_reader(const char* file, uint32_t* samplerate, int* bitrate, short* channels,
+                                     uint32_t* signal_len, float* frame_ms, int* epmode, int* hrmode, int g192,
+                                     const char* file_cfg);
+static FILE*   open_bitstream_writer(const char* file, uint32_t samplerate, int bitrate, short channels,
                                      uint32_t signal_len, float frame_ms, int epmode, int hrmode, int g192,
-                                     const char *file_cfg);
-static void    write_bitstream_frame(FILE *bitstream_file, uint8_t *bytes, int size, int g192);
-static int     read_bitstream_frame(FILE *bitstream_file, uint8_t *bytes, int size, int g192);
+                                     const char* file_cfg);
+static void    write_bitstream_frame(FILE* bitstream_file, uint8_t* bytes, int size, int g192);
+static int     read_bitstream_frame(FILE *bitstream_file, uint8_t *bytes, int size, int g192, int *bfi_ext);
 static void    cleanup(void);
 static int16_t loopy_read16(FILE* f);
 static int64_t loopy_read64(FILE* f);
@@ -62,7 +65,8 @@ static FILE*        input_bitstream;
 static FILE*        error_pattern_file;
 static FILE*        error_detection_file;
 static FILE*        bitrate_switching_file;
-static FILE *       bandwidth_switching_file;
+static FILE *       epmode_switching_file;
+static FILE* bandwidth_switching_file;
 
 #include "license.h" /* provides LICENSE string */
 
@@ -95,7 +99,16 @@ static const char* const USAGE_MESSAGE =
     "  -ept                    Use together with -E -epf FILE to create bitstream triggering\n"
     "                          PLC via special value of lastnz\n"
     "  -edf FILE               Write error detection pattern to FILE.\n"
-#ifdef ENABLE_HR_MODE_FLAG
+    "\nChannel coder options:\n"
+    "  -epmode NUM|FILE        Error protection mode. NUM must be one of the following:\n"
+    "                          0: Error protection disabled\n"
+    "                          1: Minimum error protection, detection only\n"
+    "                          2: Moderate error protection\n"
+    "                          3: Strong error protection\n"
+    "                          4: Maximum error protection\n"
+    "  -ep_dbg FILE            Save variables bfi, epmr and error report to binary files\n"
+    "                          FILE.bfi, FILE.epmr and FILE.error_report\n"
+#ifdef ENABLE_HR_MODE_FL_FLAG
     "\nHigh resolution mode options:\n"
     "  -hrmode                 Enable high resolution mode.\n"
 #endif
@@ -120,6 +133,8 @@ static const char* ERROR_MESSAGE[] = {
     "Function can't be called after bitrate was set!",                      /* LC3_BITRATE_SET_ERROR   */
     "High resolution mode and bandwidth switching are exclusive!",          /* LC3_HRMODE_BW_ERROR     */
     "Invalid PLC method!",                                                  /* LC3_PLCMODE_ERROR       */
+    "Invalid EPMR value!",                                                  /* LC3_EPMR_ERROR          */
+    "Generic Warning",                                                      /* LC3_WARNING             */
     "Invalid bandwidth frequency!"                                          /* LC3_BW_WARNING          */
 };
 
@@ -131,14 +146,15 @@ int main(int ac, char** av)
     short        nChannels = 0, bipsIn = 0;
     int          real_bitrate = 0, frame = 1, delay = 0;
     int          encoder_size = 0, decoder_size = 0;
-    LC3_Enc*     encoder = NULL;
-    LC3_Dec*     decoder = NULL;
-    LC3_Error    err     = LC3_OK;
+    int          bfi_ext = 0;
+    LC3_Enc*     encoder                                        = NULL;
+    LC3_Dec*     decoder                                        = NULL;
+    LC3_Error    err                                            = LC3_OK;
     int32_t      sample_buf[LC3_MAX_CHANNELS * LC3_MAX_SAMPLES] = {0};
-    int32_t      buf_24[LC3_MAX_CHANNELS * LC3_MAX_SAMPLES] = {0};
-    int16_t      buf_16[LC3_MAX_CHANNELS * LC3_MAX_SAMPLES] = {0};
-    uint8_t      bytes[LC3_MAX_CHANNELS * LC3_MAX_BYTES] = {0};
-    int          dummy_ep_mode = 0;
+    int32_t      buf_24[LC3_MAX_CHANNELS * LC3_MAX_SAMPLES]     = {0};
+    int16_t      buf_16[LC3_MAX_CHANNELS * LC3_MAX_SAMPLES]     = {0};
+    uint8_t      bytes[LC3_MAX_CHANNELS * LC3_MAX_BYTES]        = {0};
+    int          dc2_extra_frame                                = 0;
 
     /* Parse Command-line */
     printf(LICENSE, LC3_VERSION >> 16, (LC3_VERSION >> 8) & 255, LC3_VERSION & 255);
@@ -147,6 +163,11 @@ int main(int ac, char** av)
     /* exit handler to clean up resources */
     atexit(cleanup);
 
+#ifdef Cortex_A9
+    coresup_init();
+#endif
+
+    
     if (!arg.decoder_only) {
         /* Open Input Wav File */
         input_wav = OpenWav(arg.inputFilename, &sampleRate, &nChannels, &nSamplesFile, &bipsIn);
@@ -163,12 +184,11 @@ int main(int ac, char** av)
 
         err = lc3_enc_set_frame_ms(encoder, arg.frame_ms);
         exit_if(err, ERROR_MESSAGE[err]);
+        
 
-#ifdef ENABLE_HR_MODE_FLAG
-#ifdef ENABLE_HR_MODE
+#ifdef ENABLE_HR_MODE_FL_FLAG
         err = lc3_enc_set_hrmode(encoder, arg.hrmode);
         exit_if(err, ERROR_MESSAGE[err]);
-#endif
 #endif
 
         err = lc3_enc_set_bitrate(encoder, arg.bitrate);
@@ -178,61 +198,56 @@ int main(int ac, char** av)
         nSamples     = lc3_enc_get_input_samples(encoder);
         real_bitrate = lc3_enc_get_real_bitrate(encoder);
 
-        if (arg.bandwidth && atoi(arg.bandwidth) == 0)
-        {
+        if (arg.bandwidth && atoi(arg.bandwidth) == 0) {
             bandwidth_switching_file = fopen(arg.bandwidth, "rb");
             exit_if(bandwidth_switching_file == NULL, "Error opening bandwidth switching file!");
             puts("Using bandwidth switching file!");
         }
-    }
-    else /* !arg->decoder_only */
+    } else /* !arg->decoder_only */
     {
         /* Open Input Bitstream File */
         input_bitstream = open_bitstream_reader(arg.inputFilename, &sampleRate, &arg.bitrate, &nChannels,
-                                                &nSamplesFile, &arg.frame_ms, &dummy_ep_mode, &arg.hrmode,
+                                                &nSamplesFile, &arg.frame_ms, &arg.epmode, &arg.hrmode,
                                                 arg.formatG192, arg.configFilenameG192);
         exit_if(!input_bitstream, "Error opening bitstream file!");
     }
 
-    if (!arg.encoder_only)
-    {
+    if (!arg.encoder_only) {
         /* Setup Decoder */
         decoder_size = lc3_dec_get_size(sampleRate, nChannels);
         decoder      = malloc(decoder_size);
         err          = lc3_dec_init(decoder, sampleRate, nChannels, (LC3_PlcMode)arg.plcMeth);
         exit_if(err, ERROR_MESSAGE[err]);
-#ifdef ENABLE_HR_MODE_FLAG
-#ifdef ENABLE_HR_MODE
+#ifdef ENABLE_HR_MODE_FL_FLAG
         err = lc3_dec_set_hrmode(decoder, arg.hrmode);
-#endif
+        exit_if(err, ERROR_MESSAGE[err]);
 #endif
 
         err = lc3_dec_set_frame_ms(decoder, arg.frame_ms);
         exit_if(err, ERROR_MESSAGE[err]);
+        
+        
         delay    = arg.dc ? lc3_dec_get_delay(decoder) / arg.dc : 0;
         nSamples = lc3_dec_get_output_samples(decoder);
 
         /* Open Output Wav File */
         output_wav = CreateWav(arg.outputFilename, sampleRate, nChannels, arg.bipsOut);
         exit_if(!output_wav, "Error creating wav file!");
-    }
-    else /* !arg->encoder_only */
+    } else /* !arg->encoder_only */
     {
         /* Open Output Bitstream File */
         output_bitstream = open_bitstream_writer(arg.outputFilename, sampleRate, arg.bitrate, nChannels,
-                                                 nSamplesFile, arg.frame_ms, 0, arg.hrmode, arg.formatG192,
+                                                 nSamplesFile, arg.frame_ms, arg.epmode, arg.hrmode, arg.formatG192,
                                                  arg.configFilenameG192);
         exit_if(!output_bitstream, "Error creating bitstream file!");
     }
 
     /* open auxillary files */
-    if (arg.epf)
-    {
+    if (arg.epf) {
         error_pattern_file = fopen(arg.epf, "rb");
         exit_if(!error_pattern_file, "Error opening error pattern file!");
     }
-    if (arg.bitrate_file)
-    {
+    if (arg.bitrate_file) {
         bitrate_switching_file = fopen(arg.bitrate_file, "rb");
         exit_if(!bitrate_switching_file, "Error opening bitrate switching file!");
     }
@@ -240,6 +255,11 @@ int main(int ac, char** av)
     if (arg.edf) {
         error_detection_file = fopen(arg.edf, "wb");
         exit_if(!error_detection_file, "Error creating error detection file!");
+    }
+    if (arg.epmode_file)
+    {
+        epmode_switching_file = fopen(arg.epmode_file, "rb");
+        exit_if(epmode_switching_file == NULL, "Error opening epmode switching file!");
     }
 
     /* Print out info */
@@ -251,25 +271,21 @@ int main(int ac, char** av)
     printf("Frame length:                  %i\n", nSamples);
     printf("Output format:                 %i bit\n", arg.bipsOut);
     printf("Target bitrate:                %i\n", arg.bitrate);
-    if (!arg.decoder_only)
-    {
+    if (!arg.decoder_only) {
         printf("Real bitrate:                  %i\n\n", real_bitrate);
     }
-	printf("Bandwidth cutoff:              %s\n", arg.bandwidth ? arg.bandwidth : "-");
+    printf("Bandwidth cutoff:              %s\n", arg.bandwidth ? arg.bandwidth : "-");
     printf("High resolution mode:          %s\n\n", arg.hrmode ? "on" : "off");
     printf("PLC mode:                      %i\n", arg.plcMeth);
 
     /* delay compensation */
-    if (arg.dc == 2 && !arg.decoder_only)
-    {
+    if (arg.dc == 2 && !arg.decoder_only) {
         ReadWavInt(input_wav, sample_buf, nChannels * delay, &nSamplesRead);
     }
 
     /* Encoder + Decoder loop */
-    while (1)
-    {
-        if (!arg.decoder_only)
-        {
+    while (1) {
+        if (!arg.decoder_only) {
             /* Encoder */
             int32_t* input24[LC3_MAX_CHANNELS];
             for (i = 0; i < nChannels; i++) {
@@ -277,24 +293,33 @@ int main(int ac, char** av)
             }
 
             /* read bitrate switching file and set new bitrate */
-            if (bitrate_switching_file)
-            {
-                int32_t new_bitrate = (int32_t) (loopy_read64(bitrate_switching_file));
-                if (arg.verbose && encoder->bitrate != new_bitrate * nChannels)
-                {
-                    printf("Switching rate from %d to %d\n", encoder->bitrate,new_bitrate*nChannels);
+            if (bitrate_switching_file) {
+                int32_t new_bitrate = (int32_t)(loopy_read64(bitrate_switching_file));
+                if (arg.verbose && encoder->bitrate != new_bitrate * nChannels) {
+                    printf("Switching rate from %d to %d\n", encoder->bitrate, new_bitrate * nChannels);
                 }
                 err = lc3_enc_set_bitrate(encoder, new_bitrate * nChannels);
                 exit_if(err, ERROR_MESSAGE[err]);
             }
-            /* read bandwidth switching file and set bandwidth */
-            if (arg.bandwidth || bandwidth_switching_file)
+            /* read epmode switching file and set error protection */
+            if (epmode_switching_file)
             {
-                int32_t bw = bandwidth_switching_file ? (int32_t)loopy_read64(bandwidth_switching_file) : atoi(arg.bandwidth);
-                int32_t bw_old = encoder->bandwidth;
-                err = lc3_enc_set_bandwidth(encoder, bw);
-                if (arg.verbose && bw_old != bw && err == LC3_OK)
+                /* gen_rate_profile tool can only write values starting from 100 */
+                int16_t epmode = (int16_t)(loopy_read64(epmode_switching_file) / 100);
+                assert(epmode > 0 && epmode < 5); /* epmode 0 not allowed when switching */
+                if (arg.verbose && encoder->epmode != epmode)
                 {
+                    printf("Switching epmode from %d to %d\n", encoder->epmode, epmode);
+                }
+                exit_if(err, ERROR_MESSAGE[err]);
+            }
+            /* read bandwidth switching file and set bandwidth */
+            if (arg.bandwidth || bandwidth_switching_file) {
+                int32_t bw =
+                    bandwidth_switching_file ? (int32_t)loopy_read64(bandwidth_switching_file) : atoi(arg.bandwidth);
+                int32_t bw_old = encoder->bandwidth;
+                err            = lc3_enc_set_bandwidth(encoder, bw);
+                if (arg.verbose && bw_old != bw && err == LC3_OK) {
                     printf("Switching bandwidth from %i to %i\n", bw_old, bw);
                 }
                 exit_if(err, ERROR_MESSAGE[err]);
@@ -305,10 +330,32 @@ int main(int ac, char** av)
             /* zero out rest of last frame */
             memset(sample_buf + nSamplesRead, 0, (nSamples * nChannels - nSamplesRead) * sizeof(sample_buf[0]));
 
-            if (nSamplesRead == 0)
+
+            if (arg.dc != 2) 
             {
-                break;
+                if (nSamplesRead == 0)
+                {
+                    break;
+                }
+            } 
+            else 
+            {
+                if (nSamplesRead != (nSamples * nChannels)) {
+                    int32_t padded_samples = ((nSamples * nChannels) - nSamplesRead) / nChannels;
+                    int32_t delay_samples  = lc3_enc_get_delay(encoder) / 2;
+
+                    if (padded_samples >= delay_samples) 
+                    {
+                        if (dc2_extra_frame == 1) 
+                        {
+                            break;
+                        }
+                        dc2_extra_frame = 1;
+                    }
+                }
+
             }
+
             if (arg.ept && loopy_read16(error_pattern_file))
             {
                 nBytes = -1; /* tell encoder packet is lost and trigger PLC */
@@ -335,19 +382,16 @@ int main(int ac, char** av)
             }
 
             exit_if(err, ERROR_MESSAGE[err]);
-        }
-        else /* !arg.decoder_only */
+        } else /* !arg.decoder_only */
         {
             /* Read bitstream */
-            nBytes = read_bitstream_frame(input_bitstream, bytes, sizeof(bytes), arg.formatG192);
-            if (nBytes < 0)
-            {
+            nBytes = read_bitstream_frame(input_bitstream, bytes, sizeof(bytes), arg.formatG192, &bfi_ext);
+            if (nBytes < 0) {
                 break;
             }
         }
 
-        if (!arg.encoder_only)
-        {
+        if (!arg.encoder_only) {
             /* Decoder */
             /* read error pattern */
             if (error_pattern_file && loopy_read16(error_pattern_file)) {
@@ -362,9 +406,9 @@ int main(int ac, char** av)
 
             /* Run Decoder */
             if (arg.bipsOut == 24) {
-                err = lc3_dec24(decoder, bytes, nBytes, output24);
+                err = lc3_dec24(decoder, bytes, nBytes, output24, bfi_ext);
             } else if (arg.bipsOut == 32) {
-                err = lc3_dec32(decoder, bytes, nBytes, output24);
+                err = lc3_dec32(decoder, bytes, nBytes, output24, bfi_ext);
             } else {
                 int16_t* output16[LC3_MAX_CHANNELS];
 
@@ -372,14 +416,13 @@ int main(int ac, char** av)
                     output16[i] = buf_16 + i * nSamples;
                 }
 
-                err = lc3_dec16(decoder, bytes, nBytes, output16);
+                err = lc3_dec16(decoder, bytes, nBytes, output16, bfi_ext);
                 scale_16_to_24(buf_16, buf_24, nSamples * nChannels);
             }
             exit_if(err && err != LC3_DECODE_ERROR, ERROR_MESSAGE[err]);
 
             /* write error detection to file */
-            if (error_detection_file != NULL)
-            {
+            if (error_detection_file != NULL) {
                 int16_t tmp = (err == LC3_DECODE_ERROR);
                 fwrite(&tmp, 2, 1, error_detection_file);
             }
@@ -390,28 +433,24 @@ int main(int ac, char** av)
             WriteWavLong(output_wav, sample_buf + delay * nChannels, MIN(nSamples - delay, nSamplesFile) * nChannels);
             nSamplesFile -= nSamples - delay;
             delay = 0;
-        }
-        else /* !arg.encoder_only */
+        } else /* !arg.encoder_only */
         {
             write_bitstream_frame(output_bitstream, bytes, nBytes, arg.formatG192);
         }
 
-        if (!arg.hide_counter)
-        {
+        if (!arg.hide_counter) {
             printf("\rProcessing frame %i", frame++);
             fflush(stdout);
         }
     }
 
-    if (!arg.encoder_only && nSamplesFile > 0 && nSamplesFile < nSamples)
-    {
+    if (!arg.encoder_only && nSamplesFile > 0 && nSamplesFile < nSamples) {
         memset(sample_buf, 0, (nSamplesFile * nChannels) * sizeof(sample_buf[0]));
         WriteWavLong(output_wav, sample_buf, nSamplesFile * nChannels);
-    }
+    } 
 
     puts("\nProcessing done!");
-    if (output_wav)
-    {
+    if (output_wav) {
         printf("%i samples clipped!\n", output_wav->clipCount);
     }
 
@@ -438,8 +477,8 @@ void cleanup(void)
     safe_fclose(error_pattern_file);
     safe_fclose(error_detection_file);
     safe_fclose(bitrate_switching_file);
+    safe_fclose(epmode_switching_file);
     safe_fclose(bandwidth_switching_file);
-
 }
 
 static void parseCmdl(int ac, char** av, Arguments* arg)
@@ -449,7 +488,7 @@ static void parseCmdl(int ac, char** av, Arguments* arg)
     arg->bipsOut  = 16;
     arg->frame_ms = 10;
     arg->dc       = 1;
-#ifdef ENABLE_HR_MODE_FLAG
+#ifdef ENABLE_HR_MODE_FL_FLAG
     arg->hrmode = 0;
 #endif
     
@@ -458,91 +497,91 @@ static void parseCmdl(int ac, char** av, Arguments* arg)
     exit_if(ac <= 1, USAGE_MESSAGE);
 
     /* parse options in any order */
-    for (; pos < ac && av[pos][0] == '-'; pos++)
-    {
-        if (!strcmp(av[pos], "-h"))
-        {
+    for (; pos < ac && av[pos][0] == '-'; pos++) {
+        if (!strcmp(av[pos], "-h")) {
             puts(USAGE_MESSAGE);
             exit(0);
         }
-        if (!strcmp(av[pos], "-q"))
-        {
+        if (!strcmp(av[pos], "-q")) {
             arg->hide_counter = 1;
         }
-        if (!strcmp(av[pos], "-v"))
-        {
+        if (!strcmp(av[pos], "-v")) {
             arg->verbose = 1;
         }
-        if (!strcmp(av[pos], "-E"))
-        {
+        if (!strcmp(av[pos], "-E")) {
             arg->encoder_only = 1;
             puts("Using only encoder!");
         }
-        if (!strcmp(av[pos], "-D"))
-        {
+        if (!strcmp(av[pos], "-D")) {
             arg->decoder_only = 1;
             puts("Using only decoder!");
         }
-        if (!strcmp(av[pos], "-formatG192"))
-        {
+        if (!strcmp(av[pos], "-formatG192")) {
             arg->formatG192 = 1;
             puts("Reading/writing bitstream in G192 format!");
         }
-        if (!strcmp(av[pos], "-cfgG192") && pos + 1 < ac)
-        {
+        if (!strcmp(av[pos], "-cfgG192") && pos + 1 < ac) {
             arg->configFilenameG192 = av[++pos];
             puts("Using user defined configuration file for G192 bitstream format!");
         }
         /* error pattern */
-        if (!strcmp(av[pos], "-epf") && pos + 1 < ac)
-        {
+        if (!strcmp(av[pos], "-epf") && pos + 1 < ac) {
             arg->epf = av[++pos];
             puts("Using error pattern file for frame loss simulation!");
         }
         /* trigger PLC with special decoder modes */
-        if (!strcmp(av[pos], "-ept"))
-        {
+        if (!strcmp(av[pos], "-ept")) {
             arg->ept = 1;
             puts("Simulating frame loss by writing special values into lastnz variable!");
         }
         /* Bits per sample */
-        if (!strcmp(av[pos], "-bps") && pos + 1 < ac)
-        {
+        if (!strcmp(av[pos], "-bps") && pos + 1 < ac) {
             arg->bipsOut = atoi(av[++pos]);
             exit_if(arg->bipsOut != 16 && arg->bipsOut != 24 && arg->bipsOut != 32,
                     "Only 16, 24 or 32 bits per sample are supported!");
         }
         /* delay compensation */
-        if (!strcmp(av[pos], "-dc") && pos + 1 < ac)
-        {
+        if (!strcmp(av[pos], "-dc") && pos + 1 < ac) {
             arg->dc = atoi(av[++pos]);
             exit_if(arg->dc < 0 || arg->dc > 2, "dc musst be 0, 1 or 2!");
         }
         /* select bandwidth */
-        if (!strcmp(av[pos], "-bandwidth") && pos + 1 < ac)
-        {
+        if (!strcmp(av[pos], "-bandwidth") && pos + 1 < ac) {
             arg->bandwidth = av[++pos];
         }
         /* frame length in ms */
-        if (!strcmp(av[pos], "-frame_ms") && pos + 1 < ac)
-        {
+        if (!strcmp(av[pos], "-frame_ms") && pos + 1 < ac) {
             arg->frame_ms = (float)atof(av[++pos]);
         }
-#ifdef ENABLE_HR_MODE_FLAG
+        /* Error protection mode */
+        if (!strcmp(av[pos], "-epmode") && pos + 1 < ac)
+        {
+            arg->epmode = atoi(av[++pos]);
+            exit_if((unsigned)arg->epmode > 5, "EP mode must be in range [0-5]");
+            if (arg->epmode == 0 && strcmp(av[pos], "0"))
+            {
+                arg->epmode      = 1;
+                arg->epmode_file = av[pos];
+                puts("Using epmode switching file!");
+            }
+            else
+            {
+                printf("Error protection %sabled (%i). ", arg->epmode ? "en" : "dis", arg->epmode);
+            }
+        }
+#ifdef ENABLE_HR_MODE_FL_FLAG
         if (!strcmp(av[pos], "-hrmode")) {
             arg->hrmode = 1;
         }
 #endif
         /* Bitrate switching file */
-        if (!strcmp(av[pos], "-swf") && pos + 1 < ac)
-        {
+        if (!strcmp(av[pos], "-swf") && pos + 1 < ac) {
             arg->bitrate_file = av[++pos];
             puts("Using bitrate switching file!");
         }
 
         /* Error detection pattern */
-        if (!strcmp(av[pos], "-edf") && pos + 1 < ac)
-        {
+        if (!strcmp(av[pos], "-edf") && pos + 1 < ac) {
             arg->edf = av[++pos];
             puts("Writing error detection file!");
         }
@@ -556,12 +595,10 @@ static void parseCmdl(int ac, char** av, Arguments* arg)
     arg->outputFilename = av[pos++];
 
     /* Bitrate */
-    if (!arg->decoder_only)
-    {
+    if (!arg->decoder_only) {
         exit_if(pos >= ac, MISSING_ARGUMENT_MESSAGE);
         arg->bitrate = atoi(av[pos]);
-        if (arg->bitrate == 0)
-        {
+        if (arg->bitrate == 0) {
             arg->bitrate      = 64000; /* dummy value */
             arg->bitrate_file = av[pos];
             puts("Using bitrate switching file!");
@@ -571,10 +608,9 @@ static void parseCmdl(int ac, char** av, Arguments* arg)
 }
 
 /* check condition and if it fails, exit with error message */
-static void exit_if(int condition, const char *message)
+static void exit_if(int condition, const char* message)
 {
-    if (condition)
-    {
+    if (condition) {
         puts(message);
         if (condition < LC3_WARNING) {
             exit(1);
@@ -583,16 +619,13 @@ static void exit_if(int condition, const char *message)
 }
 
 /* open file with .cfg suffix if file_cfg is null */
-static FILE *fopen_cfg(const char *file, const char *file_cfg, const char *mode)
+static FILE* fopen_cfg(const char* file, const char* file_cfg, const char* mode)
 {
-    FILE *f;
-    if (file_cfg)
-    {
+    FILE* f;
+    if (file_cfg) {
         return fopen(file_cfg, mode);
-    }
-    else
-    {
-        char *tmp = malloc(strlen(file) + 5);
+    } else {
+        char* tmp = malloc(strlen(file) + 5);
         sprintf(tmp, "%s.cfg", file);
         f = fopen(tmp, mode);
         free(tmp);
@@ -600,16 +633,15 @@ static FILE *fopen_cfg(const char *file, const char *file_cfg, const char *mode)
     }
 }
 
-static FILE *open_bitstream_writer(const char *file, uint32_t samplerate, int bitrate, short channels,
+static FILE* open_bitstream_writer(const char* file, uint32_t samplerate, int bitrate, short channels,
                                    uint32_t signal_len, float frame_ms, int epmode, int hrmode, int g192,
-                                   const char *file_cfg)
+                                   const char* file_cfg)
 {
-    FILE *f     = fopen(file, "wb");
-    FILE *f_use = f;
-    FILE *f_cfg = NULL;
+    FILE* f     = fopen(file, "wb");
+    FILE* f_use = f;
+    FILE* f_cfg = NULL;
 
-    if (g192)
-    {
+    if (g192) {
         f_cfg = fopen_cfg(file, file_cfg, "wb");
         exit_if(f_cfg == NULL, "Error opening G192 configuration-file!");
         f_use = f_cfg;
@@ -622,11 +654,12 @@ static FILE *open_bitstream_writer(const char *file, uint32_t samplerate, int bi
             samplerate / 100,
             bitrate / 100, channels,
             (uint16_t)(frame_ms * 100),
-            epmode,
+            epmode > 0 ? 1 : 0,
             signal_len,
             signal_len >> 16,
             hrmode
         };
+        
         fwrite(&header, sizeof(header), 1, f_use);
     }
 
@@ -634,16 +667,15 @@ static FILE *open_bitstream_writer(const char *file, uint32_t samplerate, int bi
     return f;
 }
 
-static FILE *open_bitstream_reader(const char *file, unsigned int *samplerate, int *bitrate, short *channels,
-                                   uint32_t *signal_len, float *frame_ms, int *epmode,  int *hrmode, int g192,
-                                   const char *file_cfg)
+static FILE* open_bitstream_reader(const char* file, unsigned int* samplerate, int* bitrate, short* channels,
+                                   uint32_t* signal_len, float* frame_ms, int* epmode, int* hrmode, int g192,
+                                   const char* file_cfg)
 {
     FILE* f     = fopen(file, "rb");
     FILE* f_use = f;
     FILE* f_cfg = NULL;
 
-    if (g192)
-    {
+    if (g192) {
         f_cfg = fopen_cfg(file, file_cfg, "rb");
         exit_if(f_cfg == NULL, "Error opening G192 configuration-file!");
         f_use = f_cfg;
@@ -674,8 +706,9 @@ static void write_bitstream_frame_G192(FILE* bitstream_file, uint8_t* bytes, int
 {
     int      i           = 0;
     int      currentByte = 0;
-    int      bit = 0, bitNumber = 0, syncWord = 0;
+    int      bitNumber = 0, syncWord = 0;
     uint16_t nbits = size * 8; /* G192 expects number of bits */
+    int16_t bit = 0;
 
     /* Write good/bad frame info -> encoder writes only good frames */
     syncWord = G192_GOOD_FRAME;
@@ -689,34 +722,33 @@ static void write_bitstream_frame_G192(FILE* bitstream_file, uint8_t* bytes, int
         currentByte = bytes[i];
 
         /* Start with LSB */
-        for (bitNumber = 1; bitNumber < 9; bitNumber++)
-        {
+        for (bitNumber = 1; bitNumber < 9; bitNumber++) {
             bit = (currentByte & (1 << (bitNumber - 1))) != 0;
             bit = bit ? G192_ONE : G192_ZERO;
+#ifdef OLD_G192_FORMAT_FL
             fwrite(&bit, sizeof(int16_t), 1, bitstream_file);
+#else
+            fwrite(&bit, sizeof(bit), 1, bitstream_file);
+#endif
         }
     }
 }
 
-static void write_bitstream_frame(FILE *bitstream_file, uint8_t *bytes, int size, int g192)
+static void write_bitstream_frame(FILE* bitstream_file, uint8_t* bytes, int size, int g192)
 {
-    if (g192)
-    {
+    if (g192) {
         write_bitstream_frame_G192(bitstream_file, bytes, size);
-    }
-    else
-    {
+    } else {
         int      i      = 0;
         uint16_t nbytes = size;
         fwrite(&nbytes, sizeof(nbytes), 1, bitstream_file);
-        for (i = 0; i < size; i++)
-        {
+        for (i = 0; i < size; i++) {
             putc(bytes[i], bitstream_file);
         }
     }
 }
 
-static int read_bitstream_frame_G192(FILE *bitstream_file, int size, uint8_t *bytes)
+static int read_bitstream_frame_G192(FILE *bitstream_file, int size, uint8_t *bytes, int *bfi_ext)
 {
     int      i = 0, j = 0, read = 0;
     uint16_t nbits      = 0;
@@ -724,8 +756,7 @@ static int read_bitstream_frame_G192(FILE *bitstream_file, int size, uint8_t *by
 
     /* Read frame indicator info -> good/bad/redundancy frame */
     read = (int)fread(&frameIndicator, sizeof(frameIndicator), 1, bitstream_file);
-    if (read != 1)
-    {
+    if (read != 1) {
         return -1;
     }
 
@@ -734,9 +765,10 @@ static int read_bitstream_frame_G192(FILE *bitstream_file, int size, uint8_t *by
 
     nbytes = nbits / 8;
 
-    exit_if(frameIndicator != G192_GOOD_FRAME && frameIndicator != G192_BAD_FRAME,
+    exit_if(frameIndicator != G192_GOOD_FRAME && frameIndicator != G192_BAD_FRAME &&
+                frameIndicator != G192_REDUNDANCY_FRAME,
             "Wrong G192 format detected in bitstream file! The sync word could not be recognized!");
-
+    
     for (i = 0; i < nbytes && i < size; i++)
     {
         int byte = 0;
@@ -750,33 +782,32 @@ static int read_bitstream_frame_G192(FILE *bitstream_file, int size, uint8_t *by
         }
         bytes[i] = (uint8_t)byte;
     }
-    if (frameIndicator == G192_GOOD_FRAME)
-    {
-        /* falltrough */
+
+    if (frameIndicator == G192_GOOD_FRAME) {
+        *bfi_ext = 0;
+    } else if (frameIndicator == G192_BAD_FRAME) {
+        nbytes   = 0;
+        *bfi_ext = 1;
     }
-    else if (frameIndicator == G192_BAD_FRAME)
+    else if (frameIndicator == G192_REDUNDANCY_FRAME)
     {
-        nbytes = 0;
+        *bfi_ext = 3;
     }
+    
     return nbytes;
 }
 
-static int read_bitstream_frame(FILE *bitstream_file, uint8_t *bytes, int size, int g192)
+static int read_bitstream_frame(FILE *bitstream_file, uint8_t *bytes, int size, int g192, int *bfi_ext)
 {
-    if (g192)
-    {
-        return read_bitstream_frame_G192(bitstream_file, size, bytes);
-    }
-    else
-    {
+    if (g192) {
+        return read_bitstream_frame_G192(bitstream_file, size, bytes, bfi_ext);
+    } else {
         int      i      = 0;
         uint16_t nbytes = 0;
-        if (fread(&nbytes, sizeof(nbytes), 1, bitstream_file) != 1)
-        {
+        if (fread(&nbytes, sizeof(nbytes), 1, bitstream_file) != 1) {
             return -1; /* End of file reached */
         }
-        for (i = 0; i < nbytes && i < size; i++)
-        {
+        for (i = 0; i < nbytes && i < size; i++) {
             bytes[i] = getc(bitstream_file);
         }
         return nbytes;
@@ -784,46 +815,39 @@ static int read_bitstream_frame(FILE *bitstream_file, uint8_t *bytes, int size, 
 }
 
 /* read value from file and rewind if end is reached */
-static int16_t loopy_read16(FILE *f)
+static int16_t loopy_read16(FILE* f)
 {
     int16_t tmp = 0;
 #ifdef READ_G192FER
     static int16_t format_start_check = -1;
 #endif
-    if (fread(&tmp, sizeof(tmp), 1, f) != 1)
-    {
+    if (fread(&tmp, sizeof(tmp), 1, f) != 1) {
         fseek(f, 0, SEEK_SET);
         fread(&tmp, sizeof(tmp), 1, f);
     }
 
 #ifdef READ_G192FER
-    if (format_start_check < 0)
-    {
-       format_start_check = tmp;  /*save first 16 bit  FER value  */
+    if (format_start_check < 0) {
+        format_start_check = tmp; /*save first 16 bit  FER value  */
     }
 
-    if (format_start_check >= 0  &&  format_start_check <= 1)
-    {
-       if (tmp != 0 &&  tmp != 1)
-       {
-          printf("\n Warning !!! assumed [0, 1] strange FER file values %d  %d \n ", format_start_check, tmp);
-          fflush(stdout);
-       }
+    if (format_start_check >= 0 && format_start_check <= 1) {
+        if (tmp != 0 && tmp != 1) {
+            printf("\n Warning !!! assumed [0, 1] strange FER file values %d  %d \n ", format_start_check, tmp);
+            fflush(stdout);
+        }
     }
 
-    if (format_start_check == G192_BAD_FRAME ||   format_start_check == G192_GOOD_FRAME)
-    {
+    if (format_start_check == G192_BAD_FRAME || format_start_check == G192_GOOD_FRAME) {
 
 
-       if ( (tmp != G192_BAD_FRAME && tmp != G192_GOOD_FRAME))
-       {
-          printf("\n Warning !!! assumed g.192 [0x6b21, 0x6b20,] , strange FER file values %d  %d \n ", format_start_check, tmp);
-          fflush(stdout);
-       }
-       else
-       {
-         tmp = (G192_GOOD_FRAME-tmp);   /* convert g192 synch word to   1 and 0 , note PC byte order assumed */
-       }
+        if ((tmp != G192_BAD_FRAME && tmp != G192_GOOD_FRAME)) {
+            printf("\n Warning !!! assumed g.192 [0x6b21, 0x6b20,] , strange FER file values %d  %d \n ",
+                   format_start_check, tmp);
+            fflush(stdout);
+        } else {
+            tmp = (G192_GOOD_FRAME - tmp); /* convert g192 synch word to   1 and 0 , note PC byte order assumed */
+        }
     }
     assert(tmp == 1 || tmp == 0);
 #endif
@@ -831,56 +855,48 @@ static int16_t loopy_read16(FILE *f)
     return tmp;
 }
 
-static int64_t loopy_read64(FILE *f)
+static int64_t loopy_read64(FILE* f)
 {
     int64_t tmp = 0;
-    if (fread(&tmp, sizeof(tmp), 1, f) != 1)
-    {
+    if (fread(&tmp, sizeof(tmp), 1, f) != 1) {
         fseek(f, 0, SEEK_SET);
         fread(&tmp, sizeof(tmp), 1, f);
     }
     return tmp;
 }
 
-static void scale_24_to_16(const int32_t *in, int16_t *out, int n)
+static void scale_24_to_16(const int32_t* in, int16_t* out, int n)
 {
     int i;
-    for (i = 0; i < n; i++)
-    {
+    for (i = 0; i < n; i++) {
         out[i] = in[i];
     }
 }
 
-static void scale_16_to_24(const int16_t *in, int32_t *out, int n)
+static void scale_16_to_24(const int16_t* in, int32_t* out, int n)
 {
     int i;
-    for (i = 0; i < n; i++)
-    {
+    for (i = 0; i < n; i++) {
         out[i] = in[i];
     }
 }
 
-static void interleave(int32_t **in, int32_t *out, int n, int channels)
+static void interleave(int32_t** in, int32_t* out, int n, int channels)
 {
     int ch, i;
-    for (ch = 0; ch < channels; ch++)
-    {
-        for (i = 0; i < n; i++)
-        {
+    for (ch = 0; ch < channels; ch++) {
+        for (i = 0; i < n; i++) {
             out[i * channels + ch] = in[ch][i];
         }
     }
 }
 
-static void deinterleave(int32_t *in, int32_t **out, int n, int channels)
+static void deinterleave(int32_t* in, int32_t** out, int n, int channels)
 {
     int ch, i;
-    for (ch = 0; ch < channels; ch++)
-    {
-        for (i = 0; i < n; i++)
-        {
+    for (ch = 0; ch < channels; ch++) {
+        for (i = 0; i < n; i++) {
             out[ch][i] = in[i * channels + ch];
         }
     }
 }
-

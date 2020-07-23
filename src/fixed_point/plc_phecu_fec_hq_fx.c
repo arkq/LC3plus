@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "defines.h"
 
@@ -289,41 +290,8 @@ void trans_burst_ana_fx(
 
    tr_dec = (Word16 *)scratchAlign(L_gr_pow_right, sizeof(*L_gr_pow_right) * MAX_LGW); /* Size = 2bytes * MAX_LGW */
 
-
-#ifdef  NONBE_PLC2_MUTING_DCSYNT_FIX 
    oneOverFrame = oneOverFrameQ15Tab[fs_idx];
    Lgw          = s_min(add(fs_idx, LGW8K), LGW48K);  /* 4,5,6,7, (7/8) */
-#else
-   /* Initialize for 48k to prevent warnings */
-   oneOverFrame = INV_L_FRAME48K_Q15; move16();
-   Lgw = LGW48K;  move16();
-
-   IF(sub(output_frame, L_FRAME32K) == 0)
-   {
-      oneOverFrame = INV_L_FRAME32K_Q15; move16();
-      Lgw = LGW32K; move16();
-
-   }
-   ELSE IF(sub(output_frame, L_FRAME24K) == 0)
-   {
-      oneOverFrame = INV_L_FRAME24K_Q15;   move16();
-      Lgw = LGW24K;   move16();
-
-   }
-   ELSE IF(sub(output_frame, L_FRAME16K) == 0)
-   {
-      oneOverFrame = INV_L_FRAME16K_Q15;  move16();
-      Lgw = LGW16K;  move16();
-
-   }
-   ELSE IF(sub(output_frame, L_FRAME8K) == 0)
-   {
-      oneOverFrame = INV_L_FRAME8K_Q15;  move16();
-      Lgw = LGW8K;  move16();
-   }
-
- 
-#endif
 
    burst_len = add(mult_r(time_offs, oneOverFrame), 1);
 
@@ -938,6 +906,7 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          plc_phEcu_maxval_fx(xfp, peak_range_1, &Xmax);
          plc_phEcu_minval_fx(xfp, peak_range_1, &Xmin);
          sens = mult_r(sub(Xmax, Xmin), CMPLMNT_PLOC_SENS_FX);
+          
    
          plc_phEcu_peak_locator_fx(xfp, peak_range_1, plocs, num_plocs, sens, Xmax, Xmin, MAX_LPROT_RED, buffer_fft);
 
@@ -1114,7 +1083,7 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          Word32  L_corr_phase[MAX_PLOCS], L_Xph;
          Word32 *pCorrPhase_L;
          Word16  cos_F, sin_F, tmp;
-         Word16 peak_sin_F, peak_cos_F;
+         Word16 peak_sin_F = 0, peak_cos_F = 0;
          Word16 sin_F_fade2avg, cos_F_fade2avg;
          Word16 fs_idx;
          Word16        Lprot, m, i, e, im_ind, delta_corr_up, delta_corr_dn, delta_tmp;
@@ -1180,11 +1149,7 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          Lprot = LprotSzPtr[fs_idx];move16();
          Lprot_inv = InvLprot_Q22[fs_idx];  move16();
 
-
-#ifdef  NONBE_PLC2_MUTING_DCSYNT_FIX 
          tmp2 = add(mult_r(time_offs, oneOverFrameQ15Tab[fs_idx]), 1);/* save a local burst_len for  securing DC  and fs/2 muting */
-#endif
-
 
          /* Correction/evolution  phase of the identified peaks */
          IF(s_or(is_trans[0], is_trans[1]) != 0)
@@ -1241,7 +1206,6 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
             X[shr_pos(Lprot, 1)] = 0;  move16(); /* also reset fs/2 if there are no peaks */
          }
 
-#ifdef  NONBE_PLC2_MUTING_DCSYNT_FIX 
          IF(sub(tmp2, (BURST_ATT_THRESH+1)) > 0)
          {
             /*   also start DC  scaling attenuation  */
@@ -1249,8 +1213,6 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
             /*  start fs/by2   attenuation  */
             X[shr_pos(Lprot, 1)] = mult(alpha[s_min(add(fs_idx, LGW8K), LGW48K)], X[shr_pos(Lprot, 1)]); move16();
          }
-#endif
-
 
 
          lprotBy2Minus1 = sub(shr_pos(Lprot, 1), 1);
@@ -1864,17 +1826,22 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
                Word16 tmp_man_upshift = margin_prevsynth - 1; /* 1 ..   -15 */
                Word16 Qnew = 15 - (q_fx_old_exp - tmp_man_upshift);
                assert(Qold == Qnew);
+               UNUSED(Qold);
+               UNUSED(Qnew);
             }
             if (margin_prevsynth == 1)
             {
                Word16 Qold = 15 - (q_fx_old_exp + 0);
                assert(*Q_spec == Qold);
+               UNUSED(Qold);
             }
             if (margin_prevsynth == 2)
             {
                Word16 Qold = 15 - (q_fx_old_exp - 1);
                assert(*Q_spec == Qold);
+               UNUSED(Qold);
             }
+             
             Q_prevsynthMinus1 = sub(15, add(q_fx_old_exp, +1)); /* dbg to use non-scaled prevsynth for OLA  */
    
             /*  Q of prev_synth now separated from prev_bfi=0 and prev_bfi==1  */
@@ -2328,6 +2295,7 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
 #define C_JACOB_Q14 18725 /*    c_jacob = 1.1429;   % assume 0.1875 hammrect window 'periodic' */
 
          ASSERT(special == 0); /* always use other imax for edges cases */
+         UNUSED(special);
 
          /* Get the bin parameters into variables */
          pY = y_re;

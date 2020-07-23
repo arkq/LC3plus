@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "functions.h"
 
@@ -24,9 +25,7 @@ LC3_INT sign(LC3_FLOAT x)
 
 void processQuantizeSpec_fl(LC3_FLOAT x[], LC3_FLOAT gain, LC3_INT xq[], LC3_INT nt, LC3_INT totalBits, LC3_INT* nbits, LC3_INT* nbits2, LC3_INT fs,
                             LC3_INT* lastnzout, LC3_INT* codingdata, LC3_INT* lsbMode, LC3_INT mode, LC3_INT target
-#ifdef ENABLE_HR_MODE
                             , LC3_INT hrmode
-#endif
 )
 {
 
@@ -38,24 +37,18 @@ void processQuantizeSpec_fl(LC3_FLOAT x[], LC3_FLOAT gain, LC3_INT xq[], LC3_INT
     LC3_INT lastnz = 1;
     LC3_FLOAT offset = 0.375;
 
-#ifdef ENABLE_HR_MODE
     if (hrmode)
     {
     	offset = 0.5;
     }
-#endif
 
 
     /* Quantization */
     for (i = 0; i < nt; i++) {
         xq[i] = trunc(x[i] / gain + offset * sign(x[i]));
-#ifdef ENABLE_HR_MODE
         if (hrmode == 0) {
             assert(xq[i] <= 32767 && xq[i] >= -32768);
         }
-#else
-        assert(xq[i] <= 32767 && xq[i] >= -32768);
-#endif
     }
 
     /* Rate flag */

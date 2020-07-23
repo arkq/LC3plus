@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "functions.h"
 
@@ -41,24 +42,24 @@ void read_uint_fl(LC3_INT nbits, LC3_UINT8* ptr, LC3_INT* mask_side, LC3_INT* bp
 }
 
 #ifdef ENABLE_PADDING
-LC3_INT paddingDec_fl(LC3_UINT8* bytes, LC3_INT numbytes, LC3_INT N, LC3_INT bw_cutoff_bits, LC3_INT* total_padding)
+LC3_INT paddingDec_fl(LC3_UINT8* bytes, LC3_INT nbbits, LC3_INT L_spec, LC3_INT bw_cutoff_bits, LC3_INT ep_enabled, LC3_INT* total_padding, LC3_INT *np_zero)
 {
     LC3_INT lastnz_threshold;
     LC3_INT val, padding_len_bits, padding_len;
-
     LC3_INT bp_side;
-
     LC3_INT    mask_side;
     LC3_UINT8* ptr = bytes;
 
+    LC3_INT nbbytes = nbbits >> 3;
     LC3_INT lastnz;
     LC3_INT bw_cutoff_idx;
-    LC3_INT nbits = ceil(LC3_LOG2(N / 2));
+    LC3_INT nbits = ceil(LC3_LOG2(L_spec / 2));
+    *np_zero = 0;
 
     *total_padding = 0;
 
-    bp_side   = numbytes - 1; /* Matlab offset by 1 */
-    mask_side = 1;
+    bp_side   = (nbbits - 1) >> 3;
+    mask_side = 1 << (8 - (nbbits - (bp_side << 3)));
 
     if (bp_side < 19 || bp_side >= LC3_MAX_BYTES) {
         return 1;
@@ -82,14 +83,21 @@ LC3_INT paddingDec_fl(LC3_UINT8* bytes, LC3_INT numbytes, LC3_INT N, LC3_INT bw_
 
         /* Read 4 reserved bits */
         read_uint_fl(4, ptr, &mask_side, &bp_side, &val);
-
-        /* Discard padding length bytes */
-        bp_side = bp_side - padding_len;
-
-        *total_padding = *total_padding + padding_len + 2;
-
+        
+        if (ep_enabled == 0)
+        {
+            /* Discard padding length bytes */
+            bp_side        = bp_side - padding_len;
+            *total_padding = *total_padding + padding_len + 2;
+        }
+        else
+        {
+            *total_padding = *total_padding + 2;
+            *np_zero       = *np_zero + padding_len;
+        }
+        
         /* check if minimum payload size is reached */
-        if ((numbytes - *total_padding) < 20) {
+        if ((nbbytes - (*total_padding + *np_zero)) < 20) {
             return 1;
         }
 
@@ -100,6 +108,12 @@ LC3_INT paddingDec_fl(LC3_UINT8* bytes, LC3_INT numbytes, LC3_INT N, LC3_INT bw_
 
         read_uint_fl(nbits, ptr, &mask_side, &bp_side, &lastnz);
     }
+    
+    if (ep_enabled != 0)
+    {
+        *total_padding = *total_padding + *np_zero;
+    }
+    
     return 0;
 }
 #endif
@@ -111,22 +125,28 @@ void processDecoderEntropy_fl(LC3_UINT8* bytes, LC3_INT numbytes, LC3_INT* mask_
 {
 
     LC3_INT plc_trigger_bw = 0, plc_trigger_last_nz = 0, plc_trigger_SNS1 = 0, plc_trigger_SNS2 = 0, tmp = 0, bit = 0,
-        submodeMSB = 0, i = 0, ltpf_tmp[3] = {0}, ind = 0, submodeLSB = 0;
+        submodeMSB = 0, i = 0, ltpf_tmp[3] = {0}, ind = 0, submodeLSB = 0, bp_side_local = 0, mask_side_local = 0;
     LC3_UINT8* ptr;
     LC3_INT      gainMSBbits[4] = {1, 1, 2, 2};
 
-    *bp_side   = numbytes - 1; /* Matlab offset by 1 */
-    *mask_side = 1;
+    *bp_side = -1;
+    bp_side_local   = numbytes - 1; /* Matlab offset by 1 */
+    mask_side_local = 1;
+    *mask_side = -1;
     ptr        = bytes;
+    *lsbMode = -1;
+    *lastnz = -1;
 
     plc_trigger_bw      = 1; /* Bandwidth */
     plc_trigger_last_nz = 1; /* Last non-zero tuple */
     plc_trigger_SNS1    = 1; /* SNS-VQ 2nd stage MPVQ data (24-25 bits) */
     plc_trigger_SNS2    = 1; /* SNS-VQ 2nd stage MPVQ data (24-25 bits) */
+    
+    
 
     /* Bandwidth */
     if (bw_cutoff_bits > 0) {
-        read_uint_fl(bw_cutoff_bits, ptr, mask_side, bp_side, bw_cutoff_idx);
+        read_uint_fl(bw_cutoff_bits, ptr, &mask_side_local, &bp_side_local, bw_cutoff_idx);
 
         if (fs_idx < *bw_cutoff_idx) {
             *bfi = plc_trigger_bw;
@@ -147,7 +167,7 @@ void processDecoderEntropy_fl(LC3_UINT8* bytes, LC3_INT numbytes, LC3_INT* mask_
     }
 
     /* Last non-zero tuple */
-    read_uint_fl(ceil(LC3_LOG2(N / 2)), ptr, mask_side, bp_side, lastnz);
+    read_uint_fl(ceil(LC3_LOG2(N / 2)), ptr, &mask_side_local, &bp_side_local, lastnz);
     *lastnz = (*lastnz + 1) * 2;
 
     if (*lastnz > N) {
@@ -158,34 +178,34 @@ void processDecoderEntropy_fl(LC3_UINT8* bytes, LC3_INT numbytes, LC3_INT* mask_
     }
 
     /* LSB mode bit */
-    read_bit_fl(ptr, mask_side, bp_side, lsbMode);
+    read_bit_fl(ptr, &mask_side_local, &bp_side_local, lsbMode);
 
     /* Global gain */
-    read_uint_fl(8, ptr, mask_side, bp_side, gg_idx);
+    read_uint_fl(8, ptr, &mask_side_local, &bp_side_local, gg_idx);
 
     /* TNS activation flag */
     for (i = 0; i < *tns_numfilters; i++) {
-        read_bit_fl(ptr, mask_side, bp_side, &bit);
+        read_bit_fl(ptr, &mask_side_local, &bp_side_local, &bit);
         tns_order[i] = bit;
     }
 
     /* LTPF activation flag */
-    read_bit_fl(ptr, mask_side, bp_side, &ltpf_tmp[0]);
+    read_bit_fl(ptr, &mask_side_local, &bp_side_local, &ltpf_tmp[0]);
 
     /* SNS-VQ 1st stage */
-    read_uint_fl(5, ptr, mask_side, bp_side, &scf_idx[0]);
-    read_uint_fl(5, ptr, mask_side, bp_side, &scf_idx[1]);
+    read_uint_fl(5, ptr, &mask_side_local, &bp_side_local, &scf_idx[0]);
+    read_uint_fl(5, ptr, &mask_side_local, &bp_side_local, &scf_idx[1]);
 
     /* SNS-VQ 2nd stage side-info (3-4 bits) */
-    read_bit_fl(ptr, mask_side, bp_side, &submodeMSB);
+    read_bit_fl(ptr, &mask_side_local, &bp_side_local, &submodeMSB);
     scf_idx[2] = submodeMSB * 2;
 
-    read_uint_fl(gainMSBbits[scf_idx[2]], ptr, mask_side, bp_side, &scf_idx[3]);
-    read_bit_fl(ptr, mask_side, bp_side, &scf_idx[4]);
+    read_uint_fl(gainMSBbits[scf_idx[2]], ptr, &mask_side_local, &bp_side_local, &scf_idx[3]);
+    read_bit_fl(ptr, &mask_side_local, &bp_side_local, &scf_idx[4]);
 
     /* SNS-VQ 2nd stage MPVQ data (24-25 bits) */
     if (submodeMSB == 0) {
-        read_uint_fl(25, ptr, mask_side, bp_side, &tmp);
+        read_uint_fl(25, ptr, &mask_side_local, &bp_side_local, &tmp);
         if (tmp >= 33460056) {
             *bfi = plc_trigger_SNS1;
             if (*bfi) {
@@ -206,7 +226,7 @@ void processDecoderEntropy_fl(LC3_UINT8* bytes, LC3_INT numbytes, LC3_INT* mask_
         }
 
     } else {
-        read_uint_fl(24, ptr, mask_side, bp_side, &tmp);
+        read_uint_fl(24, ptr, &mask_side_local, &bp_side_local, &tmp);
 
         if (tmp >= 16708096) {
             *bfi = plc_trigger_SNS2;
@@ -231,8 +251,8 @@ void processDecoderEntropy_fl(LC3_UINT8* bytes, LC3_INT numbytes, LC3_INT* mask_
 
     /* LTPF data */
     if (ltpf_tmp[0] == 1) {
-        read_bit_fl(ptr, mask_side, bp_side, &ltpf_tmp[1]);
-        read_uint_fl(9, ptr, mask_side, bp_side, &ltpf_tmp[2]);
+        read_bit_fl(ptr, &mask_side_local, &bp_side_local, &ltpf_tmp[1]);
+        read_uint_fl(9, ptr, &mask_side_local, &bp_side_local, &ltpf_tmp[2]);
     } else {
         ltpf_tmp[1] = 0;
         ltpf_tmp[2] = 0;
@@ -243,5 +263,8 @@ void processDecoderEntropy_fl(LC3_UINT8* bytes, LC3_INT numbytes, LC3_INT* mask_
     }
 
     /* Noise factor */
-    read_uint_fl(3, ptr, mask_side, bp_side, fac_ns_idx);
+    read_uint_fl(3, ptr, &mask_side_local, &bp_side_local, fac_ns_idx);
+    
+    *bp_side = bp_side_local;
+    *mask_side = mask_side_local;
 }

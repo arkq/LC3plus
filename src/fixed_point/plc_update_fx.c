@@ -1,48 +1,32 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "defines.h"
 
 #include "functions.h"
-#include "stl.h"
-#include "basop32.h"
 
 
 
 void processPLCupdate_fx(AplcSetup *plcAd, Word16 x_fx[], Word16 q_fx_exp, Word16 concealMethod, Word16 frame_length,
                          Word16 fs_idx, Word16 *nbLostFramesInRow, Word16 *prev_prev_bfi, Word16 *prev_bfi, Word16 bfi, Word16 scf_q[],
-                         Word16 ola_mem_fx[], Word16 ola_mem_fx_exp, Word16 *ns_cum_alpha)
+                         Word16 *ns_cum_alpha)
 {
-
-#ifdef DYNMEM_COUNT
-    Dyn_Mem_In("process_plc_update_fx",         
-        0
-                   );
-#endif
-
-
     processPLCUpdateAfterIMDCT_fx(x_fx, q_fx_exp, concealMethod, frame_length, fs_idx, nbLostFramesInRow, prev_prev_bfi, prev_bfi, bfi,
                                   scf_q, ns_cum_alpha, plcAd); /* NB *prev_bfi updated here */
 
-    UNUSED(ola_mem_fx);
-    UNUSED(ola_mem_fx_exp);
     IF ( plcAd != 0 )
     { 
         /*  reuse/inplace the most recent 16 ms of x_old_tot without additional rescaling,  keep exponent aligned with tdc pitch buffer to  save WMOPS */
         ASSERT( (&plcAd->x_old_tot_fx[plcAd->max_len_pcm_plc - LprotSzPtr[fs_idx] ])  == plcAd->PhECU_xfp_fx );   
         plcAd->PhECU_xfp_exp_fx  = plcAd->q_fx_old_exp;    move16(); /* exponent used by concealmethod 2 in prevBfi frames and also right after  non bfi frames */
     }
-
-#ifdef DYNMEM_COUNT
-    Dyn_Mem_Out();
-#endif
-
 }
 
 void processPLCupdateSpec_fx(Word16 q_old_d_fx[], Word16 *q_old_fx_exp, Word32 q_d_fx[], Word16 *q_fx_exp, Word16 yLen)
@@ -65,8 +49,6 @@ void processPLCupdateSpec_fx(Word16 q_old_d_fx[], Word16 *q_old_fx_exp, Word32 q
 
     Dyn_Mem_Deluxe_Out();
 }
-
-
 
 void processPLCspec2shape_fx(Word16 prev_bfi, Word16 bfi, Word16 q_old_d_fx[], Word16 yLen,  
                              Word16 *stPhECU_oold_grp_shape_fx, Word16 *stPhECU_old_grp_shape_fx)

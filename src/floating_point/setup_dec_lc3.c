@@ -1,15 +1,17 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "setup_dec_lc3.h"
 #include "functions.h"
 #include <stdio.h>
+#include <assert.h>
 
 /* if decoder is null only size is reported */
 int alloc_decoder(LC3_Dec* decoder, int channels)
@@ -39,11 +41,9 @@ LC3_Error FillDecSetup(LC3_Dec* decoder, int samplerate, int channels, LC3_PlcMo
     decoder->plcMeth = plc_mode;
     
     
-#ifdef ENABLE_HR_MODE
     if (decoder->fs_idx > 4) {
         decoder->fs_idx = 5;
     }
-#endif
     decoder->channels       = channels;
     decoder->frame_ms       = 10;
     decoder->frame_dms      = 100;
@@ -60,14 +60,13 @@ LC3_Error FillDecSetup(LC3_Dec* decoder, int samplerate, int channels, LC3_PlcMo
     } else if (decoder->fs == 48000) {
         decoder->tilt = 30;
     }
-#ifdef ENABLE_HR_MODE
     else if (decoder->fs == 96000) {
         decoder->tilt = 34;
     }
-#endif
 
     set_dec_frame_params(decoder);
 
+    
     return LC3_OK;
 }
 
@@ -75,129 +74,103 @@ LC3_Error FillDecSetup(LC3_Dec* decoder, int samplerate, int channels, LC3_PlcMo
 void set_dec_frame_params(LC3_Dec* decoder)
 {
     int ch = 0;
+    
+    if (decoder->fs_idx == 5)
+    {
+        decoder->hrmode = 1;
+    }
 
     decoder->frame_length = ceil(decoder->fs * 10 / 1000); /* fs * 0.01*2^6 */
-#ifdef ENABLE_HR_MODE
     if (decoder->hrmode == 1)
     {
-    		decoder->yLen = decoder->frame_length;
+        decoder->yLen = decoder->frame_length;
     }
     else
     {
-    	decoder->yLen = MIN(MAX_BW, decoder->frame_length);
+        decoder->yLen = MIN(MAX_BW, decoder->frame_length);
     }
-#else
-    decoder->yLen         = MIN(MAX_BW, decoder->frame_length);
-#endif
+
     decoder->bands_number = 64;
-    if (decoder->frame_ms == 2.5) {
+    if (decoder->frame_ms == 2.5) 
+    {
         decoder->frame_length = decoder->frame_length >> 2;
         decoder->yLen /= 4;
-#ifdef ENABLE_HR_MODE
         if (decoder->hrmode)
         {
             decoder->bands_number = bands_number_2_5ms_HR[decoder->fs_idx];
-        } else
-#endif
+        } 
+        else
         {
             decoder->bands_number = bands_number_2_5ms[decoder->fs_idx];
         }
     }
-    if (decoder->frame_ms == 5) {
+    if (decoder->frame_ms == 5) 
+    {
         decoder->frame_length = decoder->frame_length >> 1;
         decoder->yLen /= 2;
         decoder->bands_number = bands_number_5ms[decoder->fs_idx];
     }
 
-#ifdef ENABLE_HR_MODE
     if (decoder->hrmode)
     {
-    	decoder->BW_cutoff_bits    = 0;
+        decoder->BW_cutoff_bits    = 0;
     }
     else
     {
-    	decoder->BW_cutoff_bits    = BW_cutoff_bits_all[decoder->fs_idx];
+        decoder->BW_cutoff_bits    = BW_cutoff_bits_all[decoder->fs_idx];
     }
-#endif
 
-    if (decoder->frame_ms == 10) {
-#ifdef ENABLE_HR_MODE
-    	if (decoder->hrmode)
-    	{
-    		decoder->bands_offset = ACC_COEFF_PER_BAND_HR[decoder->fs_idx];
-            decoder->cutoffBins   = BW_cutoff_bin_all_HR;
-    	}
-    	else
-    	{
-    		decoder->bands_offset = ACC_COEFF_PER_BAND[decoder->fs_idx];
-            decoder->cutoffBins   = BW_cutoff_bin_all;
-    	}
-#else
-        decoder->bands_offset = ACC_COEFF_PER_BAND[decoder->fs_idx];
+    if (decoder->frame_ms == 10) 
+    {
+        if (decoder->hrmode)
+        {
+            decoder->bands_offset = ACC_COEFF_PER_BAND_HR[decoder->fs_idx];
+        }
+        else
+        {
+            decoder->bands_offset = ACC_COEFF_PER_BAND[decoder->fs_idx];
+        }
         decoder->cutoffBins   = BW_cutoff_bin_all;
-#endif
     }
-    else if (decoder->frame_ms == 2.5) {
-#ifdef ENABLE_HR_MODE
-    	if (decoder->hrmode)
-    	{
-    		decoder->bands_offset = ACC_COEFF_PER_BAND_2_5ms_HR[decoder->fs_idx];
-            decoder->cutoffBins   = BW_cutoff_bin_all_2_5ms_HR;
-    	}
-    	else
-    	{
-    		decoder->bands_offset = ACC_COEFF_PER_BAND_2_5ms[decoder->fs_idx];
-            decoder->cutoffBins   = BW_cutoff_bin_all_2_5ms;
-    	}
-#else
-        decoder->bands_offset = ACC_COEFF_PER_BAND_2_5ms[decoder->fs_idx];
+    else if (decoder->frame_ms == 2.5) 
+    {
+        if (decoder->hrmode)
+        {
+            decoder->bands_offset = ACC_COEFF_PER_BAND_2_5ms_HR[decoder->fs_idx];
+        }
+        else
+        {
+            decoder->bands_offset = ACC_COEFF_PER_BAND_2_5ms[decoder->fs_idx];
+        }
         decoder->cutoffBins   = BW_cutoff_bin_all_2_5ms;
-#endif
     }
-    else if (decoder->frame_ms == 5) {
-#ifdef ENABLE_HR_MODE
-    	if (decoder->hrmode)
-    	{
-    		decoder->bands_offset = ACC_COEFF_PER_BAND_5ms_HR[decoder->fs_idx];
-            decoder->cutoffBins   = BW_cutoff_bin_all_5ms_HR;
-    	}
-    	else
-    	{
-    		decoder->bands_offset = ACC_COEFF_PER_BAND_5ms[decoder->fs_idx];
-            decoder->cutoffBins   = BW_cutoff_bin_all_5ms;
-    	}
-#else
-        decoder->bands_offset = ACC_COEFF_PER_BAND_5ms[decoder->fs_idx];
+    else if (decoder->frame_ms == 5) 
+    {
+        if (decoder->hrmode)
+        {
+            decoder->bands_offset = ACC_COEFF_PER_BAND_5ms_HR[decoder->fs_idx];
+        }
+        else
+        {
+            decoder->bands_offset = ACC_COEFF_PER_BAND_5ms[decoder->fs_idx];
+        }
         decoder->cutoffBins   = BW_cutoff_bin_all_5ms;
-#endif
     }
     
     
     if (decoder->frame_ms == 10) {
-#ifdef ENABLE_HR_MODE
         decoder->imdct_win     = MDCT_WINS_10ms[decoder->hrmode][decoder->fs_idx];
-#else
-        decoder->imdct_win     = MDCT_WINS_10ms[decoder->fs_idx];
-#endif
-        decoder->imdct_laZeros = 3 * decoder->frame_length / 8;
+        decoder->imdct_laZeros = MDCT_la_zeroes[decoder->fs_idx];
         decoder->imdct_winLen  = MDCT_WINDOWS_LENGTHS_10ms[decoder->fs_idx];
     }
     else if (decoder->frame_ms == 2.5) {
-#ifdef ENABLE_HR_MODE
         decoder->imdct_win     = MDCT_WINS_2_5ms[decoder->hrmode][decoder->fs_idx];
-#else
-        decoder->imdct_win     = MDCT_WINS_2_5ms[decoder->fs_idx];
-#endif
-        decoder->imdct_laZeros = 0;
+        decoder->imdct_laZeros = MDCT_la_zeroes_2_5ms[decoder->fs_idx];
         decoder->imdct_winLen  = MDCT_WINDOWS_LENGTHS_2_5ms[decoder->fs_idx];
     }
     else if (decoder->frame_ms == 5) {
-#ifdef ENABLE_HR_MODE
         decoder->imdct_win     = MDCT_WINS_5ms[decoder->hrmode][decoder->fs_idx];
-#else
-        decoder->imdct_win     = MDCT_WINS_5ms[decoder->fs_idx];
-#endif
-        decoder->imdct_laZeros = decoder->frame_length / 4;
+        decoder->imdct_laZeros = MDCT_la_zeroes_5ms[decoder->fs_idx];
         decoder->imdct_winLen  = MDCT_WINDOWS_LENGTHS_5ms[decoder->fs_idx];
     }
 
@@ -209,6 +182,7 @@ void set_dec_frame_params(LC3_Dec* decoder)
         DecSetup* setup = decoder->channel_setup[ch];
         
         setup->ltpf_mem_beta_idx = -1;
+        
 
         if (decoder) {
             /* Init DCT4 structs */
@@ -219,16 +193,17 @@ void set_dec_frame_params(LC3_Dec* decoder)
                 dct4_init(&setup->dct4structImdct, decoder->frame_length);
             }
             
+            setup->PlcNsSetup.cum_alpha = 1;
+            setup->PlcNsSetup.seed = 24607;
+            setup->alpha = 1;
         }
     }
 }
-
 
 LC3_Error update_dec_bitrate(LC3_Dec* decoder, int ch, int nBytes)
 {
     int totalBits = 0, bitsTmp = 0, channel_bytes = 0, maxBytes = 0, minBytes = 0;
 
-#ifdef ENABLE_HR_MODE
     if (decoder->hrmode)
     {
         switch (decoder->frame_dms)
@@ -254,25 +229,16 @@ LC3_Error update_dec_bitrate(LC3_Dec* decoder, int ch, int nBytes)
         default:
             return LC3_HRMODE_ERROR;
         }
-        
-        decoder->plcMeth = 0;
     }
     else
-#endif
     {
         minBytes = MIN_NBYTES;
         maxBytes = MAX_NBYTES;
     }
 
-    channel_bytes = nBytes / decoder->channels;
-    if (ch < nBytes % decoder->channels)
-    {
-        	channel_bytes ++;
-    }
+    channel_bytes = nBytes;
 
         DecSetup* setup = decoder->channel_setup[ch];
-    
-        setup->plc_seed = 24607;
 
         if (channel_bytes < minBytes || channel_bytes > maxBytes)
         {
@@ -295,6 +261,14 @@ LC3_Error update_dec_bitrate(LC3_Dec* decoder, int ch, int nBytes)
             setup->enable_lpc_weighting = (setup->total_bits < 240);
             totalBits                   = setup->total_bits * 2 - 160;
         }
+    
+        if (decoder->frame_length > 40 * ((LC3_FLOAT) (decoder->frame_dms) / 10.0)) {
+            setup->N_red_tns  = 40 * ((LC3_FLOAT) (decoder->frame_dms) / 10.0);
+            setup->fs_red_tns = 40000;
+        } else {
+            setup->N_red_tns = decoder->frame_length;
+            setup->fs_red_tns = decoder->fs;
+        }
 
         bitsTmp = totalBits;
         
@@ -315,13 +289,11 @@ LC3_Error update_dec_bitrate(LC3_Dec* decoder, int ch, int nBytes)
             setup->ltpf_conf_beta_idx = -1;
         }
 
-#ifdef ENABLE_HR_MODE
-        /* No LTPF at 96 kHz */
-        if (decoder->fs_idx == 5 || decoder->hrmode == 1) {
+        /* No LTPF in hrmode */
+        if (decoder->hrmode == 1) {
             setup->ltpf_conf_beta     = 0;
             setup->ltpf_conf_beta_idx = -1;
         }
-#endif
     
     return LC3_OK;
 }

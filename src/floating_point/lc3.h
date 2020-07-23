@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 /*! \file lc3.h
  *  This header provides the API for LC3plus.
@@ -35,7 +36,7 @@ typedef __int32       int32_t;
 #define LC3_VERSION_INT(major, minor, micro) (((major) << 16) | ((minor) << 8) | (micro))
 
 /*! Version number to ensure header and binary are matching. */
-#define LC3_VERSION LC3_VERSION_INT(1, 4, 2)
+#define LC3_VERSION LC3_VERSION_INT(1, 4, 10)
 
 /*! Maximum number of supported channels. The actual binary might support
  *  less, use lc3_channels_supported() to check. */
@@ -46,7 +47,7 @@ typedef __int32       int32_t;
 #define LC3_MAX_SAMPLES 960
 
 /*! Maximum number of bytes of one LC3 frame. */
-#define LC3_MAX_BYTES 6960
+#define LC3_MAX_BYTES 1250
 
 /*! Error codes returned by functions. */
 typedef enum {
@@ -66,11 +67,41 @@ typedef enum {
     LC3_BITRATE_SET_ERROR   = 13, /*!< Function called after bitrate has been set */
     LC3_HRMODE_BW_ERROR     = 14, /*!< High quality mode and bandwidth switching must not be used together */
     LC3_PLCMODE_ERROR       = 15, /*!< Invalid plc_method value */
+    LC3_EPMR_ERROR          = 16, /*!< Invalid epmr value */
         
     /* START WARNING */
-    LC3_WARNING             = 16,
-    LC3_BW_WARNING          = 17  /*!< Invalid bandwidth cutoff frequency */
+    LC3_WARNING             = 17,
+    LC3_BW_WARNING          = 18  /*!< Invalid bandwidth cutoff frequency */
 } LC3_Error;
+
+/*! Error protection mode. LC3_EP_ZERO differs to LC3_EP_OFF in that
+ *  errors can be detected but not corrected. */
+typedef enum
+{
+    LC3_EP_OFF    = 0, /*!< Error protection is disabled */
+    LC3_EP_ZERO   = 1, /*!< Error protection with 0 bit correction */
+    LC3_EP_LOW    = 2, /*!< Error protection correcting one symbol per codeword */
+    LC3_EP_MEDIUM = 3, /*!< Error protection correcting two symbols per codeword */
+    LC3_EP_HIGH   = 4  /*!< Error protection correcting three symbols per codeword */
+} LC3_EpMode;
+
+/*! Error protection mode request. On the encoder sidem, LC3_EPMR_ZERO to LC3_EPMR_HIGH
+ *  can be set. The decoder returns mode requests with different confidences. */
+typedef enum
+{
+    LC3_EPMR_ZERO      = 0,  /*!< Request no error correction. High confidence if returned by decoder. */
+    LC3_EPMR_LOW       = 1,  /*!< Request low error correction. High confidence if returned by decoder. */
+    LC3_EPMR_MEDIUM    = 2,  /*!< Request medium error correction. High confidence if returned by decoder. */
+    LC3_EPMR_HIGH      = 3,  /*!< Request high error correction. High confidence if returned by decoder. */
+    LC3_EPMR_ZERO_MC   = 4,  /*!< No error correction requested, medium confidence. */
+    LC3_EPMR_LOW_MC    = 5,  /*!< Low error correction requested, medium confidence. */
+    LC3_EPMR_MEDIUM_MC = 6,  /*!< Medium error correction requested, medium confidence. */
+    LC3_EPMR_HIGH_MC   = 7,  /*!< High error correction requested, medium confidence. */
+    LC3_EPMR_ZERO_NC   = 8,  /*!< No error correction requested, unvalidated. */
+    LC3_EPMR_LOW_NC    = 9,  /*!< Low error correction requested, unvalidated. */
+    LC3_EPMR_MEDIUM_NC = 10, /*!< Medium error correction requested, unvalidated. */
+    LC3_EPMR_HIGH_NC   = 11  /*!< High error correction requested, unvalidated. */
+} LC3_EpModeRequest;
 
 /*! Decoder packet loss concealment mode */
 typedef enum
@@ -306,16 +337,16 @@ LC3_Error lc3_dec_init(LC3_Dec* decoder, int samplerate, int channels, LC3_PlcMo
  *                              there is a special case for LC3_DECODE_ERROR where the output is still valid.
  */
 
-LC3_Error lc3_dec_fl(LC3_Dec* decoder, void* input_bytes, int num_bytes, void** output_samples, int bps);
+LC3_Error lc3_dec_fl(LC3_Dec* decoder, void* input_bytes, int num_bytes, void** output_samples, int bps, int bfi_ext);
 
 /*! Decode LC3 frame with 16 bit output. See lc3_dec_fl(). */
-LC3_Error lc3_dec16(LC3_Dec* decoder, void* input_bytes, int num_bytes, int16_t** output_samples);
+LC3_Error lc3_dec16(LC3_Dec* decoder, void* input_bytes, int num_bytes, int16_t** output_samples, int bfi_ext);
 
 /*! Decode LC3 frame with 24 bit output. See lc3_dec_fl(). */
-LC3_Error lc3_dec24(LC3_Dec* decoder, void* input_bytes, int num_bytes, int32_t** output_samples);
+LC3_Error lc3_dec24(LC3_Dec* decoder, void* input_bytes, int num_bytes, int32_t** output_samples, int bfi_ext);
 
 /*! Decode LC3 frame with 32 bit output. See lc3_dec_fl(). */
-LC3_Error lc3_dec32(LC3_Dec* decoder, void* input_bytes, int num_bytes, int32_t** output_samples);
+LC3_Error lc3_dec32(LC3_Dec* decoder, void* input_bytes, int num_bytes, int32_t** output_samples, int bfi_ext);
 
 /*! Get the size of the LC3 decoder struct for a samplerate / channel
  * configuration. If memory is not restricted LC3_DEC_MAX_SIZE can be used for
@@ -373,6 +404,104 @@ LC3_Error lc3_dec_free_memory(LC3_Dec* decoder);
  *  \return                 LC3_OK on success or appropriate error code.
  */
 LC3_Error lc3_free_decoder_structs(LC3_Dec* decoder);
+
+/*! Set error protection mode. The default is LC3_EP_OFF. It is possible to switch between
+ *  different modees during encoding. Dynamic switching is only allowed between LC3_EP_ZERO,
+ *  LC3_EP_LOW, LC3_EP_MEDIUM, and LC3_EP_HIGH. The the decoder must be notified with
+ *  lc3_dec_set_ep_enabled() to expect protected data if epmode is other than LC3_EP_OFF.
+ *
+ *  \param[in]  encoder     Encoder handle.
+ *  \param[in]  epmode      Error protection mode.
+ *  \return                 LC3_OK on success or appropriate error code.
+ */
+LC3_Error lc3_enc_set_ep_mode(LC3_Enc *encoder, LC3_EpMode epmode);
+
+/*! Sets error protection mode request transmitted in each channel encoded frame.
+ *  The channel coder includes an error protection mode request (EPMR) in every frame.
+ *  The EPMR takes value 0, 1, 2, and 3 which request ep modes 1, 2, 3, and 4 from the
+ *  decoding device. The EPMR can be retrieved from the channel decoder via the interface
+ *  routine lc3_dec_get_ep_mode_request().
+ *
+ *  \param[in]  encoder     Encoder handle.
+ *  \param[in]  epmr        Error Protection Mode Request
+ *  \return                 LC3_OK on success or appropriate error code.
+ */
+LC3_Error lc3_enc_set_ep_mode_request(LC3_Enc *encoder, LC3_EpModeRequest epmr);
+
+/*! Set error protection mode. The default is LC3_EP_OFF. It is possible to switch between
+ *  different modees during encoding. Dynamic switching is only allowed between LC3_EP_ZERO,
+ *  LC3_EP_LOW, LC3_EP_MEDIUM, and LC3_EP_HIGH. The the decoder must be notified with
+ *  lc3_dec_set_ep_enabled() to expect protected data if epmode is other than LC3_EP_OFF.
+ *
+ *  \param[in]  encoder     Encoder handle.
+ *  \param[in]  epmode      Error protection mode.
+ *  \return                 LC3_OK on success or appropriate error code.
+ */
+LC3_Error lc3_enc_set_ep_mode(LC3_Enc *encoder, LC3_EpMode epmode);
+
+/*! Sets error protection mode request transmitted in each channel encoded frame.
+ *  The channel coder includes an error protection mode request (EPMR) in every frame.
+ *  The EPMR takes value 0, 1, 2, and 3 which request ep modes 1, 2, 3, and 4 from the
+ *  decoding device. The EPMR can be retrieved from the channel decoder via the interface
+ *  routine lc3_dec_get_ep_mode_request().
+ *
+ *  \param[in]  encoder     Encoder handle.
+ *  \param[in]  epmr        Error Protection Mode Request
+ *  \return                 LC3_OK on success or appropriate error code.
+ */
+LC3_Error lc3_enc_set_ep_mode_request(LC3_Enc *encoder, LC3_EpModeRequest epmr);
+
+/*! Enable or disable error protection. Default value is 0 (disabled). If error protection is
+ *  enabled, the decoder expects that the frames were encoded with error protection mode
+ *  LC3_EP_ZERO or higher.
+ *
+ *  \param[in]  decoder     Decoder handle.
+ *  \param[in]  ep_enabled  1 (or any nonzero) for true, 0 for false.
+ *  \return                 LC3_OK on success or appropriate error code.
+ */
+LC3_Error lc3_dec_set_ep_enabled(LC3_Dec *decoder, int ep_enabled);
+
+
+/*! Retrieves the error protection mode reqeust from channel decoder.
+ *
+ *  The return value encodes both the error protection mode request (EPMR)
+ *  and the confidence of the method by which it was retrieved.
+ *
+ *  The requested error protection mode is (epmr % 4) + 1, where epmr is the
+ *  function's return value. The confidence is specified as follows.
+ *
+ *  Confidence | Range
+ *  -----------|-------------
+ *  high       | 0 <= epmr < 4
+ *  medium     | 4 <= epmr < 8
+ *  no         | 8 <= epmr < 12
+ *
+ *  When receiving stereo content of separately channel encoded audio frames the
+ *  return value is the minimum of two values retrieved from the individual channels.
+ *
+ *  \param[in]  decoder     Decoder handle.
+ *  \return                 Error protection mode reqeust.
+ */
+LC3_EpModeRequest lc3_dec_get_ep_mode_request(const LC3_Dec *decoder);
+
+/*! Get the number of corrected bit errors in the last decoded frame. This only works if
+ *  error protection is active. If the number of errors is greater than the current error
+ *  protection mode can correct, -1 is returned. If the last frame had no errors or the
+ *  decoder handle is NULL, 0 is returned,
+ *
+ *  \param[in]  decoder     Decoder handle.
+ *  \return                 Number of corrected bits or -1. See description for details.
+ */
+int lc3_dec_get_error_report(const LC3_Dec *decoder);
+/*! This function returns an set of flags indicating whether the last frame
+ *  would have been channel decodable in epmode m, m ranging from 1 to 4. Note that
+ *  this information is not available in case the last frame was not channel
+ *  decodable in which case the return value is 0. If the last frame would have
+ *  been decodable in epmode m,  m-1th of the return value will be 1.
+ *  Otherwise, if the frame would not have been decodable or if this information
+ *  cannot be retrieved, the m-1th bit of the return value will be 0.
+ */
+int lc3_dec_get_epok_flags(const LC3_Dec *decoder);
 
 /*! \} */
 #endif /* LC3 */

@@ -1,14 +1,16 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 
 #include "functions.h"
+#include "rom_basop_util.h"
 
 void processDetectCutoffWarped_fx(Word16 *bw_idx, Word32 *d2_fx, Word16 d2_fx_exp, Word16 fs_idx, Word16 frame_dms)
 {
@@ -25,7 +27,7 @@ void processDetectCutoffWarped_fx(Word16 *bw_idx, Word32 *d2_fx, Word16 d2_fx_ex
         Word16        brickwall;
         Word16        stop;
         Word16        brickwall_dist;
-        const Word16 *warp_idx_start, *warp_idx_stop;
+        const Word16 *warp_idx_start, *warp_idx_stop, *bw_brickwall_dist;
     );
 
     SWITCH (frame_dms)
@@ -33,14 +35,17 @@ void processDetectCutoffWarped_fx(Word16 *bw_idx, Word32 *d2_fx, Word16 d2_fx_ex
     case 25:
         warp_idx_start = BW_warp_idx_start_all_2_5ms[fs_idx - 1]; move16();
         warp_idx_stop  = BW_warp_idx_stop_all_2_5ms[fs_idx - 1];  move16();
+        bw_brickwall_dist = BW_brickwall_dist_2_5ms;
         BREAK;
     case 50:
         warp_idx_start = BW_warp_idx_start_all_5ms[fs_idx - 1]; move16();
         warp_idx_stop  = BW_warp_idx_stop_all_5ms[fs_idx - 1];  move16();
+        bw_brickwall_dist = BW_brickwall_dist_5ms;
         BREAK;
     default:                                                /* 100 */
         warp_idx_start = BW_warp_idx_start_all[fs_idx - 1]; move16();
         warp_idx_stop  = BW_warp_idx_stop_all[fs_idx - 1];  move16();
+        bw_brickwall_dist = BW_brickwall_dist;
         BREAK;
     }
 
@@ -87,7 +92,7 @@ void processDetectCutoffWarped_fx(Word16 *bw_idx, Word32 *d2_fx, Word16 d2_fx_ex
     {
         brickwall      = 0; move16();
         stop           = add(warp_idx_start[counter + 1], 1);
-        brickwall_dist = BW_brickwall_dist[counter + 1];
+        brickwall_dist = bw_brickwall_dist[counter + 1];
 
         FOR (iBand = stop; iBand >= sub(stop, brickwall_dist); iBand--)
         {

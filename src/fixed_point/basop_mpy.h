@@ -1,16 +1,20 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
+
+#include "defines.h"
 
 #ifndef __BASOP_MPY_H
 #define __BASOP_MPY_H
 
-#include "stl.h"
+#include "functions.h"
+
 
 /**
  * \brief 	32*16 Bit fractional Multiplication using 40 bit OPS

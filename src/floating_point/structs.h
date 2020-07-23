@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #ifndef STRUCTS_H
 #define STRUCTS_H
@@ -65,6 +66,21 @@ typedef struct {
   LC3_INT *bp_side;
   LC3_INT *mask_side;
 } Encoder_State_fl;
+
+typedef struct {
+    LC3_INT   nbLostCmpt;
+    LC3_INT   prevBfi;
+    LC3_INT   prevprevBfi;
+    LC3_FLOAT q_d[MAX_LEN];
+    LC3_FLOAT q_d_prev[MAX_LEN];
+} PlcSetup;
+
+typedef struct PlcAdvSetup PlcAdvSetup;
+
+typedef struct {
+    LC3_FLOAT cum_alpha;
+    LC3_INT   seed;
+} PlcNsSetup;
 
 
 #endif

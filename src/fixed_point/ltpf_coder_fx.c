@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "functions.h"
 
@@ -18,17 +19,27 @@ void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Wo
                            Word16 *mem_mem_normcorr, Word16 ol_normcorr, Word16 *mem_ltpf_on, Word16 *mem_ltpf_pitch,
                            Word16 xin_exp, Word16 frame_dms, Word8 *scratchBuffer)
 {
-    Dyn_Mem_Deluxe_In(
-        Word16  pitch_index, scale0, scale1, scale2, s, *x, x_exp, shift, prod_exp, ltpf_pitch;
+    Word16  pitch_index, scale0, scale1, scale2, *x, x_exp, shift, prod_exp, ltpf_pitch;
+    Word32  L_tmp, cor_max32, sum0, sum1, sum2, prod, inv;
+    Word32 *ac32;
+    Word16 *ac, *currFrame, *predFrame;
+    Word16  min_pitch, max_pitch, ac_min_pitch, ac_max_pitch, ac_max;
+    Word16  pitch, pitch_res, min_pitch_fr, pitch_int, pitch_fr, norm_corr, ltpf_active;
+    Counter n, m, fr;
+    Word16  tmp, acflen;
+
+#ifdef DYNMEM_COUNT
+    Dyn_Mem_In("process_ltpf_coder_fx", sizeof(struct {
+        Word16  pitch_index, scale0, scale1, scale2, *x, x_exp, shift, prod_exp, ltpf_pitch;
+        Word32  L_tmp, cor_max32, sum0, sum1, sum2, prod, inv;
         Word32 *ac32;
         Word16 *ac, *currFrame, *predFrame;
-        Word32  L_tmp, ac32_max, cor_max32, sum0, sum1, sum2, prod, inv;
         Word16  min_pitch, max_pitch, ac_min_pitch, ac_max_pitch, ac_max;
         Word16  pitch, pitch_res, min_pitch_fr, pitch_int, pitch_fr, norm_corr, ltpf_active;
-        Word32  sum;
         Counter n, m, fr;
-        Word16  tmp;
-    );
+        Word16  tmp, acflen;
+     }));
+#endif
 
 
 
@@ -76,23 +87,57 @@ void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Wo
         max_pitch    = s_min(max_pitch, MAX_PITCH_12K8);
         ac_min_pitch = sub(min_pitch, 4);
         ac_max_pitch = add(max_pitch, 4);
+        acflen       = len; move16();
+        if (sub(frame_dms, 25) == 0)
+        {
+            acflen = shl(len, 1);
+            x      = x - len;
+        }
+
+        /* Compute norm */
+        sum1 = L_mac0(1, x[0], x[0]);
+        sum2 = L_mac0(1, x[-ac_min_pitch], x[-ac_min_pitch]);
+        FOR (m = 1; m < acflen; m++)
+        {
+            sum1 = L_mac0(sum1, x[m], x[m]);
+            sum2 = L_mac0(sum2, x[m - ac_min_pitch], x[m - ac_min_pitch]);
+        }
+        scale1   = norm_l(sum1);
+        sum1     = L_shl_pos(sum1, scale1);
 
         /* Compute Autocorrelation */
-        ac32_max = L_deposit_l(0);
         FOR (n = ac_min_pitch; n <= ac_max_pitch; n++)
         {
-            sum = L_mac0(0L, x[0], x[0 - n]);
-            FOR (m = 1; m < len; m++)
+            sum0 = L_mac0(0L, x[0], x[0 - n]);
+            FOR (m = 1; m < acflen; m++)
             {
-                sum = L_mac0(sum, x[m], x[m - n]);
+                sum0 = L_mac0(sum0, x[m], x[m - n]);
             }
-            ac32[n - ac_min_pitch] = sum; move32();
-            ac32_max               = L_max(L_abs(ac32[n - ac_min_pitch]), ac32_max);
-        }
-        s = norm_l(ac32_max);
-        FOR (n = ac_min_pitch; n <= ac_max_pitch; n++)
-        {
-            ac[n - ac_min_pitch] = round_fx_sat(L_shl_sat(ac32[n - ac_min_pitch], s)); move16();
+            if (n > ac_min_pitch)
+            {
+              sum2 = L_msu0(sum2, x[acflen - 1 - (n - 1)], x[acflen - 1 - (n - 1)]);
+              sum2 = L_mac0(sum2, x[-n], x[-n]);
+            }
+            scale2   = norm_l(sum2);
+            L_tmp    = L_shl_pos(sum2, scale2);
+            prod     = Mpy_32_32(sum1, L_tmp);
+            shift    = norm_l(prod);
+            prod     = L_shl_pos(prod, shift);
+            prod_exp = sub(62, add(add(scale1, scale2), shift));
+            inv      = Isqrt(prod, &prod_exp);
+            scale0   = norm_l(sum0);
+            sum0     = L_shl_pos(sum0, scale0);
+            prod     = Mpy_32_32(sum0, inv);
+            prod_exp = add(sub(31, scale0), prod_exp);
+            test();
+            IF (prod == 0 || sub(norm_l(prod), prod_exp) >= 0)
+            {
+                ac[n - ac_min_pitch] = s_max(0, round_fx_sat(L_shl_sat(prod, prod_exp))); move16();
+            }
+            ELSE
+            {
+                ac[n - ac_min_pitch] = 32767; move16();
+            }
         }
 
         /* Find maximum */
@@ -131,22 +176,22 @@ void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Wo
             cor_max32 = MIN_32;
             FOR (fr = min_pitch_fr; fr < 4; fr += pitch_res)
             {
-                sum = L_mult0(ac[pitch_int - ac_min_pitch - 4], ltpf_ac_interp_filt[fr + 3][0]);
-                sum = L_mac0(sum, ac[pitch_int - ac_min_pitch - 3], ltpf_ac_interp_filt[fr + 3][1]);
-                sum = L_mac0(sum, ac[pitch_int - ac_min_pitch - 2], ltpf_ac_interp_filt[fr + 3][2]);
-                sum = L_mac0(sum, ac[pitch_int - ac_min_pitch - 1], ltpf_ac_interp_filt[fr + 3][3]);
-                sum = L_mac0(sum, ac[pitch_int - ac_min_pitch + 0], ltpf_ac_interp_filt[fr + 3][4]);
-                sum = L_mac0(sum, ac[pitch_int - ac_min_pitch + 1], ltpf_ac_interp_filt[fr + 3][5]);
-                sum = L_mac0(sum, ac[pitch_int - ac_min_pitch + 2], ltpf_ac_interp_filt[fr + 3][6]);
-                sum = L_mac0(sum, ac[pitch_int - ac_min_pitch + 3], ltpf_ac_interp_filt[fr + 3][7]);
-                sum = L_mac0(sum, ac[pitch_int - ac_min_pitch + 4], ltpf_ac_interp_filt[fr + 3][8]);
+                sum0 = L_mult0(ac[pitch_int - ac_min_pitch - 4], ltpf_ac_interp_filt[fr + 3][0]);
+                sum0 = L_mac0(sum0, ac[pitch_int - ac_min_pitch - 3], ltpf_ac_interp_filt[fr + 3][1]);
+                sum0 = L_mac0(sum0, ac[pitch_int - ac_min_pitch - 2], ltpf_ac_interp_filt[fr + 3][2]);
+                sum0 = L_mac0(sum0, ac[pitch_int - ac_min_pitch - 1], ltpf_ac_interp_filt[fr + 3][3]);
+                sum0 = L_mac0(sum0, ac[pitch_int - ac_min_pitch + 0], ltpf_ac_interp_filt[fr + 3][4]);
+                sum0 = L_mac0(sum0, ac[pitch_int - ac_min_pitch + 1], ltpf_ac_interp_filt[fr + 3][5]);
+                sum0 = L_mac0(sum0, ac[pitch_int - ac_min_pitch + 2], ltpf_ac_interp_filt[fr + 3][6]);
+                sum0 = L_mac0(sum0, ac[pitch_int - ac_min_pitch + 3], ltpf_ac_interp_filt[fr + 3][7]);
+                sum0 = L_mac0(sum0, ac[pitch_int - ac_min_pitch + 4], ltpf_ac_interp_filt[fr + 3][8]);
 
-                L_tmp = L_sub_sat(sum, cor_max32);
+                L_tmp = L_sub_sat(sum0, cor_max32);
                 if (L_tmp > 0)
                 {
                     pitch_fr = fr; move16();
                 }
-                cor_max32 = L_max(cor_max32, sum);
+                cor_max32 = L_max(cor_max32, sum0);
             }
             IF (pitch_fr < 0)
             {
@@ -165,34 +210,24 @@ void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Wo
         ltpf_pitch = add(shl_pos(pitch_int, 2), pitch_fr);
 
         /* Filter current and predicted frame */
-#ifndef NONBE_PLC_PITCH_TUNING
-        IF (sub(ltpf_enable, 1) == 0)
-        {
-#endif
-        SWITCH (frame_dms)
-        {
-        case 25: x -= add(len, add(len, len)); BREAK; /* (3 * len) */
-        case 50: x -= len; BREAK;
-        case 100: BREAK;
-        }
 
-        FOR (n = 0; n < LEN_12K8; n++)
+        FOR (n = 0; n < acflen; n++)
         {
-            sum          = L_mult(x[n + 1], inter_filter[0][0][0]);
-            sum          = L_mac(sum, x[n], inter_filter[0][0][1]);
-            currFrame[n] = mac_r(sum, x[n - 1], inter_filter[0][0][2]);
+            sum0         = L_mult(x[n + 1], inter_filter[0][0][0]);
+            sum0         = L_mac(sum0, x[n], inter_filter[0][0][1]);
+            currFrame[n] = mac_r(sum0, x[n - 1], inter_filter[0][0][2]);
 
-            sum          = L_mult(x[n - pitch_int + 1], inter_filter[0][pitch_fr][0]);
-            sum          = L_mac(sum, x[n - pitch_int], inter_filter[0][pitch_fr][1]);
-            sum          = L_mac(sum, x[n - pitch_int - 1], inter_filter[0][pitch_fr][2]);
-            predFrame[n] = mac_r(sum, x[n - pitch_int - 2], inter_filter[0][pitch_fr][3]);
+            sum0         = L_mult(x[n - pitch_int + 1], inter_filter[0][pitch_fr][0]);
+            sum0         = L_mac(sum0, x[n - pitch_int], inter_filter[0][pitch_fr][1]);
+            sum0         = L_mac(sum0, x[n - pitch_int - 1], inter_filter[0][pitch_fr][2]);
+            predFrame[n] = mac_r(sum0, x[n - pitch_int - 2], inter_filter[0][pitch_fr][3]);
         }
 
         /* Normalized Correlation */
         sum0 = L_mult0(currFrame[0], predFrame[0]);
         sum1 = L_mac0(1, predFrame[0], predFrame[0]);
         sum2 = L_mac0(1, currFrame[0], currFrame[0]);
-        for (m = 1; m < LEN_12K8; m++)
+        for (m = 1; m < acflen; m++)
         {
             sum0 = L_mac0(sum0, currFrame[m], predFrame[m]);
             sum1 = L_mac0(sum1, predFrame[m], predFrame[m]);
@@ -226,10 +261,8 @@ void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Wo
             norm_corr = 0;
         }
 
-#ifdef NONBE_PLC_PITCH_TUNING
         IF (sub(ltpf_enable, 1) == 0)
         {
-#endif
             test(); test(); test(); test();
             /* Decision if lptf active */
             IF ((*mem_ltpf_on == 0 && sub(*mem_normcorr, 30802) > 0 && sub(norm_corr, 30802) > 0 &&
@@ -242,25 +275,10 @@ void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Wo
             }
         }
 
-#ifdef NONBE_PLC_PITCH_TUNING
-        test();
-        IF (sub(frame_dms, 100) < 0 && sub(norm_corr, 22282) < 0)
-        {
-            param[0] = 0;  move16();
-            param[1] = 0;  move16();
-            param[2] = 0;  move16();
-            *bits    = 1;  move16();
-        }
-        ELSE
-        {
-#endif
-            param[0] = 1;           move16();
-            param[1] = ltpf_active; move16();
-            param[2] = pitch_index; move16();
-            *bits    = 11;          move16();
-#ifdef NONBE_PLC_PITCH_TUNING
-        }
-#endif
+        param[0] = 1;           move16();
+        param[1] = ltpf_active; move16();
+        param[2] = pitch_index; move16();
+        *bits    = 11;          move16();   
     }
     ELSE
     {

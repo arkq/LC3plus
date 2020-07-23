@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #ifndef SETUP_ENC_LC3_H
 #define SETUP_ENC_LC3_H
@@ -44,12 +45,12 @@ typedef struct
     Word16  attdec_position;
     Word32  attdec_acc_energy;
     Word16  attdec_scaling;
-    Word32  resamp_mem32[60] ALIGN_BUFFER_STRUCT;
-    Word32  r12k8_mem_50[2] ALIGN_BUFFER_STRUCT;
-    Word16  r12k8_mem_in[60] ALIGN_BUFFER_STRUCT;
-    Word16  r12k8_mem_out[24] ALIGN_BUFFER_STRUCT;
-    Word16  olpa_mem_s12k8[3] ALIGN_BUFFER_STRUCT;
-    Word16  olpa_mem_s6k4[LEN_6K4 + MAX_PITCH_6K4] ALIGN_BUFFER_STRUCT;
+    Word32 resamp_mem32[60] ALIGN_BUFFER_STRUCT;
+    Word16 r12k8_mem_in[60] ALIGN_BUFFER_STRUCT;
+    Word32 r12k8_mem_50[2] ALIGN_BUFFER_STRUCT;
+    Word16 r12k8_mem_out[24] ALIGN_BUFFER_STRUCT;
+    Word16 olpa_mem_s12k8[3] ALIGN_BUFFER_STRUCT;
+    Word16 olpa_mem_s6k4[LEN_6K4 + MAX_PITCH_6K4 + 16] ALIGN_BUFFER_STRUCT;
     Word16  ltpf_mem_in[LTPF_MEMIN_LEN + LEN_12K8 + 1] ALIGN_BUFFER_STRUCT;
     Word16 n_pccw;
     Word16 n_pc;
@@ -58,7 +59,7 @@ typedef struct
 /* Constants and sampling rate derived values go in this struct */
 struct LC3_Enc
 {
-    EncSetup *    channel_setup[MAX_CHANNELS];
+    EncSetup *channel_setup[MAX_CHANNELS];
     const Word16 *W_fx;
     const Word16 *bands_offset;
 
@@ -70,7 +71,7 @@ struct LC3_Enc
     Word16 channels;     /* number of channels */
     Word16 epmode;       /* error protection mode */
     Word16 frame_dms;    /* frame length in dms (decimilliseconds, 10^-4)*/
-    Word8  lc3_br_set;   /* indicate if bitrate has been set */
+    Word8 lc3_br_set;    /* indicate if bitrate has been set */
 
     Word16 yLen;
     Word16 W_size;
@@ -91,6 +92,9 @@ struct LC3_Enc
     Word32 bandwidth;
     Word16 bw_ctrl_cutoff_bin;
     Word16 bw_index;
+    Word16 attdec_nblocks;
+    Word16 attdec_damping;
+    Word16 attdec_hangover_thresh;
 };
 
 #endif

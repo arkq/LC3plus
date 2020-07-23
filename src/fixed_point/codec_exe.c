@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 
 #include "functions.h" /* needed for basop instrumentation */
@@ -47,12 +48,13 @@ typedef struct
 } Arguments;
 
 /* local helper functions */
-static void    parseCmdl(int ac, char **av, Arguments *arg);
-static FILE *  open_bitstream_reader(const char *file, uint32_t *samplerate, int *bitrate, short *channels,
-                                     uint32_t *signal_len, float *frame_ms, int *epmode, int *hrmode, int g192,
-                                     const char *file_cfg);
-static FILE *  open_bitstream_writer(const char *file, uint32_t samplerate, int bitrate, short channels,
-                                     uint32_t signal_len, float frame_ms, int epmode, int g192, const char *file_cfg);
+static void  parseCmdl(int ac, char **av, Arguments *arg);
+static FILE *open_bitstream_reader(const char *file, uint32_t *samplerate, int *bitrate, short *channels,
+                                   uint32_t *signal_len, float *frame_ms, int *epmode, int *hrmode, int g192,
+                                   const char *file_cfg);
+static FILE *open_bitstream_writer(const char *file, uint32_t samplerate, int bitrate, short channels,
+                                   uint32_t signal_len, float frame_ms, int epmode, int g192, const char *file_cfg
+);
 static void    write_bitstream_frame(FILE *bitstream_file, uint8_t *bytes, int size, int g192);
 static int     read_bitstream_frame(FILE *bitstream_file, uint8_t *bytes, int size, int g192, int *bfi_ext);
 static FILE *  fopen_with_ext(const char *file, const char *ext, const char *mode);
@@ -82,7 +84,7 @@ static FILE *channel_decoder_debug_file_error_report;
 #include "license.h" /* provides LICENSE string */
 
 static const char *const USAGE_MESSAGE =
-    /* Lines must not be longer than this! --------------------------------------->| */
+/* Lines must not be longer than this! --------------------------------------->| */
     "Usage: LC3plus [OPTIONS] INPUT OUTPUT BITRATE\n"
     "\n"
     "  INPUT and OUTPUT are wav files, unless another mode is selected in OPTIONS.\n"
@@ -96,7 +98,7 @@ static const char *const USAGE_MESSAGE =
     "  -swf FILE               Use a bitrate switching file instead of fixed bitrate.\n"
     "  -dc NUM                 0: Don't use delay compensation\n"
     "                          1: Compensate delay in decoder (default)\n"
-    "                          2: Split delay equally in encoder and decoder\n"
+    "                          2: Split delay equally between encoder and decoder\n"
     "  -frame_ms               NUM Frame length in ms. NUM must be 10 (default), 5 or 2.5.\n"
     "  -bandwidth NUM|FILE     Select audio bandwidth limitation via value in Hz or switching file.\n"
     "                          NUM can be any integer value describing the bandwidth; max NUM=20000 Hz\n"
@@ -108,8 +110,8 @@ static const char *const USAGE_MESSAGE =
     "  -cfgG192 FILE           Specify a configuration file for G192 bitstream format.\n"
     "\nPLC options:\n"
     "  -epf FILE               Enable packet loss simulation using error pattern from FILE.\n"
-    "  -ept                    Use together with -E -epf FILE to create bitstream triggering\n"
-    "                          PLC via special value of lastnz\n"
+    "  -ept                    Use together with -E -epf FILE to signal lost frames within\n"
+    "                          the LC3 bitstream.\n"
     "  -edf FILE               Write error detection pattern to FILE.\n"
     "\nChannel coder options:\n"
     "  -epmode NUM|FILE        Error protection mode. NUM must be one of the following:\n"
@@ -124,25 +126,26 @@ static const char *const USAGE_MESSAGE =
 
 static const char *const MISSING_ARGUMENT_MESSAGE = "Not enough parameters! Use -h to show help.";
 
-static const char *ERROR_MESSAGE[18] = {
-    "",                                                /* LC3_OK                  */
-    "Function call failed!",                           /* LC3_ERROR               */
-    "Frame failed to decode and was concealed!",       /* LC3_DECODE_ERROR        */
-    "Pointer argument is null!",                       /* LC3_NULL_ERROR          */
-    "Invalid sampling rate!",                          /* LC3_SAMPLERATE_ERROR    */
-    "Invalid number of channels!",                     /* LC3_CHANNELS_ERROR      */
-    "Invalid bitrate!",                                /* LC3_BITRATE_ERROR       */
-    "Invalid number of bytes!",                        /* LC3_NUMBYTES_ERROR      */
-    "Invalid PLC method!",                             /* LC3_PLCMODE_ERROR       */
-    "Invalid EP mode!",                                /* LC3_EPCLASS_ERROR       */
-    "Invalid frame ms value!",                         /* LC3_FRAMEMS_ERROR       */
-    "Unaligned pointer!",                              /* LC3_ALIGN_ERROR         */
-    "Invalid channel mode request!",                   /* LC3_CMR_ERROR           */
-    "Bitrate has not been set!",                       /* LC3_BITRATE_UNSET_ERROR */
-    "Function can't be called after bitrate was set!", /* LC3_BITRATE_SET_ERROR   */
-    "Invalid external bad frame index!",               /* LC3_BFI_EXT_ERROR       */
-    "Generic Warning",                                 /* LC3_WARNING             */
-    "Invalid bandwidth frequency!"                     /* LC3_BW_WARNING          */
+static const char *ERROR_MESSAGE[19] = {
+    "",                                                      /* LC3_OK                  */
+    "Function call failed!",                                 /* LC3_ERROR               */
+    "Frame failed to decode and was concealed!",             /* LC3_DECODE_ERROR        */
+    "Pointer argument is null!",                             /* LC3_NULL_ERROR          */
+    "Invalid sampling rate!",                                /* LC3_SAMPLERATE_ERROR    */
+    "Invalid number of channels!",                           /* LC3_CHANNELS_ERROR      */
+    "Invalid bitrate!",                                      /* LC3_BITRATE_ERROR       */
+    "Invalid number of bytes!",                              /* LC3_NUMBYTES_ERROR      */
+    "Invalid PLC method!",                                   /* LC3_PLCMODE_ERROR       */
+    "Invalid EP mode!",                                      /* LC3_EPCLASS_ERROR       */
+    "Invalid frame ms value!",                               /* LC3_FRAMEMS_ERROR       */
+    "Unaligned pointer!",                                    /* LC3_ALIGN_ERROR         */
+    "Invalid channel mode request!",                         /* LC3_CMR_ERROR           */
+    "Invalid usage of hrmode, sampling rate and frame size!", /* LC3_HRMODE_ERROR  */
+    "Bitrate has not been set!",                             /* LC3_BITRATE_UNSET_ERROR */
+    "Function can't be called after bitrate was set!",       /* LC3_BITRATE_SET_ERROR   */
+    "Invalid external bad frame index!",                     /* LC3_BFI_EXT_ERROR       */
+    "Generic Warning",                                       /* LC3_WARNING             */
+    "Invalid bandwidth frequency!"                           /* LC3_BW_WARNING          */
 };
 
 
@@ -190,8 +193,9 @@ int main(int ac, char **av)
         encoder      = malloc(encoder_size);
         err          = lc3_enc_init(encoder, sampleRate, nChannels);
         exit_if(err, ERROR_MESSAGE[err]);
+        
 
-        err = lc3_enc_set_frame_ms(encoder, arg.frame_ms);
+        err = lc3_enc_set_frame_dms(encoder, (int) (arg.frame_ms * 10));
         exit_if(err, ERROR_MESSAGE[err]);
 
         err = lc3_enc_set_ep_mode(encoder, (LC3_EpMode)arg.epmode);
@@ -228,10 +232,14 @@ int main(int ac, char **av)
         decoder      = malloc(decoder_size);
         err          = lc3_dec_init(decoder, sampleRate, nChannels, (LC3_PlcMode)arg.plcMeth);
         exit_if(err, ERROR_MESSAGE[err]);
+        
 
-        err = lc3_dec_set_frame_ms(decoder, arg.frame_ms);
+
+
+        err = lc3_dec_set_frame_dms(decoder, (int) (arg.frame_ms * 10));
         exit_if(err, ERROR_MESSAGE[err]);
 
+        
         err = lc3_dec_set_ep_enabled(decoder, arg.epmode != 0);
         exit_if(err, ERROR_MESSAGE[err]);
 
@@ -245,8 +253,11 @@ int main(int ac, char **av)
     else /* !arg->encoder_only */
     {
         /* Open Output Bitstream File */
-        output_bitstream = open_bitstream_writer(arg.outputFilename, sampleRate, arg.bitrate, nChannels, nSamplesFile,
-                                                 arg.frame_ms, arg.epmode, arg.formatG192, arg.configFilenameG192);
+        output_bitstream = open_bitstream_writer(arg.outputFilename, sampleRate,
+                                                                     arg.bitrate
+                                                 , nChannels, nSamplesFile,
+                                                 arg.frame_ms, arg.epmode, arg.formatG192, arg.configFilenameG192
+        );
         exit_if(!output_bitstream, "Error creating bitstream file!");
     }
 
@@ -291,21 +302,21 @@ int main(int ac, char **av)
 #endif
 
     /* Print info */
-    printf("Encoder size:     %i\n", encoder_size);
-    printf("Decoder size:     %i\n", decoder_size);
-    printf("Scratch size:     %i\n", scratch_size);
-    printf("Sample rate:      %i\n", sampleRate);
-    printf("Channels:         %i\n", nChannels);
-    printf("Signal length:    %u\n", nSamplesFile);
-    printf("Frame length:     %i\n", nSamples);
-    printf("Output format:    %i bits\n", arg.bipsOut);
-    printf("Target bitrate:   %i\n", arg.bitrate);
+    printf("Encoder size:       %i\n", encoder_size);
+    printf("Decoder size:       %i\n", decoder_size);
+    printf("Scratch size:       %i\n", scratch_size);
+    printf("Sample rate:        %i\n", sampleRate);
+    printf("Channels:           %i\n", nChannels);
+    printf("Signal length:      %u\n", nSamplesFile);
+    printf("Frame length:       %i\n", nSamples);
+    printf("Output format:      %i bits\n", arg.bipsOut);
+    printf("Target bitrate:     %i\n", arg.bitrate);
     if (!arg.decoder_only)
     {
-        printf("Real bitrate:     %i\n\n", real_bitrate);
+        printf("Real bitrate:       %i\n\n", real_bitrate);
     }
-    printf("Bandwidth cutoff: %s\n", arg.bandwidth ? arg.bandwidth : "-");
-    printf("PLC mode:         %i\n", arg.plcMeth);
+    printf("Bandwidth cutoff:       %s\n", arg.bandwidth ? arg.bandwidth : "-");
+    printf("PLC mode:               %i\n", arg.plcMeth);
     printf("\n");
 
     setFrameRate(sampleRate, nSamples);
@@ -379,7 +390,7 @@ int main(int ac, char **av)
             {
                 if (nSamplesRead != (nSamples * nChannels))
                 {
-                    Word16 padded_samples = ((nSamples * nChannels) -  nSamplesRead) / nChannels;
+                    Word16 padded_samples = ((nSamples * nChannels) - nSamplesRead) / nChannels;
                     Word16 delay_samples  = lc3_enc_get_delay(encoder) / 2;
 
                     if (padded_samples >= delay_samples)
@@ -609,7 +620,7 @@ static void parseCmdl(int ac, char **av, Arguments *arg)
         if (!strcmp(av[pos], "-ept"))
         {
             arg->ept = 1;
-            puts("Simulating frame loss by writing special values into lastnz variable!");
+            puts("Simulating frame loss by writing reserved values into the LC3 bitstream!");
         }
         /* Bits per sample */
         if (!strcmp(av[pos], "-bps") && pos + 1 < ac)
@@ -630,7 +641,7 @@ static void parseCmdl(int ac, char **av, Arguments *arg)
             arg->bandwidth = av[++pos];
         }
         /* frame length in ms */
-        if (!strcmp(av[pos ], "-frame_ms") && pos + 1 < ac)
+        if (!strcmp(av[pos], "-frame_ms") && pos + 1 < ac)
         {
             arg->frame_ms = (float)atof(av[++pos]);
         }
@@ -671,7 +682,7 @@ static void parseCmdl(int ac, char **av, Arguments *arg)
         }
     }
 
-    exit_if(arg->encoder_only && arg->decoder_only, "Enocder and decoder modes are exclusive!");
+    exit_if(arg->encoder_only && arg->decoder_only, "Encoder and decoder modes are exclusive!");
     exit_if(arg->ept && (!arg->epf || !arg->encoder_only), "Use -ept only with -E -epf FILE!");
     exit_if(pos + 1 >= ac, MISSING_ARGUMENT_MESSAGE);
 
@@ -713,7 +724,8 @@ static FILE *fopen_cfg(const char *file, const char *file_cfg, const char *mode)
 }
 
 static FILE *open_bitstream_writer(const char *file, uint32_t samplerate, int bitrate, short channels,
-                                   uint32_t signal_len, float frame_ms, int epmode, int g192, const char *file_cfg)
+                                   uint32_t signal_len, float frame_ms, int epmode, int g192, const char *file_cfg
+)
 {
     FILE *f     = fopen(file, "wb");
     FILE *f_use = f;
@@ -757,6 +769,16 @@ static FILE *open_bitstream_reader(const char *file, unsigned int *samplerate, i
     {
         uint16_t header[10] = {0};
         fread(header, sizeof(header), 1, f_use);
+        
+        if (header[0] != 0xcc1c)
+        {
+            /* Old style bitstream header */
+            *samplerate = header[0] * 100;
+            *bitrate    = header[1] * 100;
+            *channels   = header[2];
+            fseek(f_use, 6, SEEK_SET);
+        }
+        else
         {
             assert(header[1] >= 18);
             *samplerate = header[2] * 100;

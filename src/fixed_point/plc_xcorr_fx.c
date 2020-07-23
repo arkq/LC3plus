@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "defines.h"
 #include "functions.h"
@@ -59,6 +60,7 @@ Word16 plc_norm_corr_blocks_fx(                     /* o:  norm_corr range  [-1 
     ASSERT(n_blocks <= MAX_BLOCKS && n_blocks > 0);
     ASSERT(((float)tot_len / (float)n_blocks) <= (float)(1 << l2_base_len));
     ASSERT(inshift > 0);
+    UNUSED(l2_base_len);
 
     FOR (b = 0; b < n_blocks; b++)
     { /* block loop with  fixed pre_down shifting(inshift) of input signal  */
@@ -168,24 +170,23 @@ Word16 plc_norm_corr_blocks_fx(                     /* o:  norm_corr range  [-1 
     return norm_corr;
 }
 
-Word16 plc_xcorr_lc_fx(                     /* o: quantized output xcorr in Q15  [ 0 ..32767 ] = [0. 1.0[  */
-                       Word16 *pcmbuf_fx,   /* i: NB should be an  already dynamically upscaled pcm buffer with about
-                                               0...1(2)  bits margin */
-                       Word16 buflen,       /* i: Q0 physical size of pcmbuf_fx */
-                       Word16 pitch_int,    /* i: Q0  in Fs, lag value to evaluate, corresponding to the current f0   in
+Word16 plc_xcorr_lc_fx(                        /* o: quantized output xcorr in Q15  [ 0 ..32767 ] = [0. 1.0[  */
+                       Word16 *pcmbuf_fx,      /* i: NB should be an  already dynamically upscaled pcm buffer with about
+                                                  0...1(2)  bits margin */
+                       Word16 max_len_pcm_plc, /* i: Q0 physical size of pcmbuf_fx */
+                       Word16 pitch_int,       /* i: Q0  in Fs, lag value to evaluate, corresponding to the current f0   in
                                                pcm_buf_Fx   */
-                       Word16 nom_corr_len, /* i: nominal correlation length to use  */
                        Word16 fs_idx /*i:  */)
 {
     Word16 *range1Ptr;
     Word16 *range2Ptr;
-    Word16  corr_len_fx, inshift, l2_base_len, n_blocks, norm_xcorr_est_q;
+    Word16  corr_len_fx, inshift, l2_base_len, n_blocks, norm_xcorr_est_q, pcm_max_corr_len, max_corr_len;
 
 #ifdef DYNMEM_COUNT
     Dyn_Mem_In("plc_xcorr_lc_fx", sizeof(struct {
                    Word16 *range1Ptr;
                    Word16 *range2Ptr;
-                   Word16  corr_len_fx, inshift, l2_base_len, n_blocks, norm_xcorr_est_q;
+                   Word16  corr_len_fx, inshift, l2_base_len, n_blocks, norm_xcorr_est_q, pcm_max_corr_len, max_corr_len;
                }));
 #endif
 
@@ -195,13 +196,20 @@ Word16 plc_xcorr_lc_fx(                     /* o: quantized output xcorr in Q15 
 
     IF (pitch_int > 0)
     {
-        corr_len_fx = s_min(nom_corr_len, pitch_int); /* default assumption one wavelength=pitch_int */
-        corr_len_fx = s_max(corr_len_fx, pitch_min_2[fs_idx]);
+        pcm_max_corr_len = sub(max_len_pcm_plc, pitch_int);
+
+        max_corr_len = rectLengthTab[fs_idx];  /* maximum 10 ms */
+        max_corr_len = s_min(max_corr_len, pcm_max_corr_len);
+
+        corr_len_fx = s_min(max_corr_len, pitch_int);
+        corr_len_fx = s_max(corr_len_fx, pitch_min_2[fs_idx]); /* at least 5 ms (=2*pitchmin*) corr length */
 
         ASSERT(corr_len_fx >= (pitch_min_2[fs_idx])); /* at least 2 x pitch min(fs) */
         ASSERT(corr_len_fx <= (MAX_ACC_LEN * MAX_BLOCKS));
+        ASSERT(corr_len_fx <= max_corr_len);
+        ASSERT( max_len_pcm_plc - corr_len_fx - pitch_int + 1 > 0 );
 
-        range1Ptr = &(pcmbuf_fx[buflen]) - corr_len_fx; /* ptr setup, start of head section */
+        range1Ptr = &(pcmbuf_fx[max_len_pcm_plc]) - corr_len_fx; /* ptr setup, start of head section */
         range2Ptr = range1Ptr - pitch_int;              /* ptr setup, history = tail - lag  distance */
 
         /* assume 32 bit acc of up to 32 values  ->  sum(over 32,  x_up>>2 * y_up>>2)    */

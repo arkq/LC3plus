@@ -1,12 +1,3 @@
-#  /******************************************************************************
-#  *                        ETSI TS 103 634 V1.1.1                               *
-#  *              Low Complexity Communication Codec Plus (LC3plus)              *
-#  *                                                                             *
-#  * Copyright licence is solely granted through ETSI Intellectual Property      *
-#  * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
-#  * estoppel or otherwise.                                                      *
-#  ******************************************************************************/
-
 # GNU Makefile
 
 # Options
@@ -15,9 +6,6 @@ CLANG       = 0
 GCOV        = 0
 NO_POST_REL = 0
 OPTIM       = 0
-PLC         = 1
-RELEASE     = PLUS
-HR          = 1
 
 # Paths
 VPATH  = .
@@ -33,7 +21,6 @@ CC        = gcc
 RM        = rm -f
 
 # Preprocessor(-I/-D) / Compiler / Linker flags
-CPPFLAGS += -DLC3_$(RELEASE)
 CFLAGS   += -std=c99 -O$(OPTIM)                                                            \
             -Wall -pedantic -Wcast-qual -Wno-long-long -Wpointer-arith -Wstrict-prototypes \
             -Wmissing-prototypes -Werror-implicit-function-declaration -Wunused-parameter  \
@@ -43,26 +30,21 @@ LDFLAGS += -lm
 DEPFLAGS = -MT $@ -MMD -MP -MF $(BUILD)/$*.Td
 
 ifneq "$(DEBUG)" "0"
-CFLAGS   += -g3
-LDFLAGS  += -g3
+    CFLAGS   += -g3
+    LDFLAGS  += -g3
 endif
 
 ifeq "$(GCOV)" "1"
-CFLAGS  += -fprofile-arcs -ftest-coverage
-LDFLAGS += -fprofile-arcs -ftest-coverage
+    CFLAGS  += -fprofile-arcs -ftest-coverage
+    LDFLAGS += -fprofile-arcs -ftest-coverage
 endif
 
 OPTIM    ?= 0
 CFLAGS   += -O$(OPTIM)
-
 CFLAGS   += $(foreach DIR,$(SRC_DIRS),-I$(DIR))
 
-ifeq "$(PLC)" "0"
-CFLAGS   += -DDISABLE_PLC
-endif
-
-ifeq "$(HR)" "0"
-CFLAGS   += -DDISABLE_HR
+ifeq "$(NO_POST_REL)" "1"
+CFLAGS   += -DNO_POST_REL_CHANGES
 endif
 
 # memory sanitizer, find use of uninitialized memory
@@ -118,9 +100,8 @@ all: $(NAME_LC3)
 help:
 	@echo 'Syntax: make [OPTION=VALUE ...]'
 	@echo 'Build options:'
+	@echo '    NO_POST_REL $(NO_POST_REL) [0,1]'
 	@echo '    OPTIM       $(OPTIM) [0-3]'
-	@echo '    PLC         $(PLC) [0-1]'
-	@echo '    HR          $(HR) [0-1]'
 	@echo 'Debug options:'
 	@echo '    AFL         $(AFL) [0,1]'
 	@echo '    CLANG       $(CLANG) [0-3]'
@@ -137,7 +118,7 @@ $(BUILD)/%.o : %.c $(BUILD)/cc_flags
 	@echo 'Compiling' $<
 	$(QUIET) $(CC) $(DEPFLAGS) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 	$(QUIET) $(POSTCOMPILE)
-    
+
 # force rebuild if compilation flags changed
 $(BUILD)/cc_flags: force
 	$(QUIET) mkdir -p $(BUILD)

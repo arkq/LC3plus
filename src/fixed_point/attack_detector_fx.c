@@ -1,25 +1,28 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "functions.h"
 
 void attack_detector_fx(LC3_Enc *enc, EncSetup *setup, Word16 *input, Word16 input_scaling, void *scratch)
 {
     Dyn_Mem_Deluxe_In(
-        int    i, position;
+        int    i, j, position;
         Word32 tmp, *block_energy;
         Word16 h16, l16, new_scaling, rescale, input_delta_scaling;
         Word16 scales[3], *input_16k;
+        Word16 frame_length_16k;
     );
 
-    block_energy = scratchAlign(scratch, 0);              // 4 * 4
-    input_16k    = scratchAlign(block_energy, 4 * 4 + 4); // indexing from -2 to 159 (filter delay)
+    block_energy = scratchAlign(scratch, 0);
+    input_16k    = scratchAlign(block_energy, 4 * 4 + 4);
+    frame_length_16k = i_mult(enc->attdec_nblocks, 40);
 
     IF (setup->attack_handling)
     {
@@ -43,20 +46,19 @@ void attack_detector_fx(LC3_Enc *enc, EncSetup *setup, Word16 *input, Word16 inp
         }
         setup->attdec_scaling = new_scaling; move16();
 
-        // resampling to 16 kHz
-        SWITCH (enc->frame_length)
+        SWITCH (enc->fs)
         {
-        case 320:
+        case 32000:
             input_delta_scaling = sub(1, sub(new_scaling, input_scaling));
-            FOR (i = 0; i < 160; i++)
+            FOR (i = 0; i < frame_length_16k; i++)
             {
                 input_16k[i] = add(shr(input[2 * i + 0], input_delta_scaling),
                                    shr(input[2 * i + 1], input_delta_scaling)); move16();
             }
             break;
-        case 480:
+        case 48000:
             input_delta_scaling = sub(2, sub(new_scaling, input_scaling));
-            FOR (i = 0; i < 160; i++)
+            FOR (i = 0; i < frame_length_16k; i++)
             {
                 input_16k[i] = add(shr(input[3 * i + 0], input_delta_scaling),
                                    add(shr(input[3 * i + 1], input_delta_scaling),
@@ -66,13 +68,12 @@ void attack_detector_fx(LC3_Enc *enc, EncSetup *setup, Word16 *input, Word16 inp
         default: ASSERT(!"sampling rate not supported in function attack_detector_fx!"); break;
         }
 
-        // high pass filtering
         input_16k[-2]               = setup->attdec_filter_mem[0]; move16();
         input_16k[-1]               = setup->attdec_filter_mem[1]; move16();
-        setup->attdec_filter_mem[0] = input_16k[158];              move16();
-        setup->attdec_filter_mem[1] = input_16k[159];              move16();
+        setup->attdec_filter_mem[0] = input_16k[frame_length_16k - 2];              move16();
+        setup->attdec_filter_mem[1] = input_16k[frame_length_16k - 1];              move16();
 
-        FOR (i = 159; i >= 0; i--)
+        FOR (i = frame_length_16k - 1; i >= 0; i--)
         {
             tmp = L_mult(input_16k[i], 12288);
             tmp = L_msu(tmp, input_16k[i - 1], 16384);
@@ -81,26 +82,24 @@ void attack_detector_fx(LC3_Enc *enc, EncSetup *setup, Word16 *input, Word16 inp
             input_16k[i] = extract_h(tmp); move16();
         }
 
-        // energy calculation
         basop_memset(block_energy, 0, 4 * sizeof(Word32));
 
-        FOR (i = 0; i < 40; i++)
+        FOR (j = 0; j < enc->attdec_nblocks; j++)
         {
-            block_energy[0] = L_mac(block_energy[0], input_16k[i + 0], input_16k[i + 0]);     move16();
-            block_energy[1] = L_mac(block_energy[1], input_16k[i + 40], input_16k[i + 40]);   move16();
-            block_energy[2] = L_mac(block_energy[2], input_16k[i + 80], input_16k[i + 80]);   move16();
-            block_energy[3] = L_mac(block_energy[3], input_16k[i + 120], input_16k[i + 120]); move16();
+			FOR (i = 0; i < 40; i++)
+			{
+				block_energy[j] = L_mac(block_energy[j], input_16k[i + j*40], input_16k[i + j*40]);     move16();
+			}
         }
 
-        // attack detection
-        setup->attdec_detected = setup->attdec_position >= 2;
+        setup->attdec_detected = setup->attdec_position >= enc->attdec_hangover_thresh;
         test();        move16();
         position = -1; move16();
 
-        FOR (i = 0; i < 4; i++)
+        FOR (i = 0; i < enc->attdec_nblocks; i++)
         {
             /* block_energy[i] / 8.5 */
-            l16 = extract_l(L_shr(block_energy[i], 1)); // block_energy[i] approx. h * 2^16 + l * 2.
+            l16 = extract_l(L_shr(block_energy[i], 1));
             l16 = s_and(l16, 0x7fff);
             h16 = extract_h(block_energy[i]);
             tmp = L_shr(L_mult0(l16, 30840), 15);

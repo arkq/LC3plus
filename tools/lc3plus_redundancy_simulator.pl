@@ -1,7 +1,7 @@
 #!/usr/bin/perl -w
 
 # /******************************************************************************
-# *                        ETSI TS 103 634 V1.1.1                               *
+# *                        ETSI TS 103 634 V1.2.1                               *
 # *              Low Complexity Communication Codec Plus (LC3plus)              *
 # *                                                                             *
 # * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -36,11 +36,10 @@ my $epf    = &parseEPF ($config{epf});
 # extend epf pattern if required
 my $epf_initial;
 @$epf_initial = @$epf;
-while (@$epf < @$mainBs) {
+while (@$epf < @$mainBs + $config{offset}) {
         push @$epf, @$epf_initial;
 }
 
-my $burst_index = 0;
 my @newBs;
 my %stat;
 $stat{main} = 0;
@@ -53,13 +52,11 @@ for (my $f=0; $f<@$mainBs; $f++) {
     my $newFrame;
     my $bfi = $epf->[$f + $ep_offset];
     if ($bfi==0) {                       # no packet loss, take main payload
-        $burst_index=0;
         push @newBs, $mainBs->[$f];
         $stat{main}++;
         push @tmp, 0;
     } else {
-        $burst_index++;
-        if ($burst_index <= $config{offset}) {           # packet loss, but secondary payload available
+        if ($epf->[$f + $ep_offset + $config{offset}]==0) {           # packet loss, but secondary payload available
             $helpBs->[$f]->{sync} += ($config{signal}==3);
             push @newBs, $helpBs->[$f];
             $stat{help}++;
@@ -116,14 +113,9 @@ sub parseCommandline {
 sub printHelp {
   print <<FOO;
 
-/******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
-*              Low Complexity Communication Codec Plus (LC3plus)              *
-*                                                                             *
-* Copyright licence is solely granted through ETSI Intellectual Property      *
-* Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
-* estoppel or otherwise.                                                      *
-******************************************************************************/
+LC3plus redundancy payload simulator\n
+(C) Copyright Ericsson AB and Fraunhofer Gesellschaft zur Foerderung der
+    angewandten Forschung e.V. for its Fraunhofer IIS 2019
 
 Assembles new bit stream out of primary and secondary LC3plus frames based
 on an error pattern file. Secondary frames are inserted, if no primary data

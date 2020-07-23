@@ -1,18 +1,20 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "functions.h"
 
 
 
 void processSnsComputeScf_fx(Word32 *d2_fx, Word16 d2_fx_exp, Word16 fs_idx, Word16 n_bands, Word16 *scf,
-                             Word16 scf_smoothing_enabled, Word8 *scratchBuffer)
+                             Word16 scf_smoothing_enabled, Word16 attdec_damping_factor, Word8 *scratchBuffer, Word16 sns_damping
+                             )
 {
     Dyn_Mem_Deluxe_In(
         Word16  i, s, s2, nf;
@@ -23,6 +25,8 @@ void processSnsComputeScf_fx(Word32 *d2_fx, Word16 d2_fx_exp, Word16 fs_idx, Wor
         Word16 *scf_smooth;
     );
 
+
+    UNUSED(attdec_damping_factor);
 
     d3_fx     = scratchAlign(scratchBuffer, 0);                         /* Size = 4 * MAX_BANDS_NUMBER = 256 bytes */
     d3_fx_exp = scratchAlign(d3_fx, sizeof(*d3_fx) * MAX_BANDS_NUMBER); /* Size = 2 * MAX_BANDS_NUMBER = 128 bytes */
@@ -126,7 +130,8 @@ void processSnsComputeScf_fx(Word32 *d2_fx, Word16 d2_fx_exp, Word16 fs_idx, Wor
 
     FOR (i = 0; i < M; i++)
     {
-        scf[i] = mult_r(27853, round_fx(L_shl_pos(L_sub(d3_fx[i], L_mean), 1))); move16();
+        scf[i] = mult_r(sns_damping, round_fx(L_shl_pos(L_sub(d3_fx[i], L_mean), 1)));
+        move16();
     }
 
     /* scale factor smoothing */
@@ -147,10 +152,11 @@ void processSnsComputeScf_fx(Word32 *d2_fx, Word16 d2_fx_exp, Word16 fs_idx, Wor
         scf_smooth[M - 1] = L_shr(L_mult0(L_add(L_add(scf[M - 3], scf[M - 2]), scf[M - 1]), 10923), 15);
         L_mean            = L_add(L_mean, scf_smooth[M - 1]);
 
-        L_mean = L_shr(L_mean, 4); // assumes M = 16
+        L_mean = L_shr(L_mean, 4);
+        
         FOR (i = 0; i < M; i++)
         {
-            scf[i] = L_shr(L_sub(scf_smooth[i], L_mean), 1);
+        	scf[i] = mult_r(attdec_damping_factor, sub(scf_smooth[i], L_mean));
         }
     }
 

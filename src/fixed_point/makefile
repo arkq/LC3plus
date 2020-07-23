@@ -1,24 +1,10 @@
-#  /******************************************************************************
-#  *                        ETSI TS 103 634 V1.1.1                               *
-#  *              Low Complexity Communication Codec Plus (LC3plus)              *
-#  *                                                                             *
-#  * Copyright licence is solely granted through ETSI Intellectual Property      *
-#  * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
-#  * estoppel or otherwise.                                                      *
-#  ******************************************************************************/
-
-# GNU Makefile
-
 # Options
 AFL         = 0
 CLANG       = 0
 GCOV        = 0
-KISSFFT     = 0
 NO_POST_REL = 0
 OPTIM       = 0
-PLC         = 1
-SUBSET      = 
-RELEASE     = PLUS
+SUBSET      = ALL
 WMOPS       = 1
 
 # Paths
@@ -43,7 +29,7 @@ CFLAGS += -std=c99
 
 # C compiler flags
 # Preprocessor(-I/-D) / Compiler / Linker flags
-CPPFLAGS += -Ibasic_op -DLC3_$(RELEASE) -DSUBSET_$(SUBSET)
+CPPFLAGS += -Ibasic_op -DSUBSET_$(SUBSET)
 CFLAGS   += -pedantic -Wcast-qual -Wall -W -Wextra -Wno-long-long     \
             -Wpointer-arith -Wstrict-prototypes -Wmissing-prototypes  \
             -Werror-implicit-function-declaration
@@ -67,32 +53,8 @@ CFLAGS   += -O$(OPTIM)
 
 CFLAGS   += $(foreach DIR,$(SRC_DIRS),-I$(DIR))
 
-ifeq "$(NO_POST_REL_CHANGES_TEST)" "1"
+ifeq "$(NO_POST_REL)" "1"
 CFLAGS   += -DNO_POST_REL_CHANGES
-endif
-
-ifeq "$(SUBSET_SQ)" "1"
-CFLAGS += -DSUBSET_SQ
-endif
-
-ifeq "$(SUBSET_HQ)" "1"
-CFLAGS += -DSUBSET_HQ
-endif
-
-ifeq "$(SUBSET_SWB)" "1"
-CFLAGS += -DSUBSET_SWB
-endif
-
-ifeq "$(SUBSET_FB)" "1"
-CFLAGS += -DSUBSET_FB
-endif
-
-ifeq "$(PLC)" "0"
-CFLAGS   += -DDISABLE_PLC
-endif
-
-ifeq "$(PLC)" "2"
-CFLAGS += -DDISABLE_ADVANCED_PLC
 endif
 
 # disable wmops instrumentation
@@ -107,6 +69,15 @@ POSTCOMPILE = mv -f $(BUILD)/$*.Td $(BUILD)/$*.d && touch $@
 ###############################################################################
 
 SRCS := $(notdir $(foreach DIR, $(VPATH), $(wildcard $(DIR)/*.c)))
+
+EXCL := ccConvert.c
+SRCS := $(notdir $(foreach DIR, $(VPATH), $(wildcard $(DIR)/*.c)))
+SRCS := $(filter-out $(EXCL), $(SRCS))
+
+EXCL_CCC := $(BUILD)/codec_exe.o
+OBJS_CCC_UNF := $(addprefix $(BUILD)/, $(SRCS:.c=.o))
+OBJS_CCC := $(filter-out $(EXCL_CCC), $(OBJS_CCC_UNF))
+
 OBJS := $(addprefix $(BUILD)/, $(SRCS:.c=.o))
 
 ###############################################################################
@@ -116,13 +87,14 @@ OBJS := $(addprefix $(BUILD)/, $(SRCS:.c=.o))
 all: $(NAME_LC3)
 
 help:
+	@echo 'Targets:'
+	@echo '    $(NAME_LC3) (default)'
+	@echo '    ccConvert'
 	@echo 'Syntax: make [OPTION=VALUE ...]'
 	@echo 'Build options:'
-	@echo '    KISSFFT     $(KISSFFT) [0,1]'
 	@echo '    NO_POST_REL $(NO_POST_REL) [0,1]'
 	@echo '    OPTIM       $(OPTIM) [0-3]'
-	@echo '    PLC         $(PLC) [0-2]'
-	@echo '    SUBSET      $(SUBSET) [SQ,HQ,SWB,FB]'
+	@echo '    SUBSET      $(SUBSET) [NB,SQ,HQ,SWB,FB,ALL]'
 	@echo '    WMOPS       $(WMOPS) [0,1]'
 	@echo 'Debug options:'
 	@echo '    AFL         $(AFL) [0,1]'
@@ -132,9 +104,13 @@ help:
 $(NAME_LC3): $(OBJS)
 	@echo 'Linking' $@
 	$(QUIET) $(LINK)  $(OBJS) -o $@ $(LDFLAGS)
+    
+ccConvert: $(BUILD)/ccConvert.o $(OBJS_CCC)
+	@echo 'Linking' $@
+	$(QUIET) $(LINK) $? -o $@ $(LDFLAGS)
 
 clean:
-	$(QUIET) rm -rf $(NAME_LC3) $(BUILD)
+	$(QUIET) rm -rf $(NAME_LC3) $(BUILD) ccConvert
 
 $(BUILD)/%.o : %.c $(BUILD)/cc_flags
 	@echo 'Compiling' $<

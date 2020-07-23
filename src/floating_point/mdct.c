@@ -1,15 +1,15 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "functions.h"
 
-#ifdef ENABLE_HR_MODE
 static const LC3_FLOAT* mdct_window(LC3_INT length, LC3_INT frame_dms, LC3_INT hrmode)
 {
     if (frame_dms == 100) {
@@ -68,75 +68,17 @@ static const LC3_FLOAT* mdct_window(LC3_INT length, LC3_INT frame_dms, LC3_INT h
     }
     return NULL;
 }
-#else
-static const LC3_FLOAT* mdct_window(LC3_INT length, LC3_INT frame_dms)
-{
-    if (frame_dms == 100) {
-        switch (length) {
-        case 80:
-            return MDCT_WINS_10ms[0];
-        case 160:
-            return MDCT_WINS_10ms[1];
-        case 240:
-            return MDCT_WINS_10ms[2];
-        case 320:
-            return MDCT_WINS_10ms[3];
-        case 480:
-            return MDCT_WINS_10ms[4];
-        default:
-            return NULL;
-        }
-    }
-    if (frame_dms == 50) {
-        switch (length) {
-        case 40:
-            return MDCT_WINS_5ms[0];
-        case 80:
-            return MDCT_WINS_5ms[1];
-        case 120:
-            return MDCT_WINS_5ms[2];
-        case 160:
-            return MDCT_WINS_5ms[3];
-        case 240:
-            return MDCT_WINS_5ms[4];
-        default:
-            return NULL;
-        }
-    }
-    if (frame_dms == 25) {
-        switch (length) {
-        case 20:
-            return MDCT_WINS_2_5ms[0];
-        case 40:
-            return MDCT_WINS_2_5ms[1];
-        case 60:
-            return MDCT_WINS_2_5ms[2];
-        case 80:
-            return MDCT_WINS_2_5ms[3];
-        case 120:
-            return MDCT_WINS_2_5ms[4];
-        default:
-            return NULL;
-        }
-    }
-    return NULL;
-}
-#endif
 
-#ifdef ENABLE_HR_MODE
-void mdct_init(Mdct* mdct, LC3_INT length, LC3_INT frame_dms, LC3_INT hrmode)
-#else
-void mdct_init(Mdct* mdct, LC3_INT length, LC3_INT frame_dms)
-#endif
+void mdct_init(Mdct* mdct, LC3_INT length, LC3_INT frame_dms, LC3_INT fs_idx, LC3_INT hrmode)
 {
     if (frame_dms == 100) {
-        mdct->leading_zeros = 3 * length / 8;
+        mdct->leading_zeros = MDCT_la_zeroes[fs_idx];
     } 
     else if (frame_dms == 50) {
-        mdct->leading_zeros = length / 4;
+        mdct->leading_zeros = MDCT_la_zeroes_5ms[fs_idx];
     } 
     else if (frame_dms == 25) {
-        mdct->leading_zeros = 0;
+        mdct->leading_zeros = MDCT_la_zeroes_2_5ms[fs_idx];
     }
     else {
         assert(!"invalid frame_ms");
@@ -144,11 +86,7 @@ void mdct_init(Mdct* mdct, LC3_INT length, LC3_INT frame_dms)
 
     mdct->length     = length;
     mdct->mem_length = length - mdct->leading_zeros;
-#ifdef ENABLE_HR_MODE
     mdct->window     = mdct_window(length, frame_dms, hrmode);
-#else
-    mdct->window     = mdct_window(length, frame_dms);
-#endif
     mdct->mem        = calloc(sizeof(*mdct->mem), mdct->mem_length);
     dct4_init(&mdct->dct, length);
 }

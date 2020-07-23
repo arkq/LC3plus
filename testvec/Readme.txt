@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -16,7 +16,7 @@ LC3plus ETSI Testvector script V0.0.1
 WHAT IS THIS SCRIPT?
 =====================
 
-This is the LC3plus ETSI testvector script. It checks whether the output of
+This script is the LC3plus ETSI testvector script. It checks whether the output of
 your LC3plus build produces the expected results and matches the precalculated
 MD5 hashes for a number of operating points. It is meant to be used for the
 fixed-point version of LC3plus only.
@@ -55,7 +55,7 @@ to match the path to your LC3plus test executable.
 USAGE
 ======
 
-perl testvectorCheck.pl [-create] [-clean] [-log] [-verbose]
+perl testvecCheck.pl [-create] [-clean] [-log] [-verbose]
 
 Command line options:
 
@@ -74,5 +74,5 @@ OUTPUT
 
 The pass/fail result is printed on the console. If [-log] was also selected, the pass/fail 
 result will also be printed into the logfile. Unless you use [-clean], the script will save 
-all files in a temporary folder labeled lc3plus_testvec_MM_DD_YYYY_HH_MM_SS.
+all files in a temporary folder labeled lc3plus_testvectorsMM_DD_YYYY_HH_MM_SS.
 

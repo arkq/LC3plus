@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 
 #include "functions.h"
@@ -168,6 +169,7 @@ ac_enc_mux_st2VQ_cws(                    /*  o:  max 25 bits total codeword */
 
     ASSERT((L_szA * L_szB) <= 1 << 25);          /* multiplexing only allowed up to 25 bits  (+ leading sign)  */
     ASSERT(L_cwTx >= 0 && L_cwTx <= 0x01ffFFff); /*  max 25 bits allowed */
+    UNUSED(L_szB);
 
     return L_cwTx;
 }

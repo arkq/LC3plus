@@ -38,7 +38,6 @@
   ============================================================================
 */
 
-
 /*****************************************************************************
  *
  * This file contains functions for the automatic complexity calculation
@@ -1001,10 +1000,6 @@ Word32 BASOP_get_wops (void)
 }
 #endif
 
-#if WMOPS
-static Word32 prom_cnt = 0;
-#endif
-
 void WMOPS_destroy(void)
 {
 #if WMOPS
@@ -1047,8 +1042,6 @@ void WMOPS_output_all(Word16 dtx_mode)
   char *sfmt =  "%-40s %8s %8s %7s %7s  %7s %7s %7s\n";
   char *dfmt =  "%-40s %8.2f %8.3f %7.3f %7.3f  %7.3f %7.3f %7.3f\n";
 
-  fprintf (stderr, "\nProgram Memory Analysis: %12.0f words\n", (float)prom_cnt);
-  /*fprintf (stderr, "\nInstruction Type Analysis (for worst case frame):\n\n");*/
   fprintf (stderr, "\nInstruction Type Analysis (for worst case frame number %ld):\n\n", (long int)nbframe[0]);   /* added -- JPA */
   for (i = 0; i < (int)(sizeof(BasicOperationList)/sizeof(char*)) ; i++)
     {
@@ -1203,8 +1196,6 @@ void WMOPS_output_all_std(Word16 dtx_mode)
 
   result_t result[MAXCOUNTERS+1];
 
-  fprintf (stdout, "\nProgram Memory Analysis: %12.0f words\n", (float)prom_cnt);
-  /*fprintf (stdout, "\nInstruction Type Analysis (for worst case frame):\n\n");*/
   fprintf (stdout, "\nInstruction Type Analysis (for worst case frame number %ld):\n\n", (long int)nbframe[0]);   /* added -- JPA */
   for (i = 0; i < (int)(sizeof(BasicOperationList)/sizeof(char*)) ; i++)
   {

@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
@@ -28,9 +29,9 @@ extern const LC3_INT   pvq_enc_A[16][11];
 /* 12.8 kHz resampler */
 extern const LC3_FLOAT lp_scale_factors[6];
 extern const LC3_FLOAT lp_filter[240];
-extern const double highpass50_filt_b[3];
-extern const double highpass50_filt_a[3];
-extern const LC3_INT    up_fac[6];
+extern const double    highpass50_filt_b[3];
+extern const double    highpass50_filt_a[3];
+extern const LC3_INT   up_fac[6];
 
 /* TNS */
 extern const LC3_FLOAT quants_pts_tns[17];
@@ -73,8 +74,8 @@ extern const LC3_FLOAT inter4_1[33];
 extern const LC3_FLOAT enc_inter_filter[4][4];
 
 /* Bandwidth Detector */
-extern const LC3_INT  threshold_quiet[4];
-extern const LC3_INT  threshold_brickwall[4];
+extern const LC3_INT threshold_quiet[4];
+extern const LC3_INT threshold_brickwall[4];
 extern const LC3_INT  brickwall_dist[4];
 extern const LC3_INT  BW_warp_idx_start_16k[4];
 extern const LC3_INT  BW_warp_idx_stop_16k[4];
@@ -97,15 +98,11 @@ extern const LC3_INT  BW_warp_idx_start_48k_2_5ms[4];
 extern const LC3_INT  BW_warp_idx_stop_48k_2_5ms[4];
 extern const LC3_INT* BW_warp_idx_start_all_2_5ms[4];
 extern const LC3_INT* BW_warp_idx_stop_all_2_5ms[4];
-#ifdef ENABLE_HR_MODE
-extern const LC3_INT  BW_cutoff_bin_all_2_5ms_HR[MAX_BW_BANDS_NUMBER];
-extern const LC3_INT  BW_cutoff_bin_all_2_5ms[MAX_BW_BANDS_NUMBER];
-extern const LC3_INT  bands_number_2_5ms_HR[6];
-extern const LC3_INT  bands_number_2_5ms[6];
-#else
-extern const LC3_INT  BW_cutoff_bin_all_2_5ms[MAX_BW_BANDS_NUMBER];
-extern const LC3_INT  bands_number_2_5ms[5];
-#endif
+extern const LC3_INT BW_cutoff_bin_all_2_5ms_HR[MAX_BW_BANDS_NUMBER];
+extern const LC3_INT bands_number_2_5ms_HR[6];
+
+extern const LC3_INT BW_cutoff_bin_all_2_5ms[MAX_BW_BANDS_NUMBER];
+extern const LC3_INT bands_number_2_5ms[5];
 
 
 extern const LC3_INT  BW_warp_idx_start_16k_5ms[4];
@@ -119,13 +116,9 @@ extern const LC3_INT  BW_warp_idx_stop_48k_5ms[4];
 extern const LC3_INT* BW_warp_idx_start_all_5ms[4];
 extern const LC3_INT* BW_warp_idx_stop_all_5ms[4];
 extern const LC3_INT  BW_cutoff_bin_all_5ms[MAX_BW_BANDS_NUMBER];
-#ifdef ENABLE_HR_MODE
 extern const LC3_INT bands_number_5ms[6];
 extern const LC3_INT BW_cutoff_bin_all_HR[MAX_BW_BANDS_NUMBER];
 extern const LC3_INT BW_cutoff_bin_all_5ms_HR[MAX_BW_BANDS_NUMBER];
-#else
-extern const LC3_INT    bands_number_5ms[5];
-#endif
 extern const LC3_INT BW_cutoff_bin_all[MAX_BW_BANDS_NUMBER];
 extern const LC3_INT BW_cutoff_bits_all[MAX_BW_BANDS_NUMBER];
 
@@ -140,22 +133,16 @@ extern const LC3_FLOAT MDCT_WINDOW_240[480];
 extern const LC3_FLOAT MDCT_WINDOW_320[640];
 extern const LC3_FLOAT MDCT_WINDOW_480[960];
 extern const LC3_FLOAT MDCT_WINDOW_960[1920];
-#ifdef ENABLE_HR_MODE
 extern const LC3_FLOAT* MDCT_WINS_10ms[2][6];
-#else
-extern const LC3_FLOAT* MDCT_WINS_10ms[5];
-#endif
+extern const LC3_INT    MDCT_la_zeroes[6];
 
 extern const LC3_FLOAT MDCT_WINDOW_80_2_5ms[40];
 extern const LC3_FLOAT MDCT_WINDOW_160_2_5ms[80];
 extern const LC3_FLOAT MDCT_WINDOW_240_2_5ms[120];
 extern const LC3_FLOAT MDCT_WINDOW_320_2_5ms[160];
 extern const LC3_FLOAT MDCT_WINDOW_480_2_5ms[240];
-#ifdef ENABLE_HR_MODE
 extern const LC3_FLOAT* MDCT_WINS_2_5ms[2][6];
-#else
-extern const LC3_FLOAT* MDCT_WINS_2_5ms[5];
-#endif
+extern const LC3_INT    MDCT_la_zeroes_2_5ms[6];
 
 
 extern const LC3_FLOAT MDCT_WINDOW_80_5ms[80];
@@ -163,51 +150,26 @@ extern const LC3_FLOAT MDCT_WINDOW_160_5ms[160];
 extern const LC3_FLOAT MDCT_WINDOW_240_5ms[240];
 extern const LC3_FLOAT MDCT_WINDOW_320_5ms[320];
 extern const LC3_FLOAT MDCT_WINDOW_480_5ms[480];
-#ifdef ENABLE_HR_MODE
 extern const LC3_FLOAT* MDCT_WINS_5ms[2][6];
-#else
-extern const LC3_FLOAT* MDCT_WINS_5ms[5];
-#endif
+extern const LC3_INT    MDCT_la_zeroes_5ms[6];
 
-#ifdef ENABLE_HR_MODE
 extern const LC3_INT MDCT_WINDOWS_LENGTHS_10ms[6];
-#else
-extern const LC3_INT    MDCT_WINDOWS_LENGTHS_10ms[5];
-#endif
 
-#ifdef ENABLE_HR_MODE
-extern const LC3_INT    MDCT_WINDOWS_LENGTHS_2_5ms[6];
-#else
-extern const LC3_INT    MDCT_WINDOWS_LENGTHS_2_5ms[5];
-#endif
+extern const LC3_INT MDCT_WINDOWS_LENGTHS_2_5ms[6];
 
 
-#ifdef ENABLE_HR_MODE
 extern const LC3_INT MDCT_WINDOWS_LENGTHS_5ms[6];
-#else
-extern const LC3_INT    MDCT_WINDOWS_LENGTHS_5ms[5];
-#endif
 
 /* Per band energy */
-#ifdef ENABLE_HR_MODE
 extern const LC3_INT* ACC_COEFF_PER_BAND[6];
 extern const LC3_INT* ACC_COEFF_PER_BAND_HR[6];
-#else
-extern const LC3_INT*   ACC_COEFF_PER_BAND[6];
-#endif
-#ifdef ENABLE_HR_MODE
-extern const LC3_INT* ACC_COEFF_PER_BAND_2_5ms[6];
-extern const LC3_INT* ACC_COEFF_PER_BAND_2_5ms_HR[6];
-#else
-extern const LC3_INT*   ACC_COEFF_PER_BAND_2_5ms[5];
-#endif
-#ifdef ENABLE_HR_MODE
-extern const LC3_INT* ACC_COEFF_PER_BAND_5ms[6];
-extern const LC3_INT* ACC_COEFF_PER_BAND_5ms_HR[6];
-#else
-extern const LC3_INT*   ACC_COEFF_PER_BAND_5ms[5];
-#endif
 
+extern const LC3_INT* ACC_COEFF_PER_BAND_2_5ms_HR[6];
+extern const LC3_INT* ACC_COEFF_PER_BAND_2_5ms[5];
+
+
+extern const LC3_INT* ACC_COEFF_PER_BAND_5ms_HR[6];
+extern const LC3_INT* ACC_COEFF_PER_BAND_5ms[5];
 
 
 #endif

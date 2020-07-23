@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "functions.h"
 
@@ -48,117 +49,86 @@ LC3_INT searchMaxIndice(LC3_FLOAT* in, LC3_INT len)
     return max_i;
 }
 
-void processOlpa_fl(LC3_FLOAT* wsp, LC3_FLOAT* mem_lp_decim2, LC3_FLOAT* mem_old_d_wsp, LC3_INT* mem_old_T0, LC3_INT* T0_out,
-                    LC3_FLOAT* normcorr_out, LC3_INT wsp_len)
+void processOlpa_fl(LC3_FLOAT* s_12k8, LC3_FLOAT* mem_s12k8, LC3_FLOAT* mem_s6k4, LC3_INT* mem_old_T0, LC3_INT* T0_out,
+                    LC3_FLOAT* normcorr_out, LC3_INT len, LC3_INT frame_dms)
 {
-    LC3_FLOAT norm_corr = 0, sum = 0, sum_sq1 = 0, sum_sq2 = 0, tmp[480] = {0}, sum_tmp = 0, buf_tmp[480] = {0},
-          norm_corr2 = 0;
-    LC3_FLOAT buf[178] = {0}, filt_out[131] = {0}, d_wsp[64] = {0}, R0[98] = {0}, R[98] = {0}; /* constant length */
-    LC3_INT   i = 0, j = 0, N = 0, d_N = 0, buf_len = 0, L_min = 0, L_max = 0, T0 = 0, T02 = 0, L_min2 = 0, L_max2 = 0, L = 0;
+    LC3_FLOAT norm_corr = 0, sum = 0, sum0 = 0, sum1 = 0, sum2 = 0, norm_corr2 = 0, *s6k4;
+    LC3_FLOAT buf[LEN_6K4 + MAX_PITCH_6K4] = {0}, filt_out[LEN_12K8 + 3] = {0}, d_wsp[LEN_6K4] = {0}, R0[RANGE_PITCH_6K4] = {0}, R[RANGE_PITCH_6K4] = {0}; /* constant length */
+    LC3_INT   i = 0, j = 0, len2 = 0, T0 = 0, T02 = 0, min_pitch = 0, max_pitch = 0, L = 0, mem_in_len = 0, acflen = 0;
+    
 
-    N       = wsp_len;
-    d_N     = N / 2;
-    buf_len = wsp_len + 3;
+    mem_in_len = MAX_PITCH_6K4;
+    len2       = len / 2;
+    acflen     = len2;
+    if (frame_dms == 25)
+    {
+        mem_in_len += 16;
+        acflen     += 16;
+    }
 
     /* Downsampling */
-
-    move_float(buf, mem_lp_decim2, 3);
-
-    move_float(&buf[3], wsp, wsp_len);
-
-    move_float(mem_lp_decim2, &buf[N], buf_len - N);
-
-    filter_olpa(buf, filt_out, olpa_down2, 5, buf_len);
-
-    j = 0;
-    for (i = 4; i < buf_len; i = i + 2) {
+    move_float(buf, mem_s12k8, 3);
+    move_float(&buf[3], s_12k8, len);
+    move_float(mem_s12k8, &buf[len], 3);
+    filter_olpa(buf, filt_out, olpa_down2, 5, len + 3);
+    for (i = 4, j = 0; i < len + 3; i = i + 2) {
         d_wsp[j] = filt_out[i];
         j++;
     }
 
-    /* Correlation */
-
-    move_float(buf, mem_old_d_wsp, 114);
-
-    move_float(&buf[114], d_wsp, 64);
-
-    move_float(mem_old_d_wsp, &buf[d_N], 178 - d_N);
-
-    L_min = 17;
-    L_max = 114;
-
-    for (i = L_min; i <= L_max; i++) {
+    /* Compute autocorrelation */
+    s6k4 = &buf[mem_in_len];
+    move_float(buf, mem_s6k4, mem_in_len);
+    move_float(s6k4, d_wsp, len2);
+    move_float(mem_s6k4, &buf[len2], mem_in_len);
+    if (frame_dms == 25)
+    {
+        s6k4 = s6k4 - 16;
+    }
+    for (i = MIN_PITCH_6K4; i <= MAX_PITCH_6K4; i++) {
         sum = 0;
-
-        move_float(buf_tmp, &buf[L_max - i], d_N);
-
-        for (j = 0; j < d_N; j++) {
-            sum += d_wsp[j] * buf_tmp[j];
+        for (j = 0; j < acflen; j++) {
+            sum += s6k4[j] * s6k4[j - i];
         }
-
-        R0[i - L_min] = sum;
+        R0[i - MIN_PITCH_6K4] = sum;
     }
 
-    move_float(R, R0, 98);
-
-    for (i = 0; i < 98; i++) {
+    /* Weight autocorrelation and find maximum */
+    move_float(R, R0, RANGE_PITCH_6K4);
+    for (i = 0; i < RANGE_PITCH_6K4; i++) {
         R0[i] = R0[i] * olpa_acw[i];
     }
+    L  = searchMaxIndice(R0, RANGE_PITCH_6K4);
+    T0 = L + MIN_PITCH_6K4;
 
-    L  = searchMaxIndice(R0, 98);
-    T0 = L + L_min;
-
-    move_float(tmp, &buf[L_max - T0], d_N);
-
-    sum_tmp = 0;
-    sum_sq1 = 0;
-    sum_sq2 = 0;
-
-    for (i = 0; i < d_N; i++) {
-        sum_tmp += d_wsp[i] * tmp[i];
-        sum_sq1 += d_wsp[i] * d_wsp[i];
-        sum_sq2 += tmp[i] * tmp[i];
+    /* Compute normalized correlation */
+    sum0 = sum1 = sum2 = 0;
+    for (i = 0; i < acflen; i++) {
+        sum0 += s6k4[i] * s6k4[i - T0];
+        sum1 += s6k4[i - T0] * s6k4[i - T0];
+        sum2 += s6k4[i] * s6k4[i];
     }
-
-    sum_sq1 = sum_sq1 * sum_sq2;
-    sum_sq1 = LC3_SQRT(sum_sq1) + LC3_POW(10.0, -5.0);
-
-    norm_corr = sum_tmp / sum_sq1;
+    sum1 = sum1 * sum2;
+    sum1 = LC3_SQRT(sum1) + LC3_POW(10.0, -5.0);
+    norm_corr = sum0 / sum1;
     norm_corr = MAX(0, norm_corr);
 
-    L_min2 = MAX(L_min, *mem_old_T0 - 4);
-    L_max2 = MIN(L_max, *mem_old_T0 + 4);
+    /* Second try in the neighborhood of the previous pitch */
+    min_pitch = MAX(MIN_PITCH_6K4, *mem_old_T0 - 4);
+    max_pitch = MIN(MAX_PITCH_6K4, *mem_old_T0 + 4);
+    L = searchMaxIndice(&R[min_pitch - MIN_PITCH_6K4], max_pitch - min_pitch + 1 );
+    T02 = L + min_pitch;
 
-    /* Distance can be negative here */
-    if (((L_max2 - L_min + 1) - (L_min2 - L_min)) > 0) {
-        move_float(buf_tmp, &R[L_min2 - L_min], ((L_max2 - L_min + 1) - (L_min2 - L_min)));
-    }
-
-    L = searchMaxIndice(buf_tmp, (L_max2 - L_min + 1) - (L_min2 - L_min));
-
-    if (L == -128) {
-        T02 = -128;
-    } else {
-        T02 = L + L_min2;
-    }
-
-    if ((T02 != T0) && (T02 != -128)) {
-        move_float(tmp, &buf[L_max - T02], d_N);
-
-        sum_tmp = 0;
-        sum_sq1 = 0;
-        sum_sq2 = 0;
-        for (i = 0; i < d_N; i++) {
-            sum_tmp += d_wsp[i] * tmp[i];
-            sum_sq1 += d_wsp[i] * d_wsp[i];
-            sum_sq2 += tmp[i] * tmp[i];
+    if (T02 != T0) {
+        sum0 = sum1 = sum2 = 0;
+        for (i = 0; i < acflen; i++) {
+            sum0 += s6k4[i] * s6k4[i - T02];
+            sum1 += s6k4[i - T02] * s6k4[i - T02];
+            sum2 += s6k4[i] * s6k4[i];
         }
-
-        sum_sq1 = sum_sq1 * sum_sq2;
-        sum_sq1 = LC3_SQRT(sum_sq1) + LC3_POW(10.0, -5.0);
-
-        norm_corr2 = sum_tmp / sum_sq1;
-
+        sum1 = sum1 * sum2;
+        sum1 = LC3_SQRT(sum1) + LC3_POW(10.0, -5.0);
+        norm_corr2 = sum0 / sum1;
         norm_corr2 = MAX(0, norm_corr2);
 
         if (norm_corr2 > (norm_corr * 0.85)) {
@@ -167,10 +137,7 @@ void processOlpa_fl(LC3_FLOAT* wsp, LC3_FLOAT* mem_lp_decim2, LC3_FLOAT* mem_old
         }
     }
 
-    *mem_old_T0 = T0;
-
-    T0 = T0 * 2.0;
-
-    *T0_out       = T0;
+    *mem_old_T0   = T0;
+    *T0_out       = T0 * 2.0;
     *normcorr_out = norm_corr;
 }

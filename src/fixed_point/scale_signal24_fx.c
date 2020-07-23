@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "functions.h"
 
@@ -80,7 +81,6 @@ void scale_signal24_fx(const Word32 x[], /* i:   time input signal */
             mem_s12k8[i] = shl(mem_s12k8[i], s);
         }
     }
-
     /* Store part of current frame as mdct memory buffer and resampler input buffer for next frame */
     basop_memcpy(mdct_mem32, &x[N - mdct_mem_len], mdct_mem_len * sizeof(Word32));
     basop_memmove(resamp_mem32, &x[N - resample_mem_in_len], resample_mem_in_len * sizeof(Word32));

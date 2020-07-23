@@ -115,7 +115,6 @@ HISTORY:
  |___________________________________________________________________________|
 */
 
-
 /*___________________________________________________________________________
  |                                                                           |
  |   Include-Files                                                           |
@@ -199,7 +198,7 @@ void BASOP_CHECK(int Overflow, int Overflow2)
       } else {
         /* printf("Overflow in "); printStack(); */
 #ifdef PRINT_STACK_OVERFLOW
-        printStack("Overflow in ", PRINT_STACK_ID);
+         printStack("Overflow in ", PRINT_STACK_ID);
 #endif
       }
     }
@@ -2987,4 +2986,3 @@ Word32 L_msuNs (Word32 L_var3, Word16 var1, Word16 var2)
 
 
 /* end of file */
-

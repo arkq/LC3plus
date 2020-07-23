@@ -692,8 +692,4 @@ Word32 L_rotl( Word32 L_var1, Word16 var2, Word16 *var3) {
 
 
 
-
-
-
-
 /* end of file */

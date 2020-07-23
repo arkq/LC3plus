@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "defines.h"
 
@@ -40,6 +41,8 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
         Word32 *      L_ecu_rec; /*  local xtda  output is MAX_LEN -> input  buffer,
                                     as  tmp buffer for w32 fft MAX_LPROT */
     );
+    
+    band_offsets = NULL;
 
     d2_fx        = (Word32 *)scratchAlign(scratchBuffer, 0); /* Size = 4 * MAX_BANDS_NUMBER_PLC */
     q_old_d_fx32 = (Word32 *)scratchAlign(d2_fx, sizeof(*d2_fx) * MAX_BANDS_NUMBER_PLC); /* Size = 4 * MAX_BW */
@@ -62,10 +65,8 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
     /* Buffers overlap since they are not used at once */
 
     
-#ifdef NONBE_PLC4_ADAP_DAMP
     UNUSED(ns_cum_alpha);
     UNUSED(ns_seed);
-#endif
 
     /* Apply/Prepare PLC in bfi-case */
     IF (sub(bfi, 1) == 0)
@@ -93,14 +94,9 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
 
 
 
-
-
-
-
                /* first bfi frame calc decoded pcm  energy 16,16 ms, in 26 ms buffer separated by 10 ms*/
                 
                {   /* compute energy normalization needed for concealment method 2  Xavg  and transient analysis */
-                   
                     
                    /* left   */                
                   processPLCUpdateXFP_w_E_hist_fx(0, 0,
@@ -117,7 +113,6 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
                      &plcAd->PhECU_L_oold_xfp_w_E_fx, &plcAd->PhECU_oold_xfp_w_E_exp_fx,
                      &plcAd->PhECU_L_old_xfp_w_E_fx, &plcAd->PhECU_old_xfp_w_E_exp_fx,
                      &plcAd->PhECU_oold_Ltot_exp_fx, &plcAd->PhECU_old_Ltot_exp_fx);               
-
                }
             }
 
@@ -209,7 +204,8 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
                 /* LPC Analysis */
                 /* calculate per band energy*/
                 processPerBandEnergy_fx(d2_fx, &d2_fx_exp, q_old_d_fx32, *q_old_fx_exp, band_offsets, fs_idx, n_bands,
-                                        1, frame_dms, buffer_perBandEnergy);
+                                        1, frame_dms, buffer_perBandEnergy
+                );
 
                 /* calculate pre-emphasis */
                 processPreEmphasis_fx(d2_fx, &d2_fx_exp, fs_idx, n_bands, frame_dms, buffer_preEmphasis);
@@ -228,11 +224,17 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
             }
 
             /* call TD-PLC */
+            /* Q_syn = plcAd->q_fx_old_exp; */ /* makes q_fx_old_exp
+               available in processTimeDomainConcealment_Apply_fx() for
+               debugging */
             processTimeDomainConcealment_Apply_fx(
                 old_pitch_int, plcAd->tdc_preemph_fac, plcAd->tdc_A, plcAd->tdc_lpc_order, plcAd->x_old_tot_fx, frame_length, frame_dms,
                 fs_idx, nbLostFramesInRow, sub(frame_length, la_zeroes), plcAd->stab_fac, &plcAd->tdc_fract,
-                &plcAd->tdc_seed, &plcAd->tdc_gain_p, &plcAd->tdc_gain_c, &plcAd->tdc_cum_damp, x_fx, &Q_syn, damping,
-                plcAd->max_len_pcm_plc, buffer_tdc);
+                &plcAd->tdc_seed, 
+                &plcAd->tdc_gain_c, x_fx, &Q_syn, damping,
+                plcAd->max_len_pcm_plc,
+                plcAd->harmonicBuf_fx, plcAd->synthHist_fx, &plcAd->harmonicBuf_Q,
+                buffer_tdc);
 
             /* exponent of TD-PLC output */
             Q_syn     = add(Q_syn, sub(15, plcAd->q_fx_old_exp));
@@ -246,17 +248,12 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
             *q_fx_exp = *q_old_fx_exp; move16();
 
             /* call Noise Substitution */
-#ifndef NONBE_PLC4_ADAP_DAMP
-            processPLCNoiseSubstitution_fx(q_d_fx, q_old_d_fx, yLen, nbLostFramesInRow, plcAd->stab_fac, frame_dms,
-                                           damping, ns_cum_alpha, ns_seed);
-#else
             processPLCNoiseSubstitution_fx(q_d_fx, q_old_d_fx, yLen);
-#endif
             BREAK;
 
         default: ASSERT(!"Unsupported PLC method!");
-        } /* switch (converalMethod)*/
-    }     /* if (bfi) */
+        }
+    }
 
     Dyn_Mem_Deluxe_Out();
 }

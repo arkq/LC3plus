@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 /*! \file lc3.h
  *  This header provides the API for LC3.
@@ -25,6 +26,8 @@
 #ifndef LC3_H
 #define LC3_H
 
+
+
 #ifndef _MSC_VER
 #include <stdint.h>
 #else
@@ -36,7 +39,7 @@ typedef __int32 int32_t;
 #define LC3_VERSION_INT(major, minor, micro) (((major) << 16) | ((minor) << 8) | (micro))
 
 /*! Version number to ensure header and binary are matching. */
-#define LC3_VERSION LC3_VERSION_INT(1, 4, 2)
+#define LC3_VERSION LC3_VERSION_INT(1, 4, 10)
 
 /*! Maximum number of supported channels. The actual binary might support
  *  less, use lc3_channels_supported() to check. */
@@ -49,17 +52,16 @@ typedef __int32 int32_t;
 #define LC3_MAX_BYTES 870
 
 /*! Maximum size needed to store encoder state. */
-#define LC3_ENC_MAX_SIZE 6880
+#define LC3_ENC_MAX_SIZE 7064
 
 /*! Maximum size needed to store decoder state. */
-#define LC3_DEC_MAX_SIZE 20352
+    #define LC3_DEC_MAX_SIZE 27248
 
 /*! Maximum scratch size needed by lc3_enc16() or lc3_enc24().*/
 #define LC3_ENC_MAX_SCRATCH_SIZE 6784
 
 /*! Maximum scratch size needed by lc3_dec16() or lc3_dec24(). */
-#define LC3_DEC_MAX_SCRATCH_SIZE 16514  /* to BE corrected */
-
+#define LC3_DEC_MAX_SCRATCH_SIZE 27474
 /*! Decoder packet loss concealment mode */
 typedef enum
 {
@@ -112,13 +114,14 @@ typedef enum
     LC3_FRAMEMS_ERROR       = 10, /*!< Invalid frame_ms value */
     LC3_ALIGN_ERROR         = 11, /*!< Unaligned pointer */
     LC3_EPMR_ERROR          = 12, /*!< Invalid epmr value */
-    LC3_BITRATE_UNSET_ERROR = 13, /*!< Function called before bitrate has been set */
-    LC3_BITRATE_SET_ERROR   = 14, /*!< Function called after bitrate has been set */
-    LC3_BFI_EXT_ERROR       = 15, /*!< Invalid external bad frame index */
+    LC3_HRMODE_ERROR        = 13, /*!< Invalid usage of hrmode, sampling rate and frame size */
+    LC3_BITRATE_UNSET_ERROR = 14, /*!< Function called before bitrate has been set */
+    LC3_BITRATE_SET_ERROR   = 15, /*!< Function called after bitrate has been set */
+    LC3_BFI_EXT_ERROR       = 16, /*!< Invalid external bad frame index */
 
     /* START WARNING */
-    LC3_WARNING             = 16,
-    LC3_BW_WARNING          = 17  /*!< Invalid bandwidth cutoff frequency */
+    LC3_WARNING    = 17,
+    LC3_BW_WARNING = 18 /*!< Invalid bandwidth cutoff frequency */
 
 } LC3_Error;
 
@@ -237,7 +240,7 @@ int lc3_enc_get_num_bytes(const LC3_Enc *encoder);
 
 /*! Set encoder bitrate for all channels.
  *  This function must be called at least once before encoding the first frame, but
- *  after other configuration functions such as lc3_enc_set_frame_ms().
+ *  after other configuration functions such as lc3_enc_set_frame_dms().
  *
  *  Recommended bitrates for input sampling rates with 10 ms framing:
  *  kHz     | kbps
@@ -254,6 +257,7 @@ int lc3_enc_get_num_bytes(const LC3_Enc *encoder);
  */
 LC3_Error lc3_enc_set_bitrate(LC3_Enc *encoder, int bitrate);
 
+
 /*! Get the encoder delay in number of samples.
  *
  *  \param[in]  encoder     Encoder handle.
@@ -261,16 +265,16 @@ LC3_Error lc3_enc_set_bitrate(LC3_Enc *encoder, int bitrate);
  */
 int lc3_enc_get_delay(const LC3_Enc *encoder);
 
-/*! Set the frame length for LC3 encoder. Allowed values are 10 (default), 5, 2.5 ms.
+/*! Set the frame length for LC3 encoder in deci milliseconds.
  *  Not all lengths may be enabled, in that case LC3_FRAMEMS_ERROR is returned.
  *  This function must be called before lc3_enc_set_bitrate(). The decoder must be
- *  configured with lc3_dec_set_frame_ms() with the same value.
+ *  configured with lc3_dec_set_frame_dms() with the same value.
  *
  *  \param[in]  encoder     Encoder handle.
  *  \param[in]  frame_ms    Frame length in ms.
  *  \return                 LC3_OK on success or appropriate error code.
  */
-LC3_Error lc3_enc_set_frame_ms(LC3_Enc *encoder, float frame_ms);
+LC3_Error lc3_enc_set_frame_dms(LC3_Enc *encoder, int frame_ms);
 
 /*! Set error protection mode. The default is LC3_EP_OFF. It is possible to switch between
  *  different modees during encoding. Dynamic switching is only allowed between LC3_EP_ZERO,
@@ -302,11 +306,12 @@ LC3_Error lc3_enc_set_ep_mode_request(LC3_Enc *encoder, LC3_EpModeRequest epmr);
  *  \param[in]  bandwidth   Cutoff Frequency in Hz
  *  \return                 LC3_OK on success or appropriate error code.
  */
-LC3_Error lc3_enc_set_bandwidth(LC3_Enc* encoder, int bandwidth);
+LC3_Error lc3_enc_set_bandwidth(LC3_Enc *encoder, int bandwidth);
 
 /*! \}
  *  \addtogroup Decoder
  *  \{ */
+
 
 /*!
  *  Initialize LC3 decoder.
@@ -354,15 +359,16 @@ LC3_Error lc3_dec_init(LC3_Dec *decoder, int samplerate, int channels, LC3_PlcMo
  *  \return                     Returns LC3_OK on success or appropriate error code. Note there is
  *                              a special case for LC3_DECODE_ERROR where the output is still valid.
  */
-LC3_Error lc3_dec16(LC3_Dec *decoder, void *input_bytes, int num_bytes, int16_t **output_samples, void *scratch, int bfi_ext);
+LC3_Error lc3_dec16(LC3_Dec *decoder, void *input_bytes, int num_bytes, int16_t **output_samples, void *scratch,
+                    int bfi_ext);
 
 /*! Decode compressed LC3 frame to 24 bit PCM output.
  *
  *  The output samples are 24-bit values, sign-extended to 32-bit.
  *  See lc3_dec16() for parameter documentation.
  */
-LC3_Error lc3_dec24(LC3_Dec *decoder, void *input_bytes, int num_bytes, int32_t **output_samples, void *scratch, int bfi_ext);
-
+LC3_Error lc3_dec24(LC3_Dec *decoder, void *input_bytes, int num_bytes, int32_t **output_samples, void *scratch,
+                    int bfi_ext);
 
 /*! Get the size of the LC3 decoder struct for a samplerate / channel / plc_mode configuration.
  *  If memory is not restricted LC3_DEC_MAX_SIZE can be used for all configurations.
@@ -398,7 +404,7 @@ int lc3_dec_get_output_samples(const LC3_Dec *decoder);
  */
 int lc3_dec_get_delay(const LC3_Dec *decoder);
 
-/*! Set the frame length for LC3 decoder. Allowed values are 10 (default), 7.5, 5, 2.5 ms.
+/*! Set the frame length for LC3 decoder in deci milliseconds.
  *  Not all lengths may be enabled, in that case LC3_FRAMEMS_ERROR is returned.
  *  This only works correcly if the encoder was configured with the same vale.
  *
@@ -406,7 +412,7 @@ int lc3_dec_get_delay(const LC3_Dec *decoder);
  *  \param[in]  frame_ms    Frame length in ms.
  *  \return                 LC3_OK on success or appropriate error code.
  */
-LC3_Error lc3_dec_set_frame_ms(LC3_Dec *decoder, float frame_ms);
+LC3_Error lc3_dec_set_frame_dms(LC3_Dec *decoder, int frame_ms);
 
 /*! Enable or disable error protection. Default value is 0 (disabled). If error protection is
  *  enabled, the decoder expects that the frames were encoded with error protection mode
@@ -417,7 +423,6 @@ LC3_Error lc3_dec_set_frame_ms(LC3_Dec *decoder, float frame_ms);
  *  \return                 LC3_OK on success or appropriate error code.
  */
 LC3_Error lc3_dec_set_ep_enabled(LC3_Dec *decoder, int ep_enabled);
-
 
 /*! Retrieves the error protection mode reqeust from channel decoder.
  *
@@ -450,6 +455,15 @@ LC3_EpModeRequest lc3_dec_get_ep_mode_request(const LC3_Dec *decoder);
  *  \return                 Number of corrected bits or -1. See description for details.
  */
 int lc3_dec_get_error_report(const LC3_Dec *decoder);
+/*! This function returns an set of flags indicating whether the last frame
+ *  would have been channel decodable in epmode m, m ranging from 1 to 4. Note that
+ *  this information is not available in case the last frame was not channel
+ *  decodable in which case the return value is 0. If the last frame would have
+ *  been decodable in epmode m,  m-1th of the return value will be 1.
+ *  Otherwise, if the frame would not have been decodable or if this information
+ *  cannot be retrieved, the m-1th bit of the return value will be 0.
+ */
+int lc3_dec_get_epok_flags(const LC3_Dec *decoder);
 
 /*! \} */
 #endif /* LC3 */

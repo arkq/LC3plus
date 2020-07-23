@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "defines.h"
 
@@ -13,11 +14,13 @@
 #include "functions.h"
 
 
+
 void processPCupdate_fx(Word16 bfi, Word16 yLen, Word16 q_old_res_fx[], Word16 *q_old_res_fx_exp,
-                      Word16 q_res_fx[], Word16 spec_inv_idx, Word16 gg_idx, Word16 gg_idx_off,
-                      Word16 *prev_gg, Word16 *prev_gg_e, Word16 rframe, Word16 *BW_cutoff_idx_nf,
-                      Word16 *prev_BW_cutoff_idx_nf, Word16 fac_ns_idx, Word16 *prev_fac_ns_fx, Word16 fac,
-                      Word16 fac_e)
+                        Word16 q_res_fx[],
+                        Word16 spec_inv_idx, Word16 gg_idx, Word16 gg_idx_off,
+                        Word16 *prev_gg, Word16 *prev_gg_e, Word16 rframe, Word16 *BW_cutoff_idx_nf,
+                        Word16 *prev_BW_cutoff_idx_nf, Word16 fac_ns_idx, Word16 *prev_fac_ns_fx, Word16 fac,
+                        Word16 fac_e)
 {
     Word16  global_gain, global_gain_e, s, s2, s3, tmp16;
     Word32  tmp32;
@@ -65,7 +68,8 @@ void processPCupdate_fx(Word16 bfi, Word16 yLen, Word16 q_old_res_fx[], Word16 *
         *prev_BW_cutoff_idx_nf = *BW_cutoff_idx_nf;
         *prev_fac_ns_fx = shl_pos(sub(8, fac_ns_idx), 11);
     }
-    ELSE IF(sub(bfi, 2) == 0 && sub(*BW_cutoff_idx_nf, *prev_BW_cutoff_idx_nf) != 0)
+    ELSE IF(sub(bfi, 2) == 0 && sub(*BW_cutoff_idx_nf, *prev_BW_cutoff_idx_nf) != 0
+            && sub(spec_inv_idx, yLen) < 0)
     {
         *BW_cutoff_idx_nf = *prev_BW_cutoff_idx_nf;
         *prev_fac_ns_fx = shl_sat(mult(*prev_fac_ns_fx, fac), fac_e);

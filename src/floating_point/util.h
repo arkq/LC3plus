@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #ifndef UTIL_H
 #define UTIL_H
@@ -23,6 +24,8 @@ static LC3_INT strcasecmp(const char* a, const char* b) {
 /* restrict is not available on visual studio */
 #ifdef _MSC_VER
 #define restrict __restrict
+/* inline is not recognized in visual studio 13 required by matlab r2015a in win10 */
+#define inline __inline
 #endif
 
 /* number of elements in array */

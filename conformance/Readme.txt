@@ -3,7 +3,7 @@ LC3 Conformance script V1.0.4
 ================================
 
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -13,6 +13,8 @@ LC3 Conformance script V1.0.4
 
 Changelog
 ==============
+    - V1.1.3 2020-03-24
+        - Fixed formula of energy difference and changed threshold to 70
     - V1.0.4 2019-07-17
         - Better command logging
     - V1.0.3 2019-07-01        

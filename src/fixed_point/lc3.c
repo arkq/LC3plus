@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "defines.h"
 #include "functions.h"
@@ -17,7 +18,6 @@
     if (cond)                                                                                                          \
     return (error)
 
-#pragma message("PROFILE CONFIG: " PROFILE)
 #ifdef SUBSET_NB
 #pragma message("- SUBSET_NB")
 #endif
@@ -42,6 +42,7 @@ STATIC_ASSERT(LC3_ENC_MAX_SIZE >= ENC_MAX_SIZE);
 STATIC_ASSERT(LC3_DEC_MAX_SIZE >= DEC_MAX_SIZE);
 STATIC_ASSERT(LC3_ENC_MAX_SCRATCH_SIZE >= SCRATCH_BUF_LEN_ENC_TOT);
 STATIC_ASSERT(LC3_DEC_MAX_SCRATCH_SIZE >= SCRATCH_BUF_LEN_DEC_TOT);
+STATIC_ASSERT(PLC_FADEOUT_IN_MS >= 20);
 
 
 /* misc functions ************************************************************/
@@ -90,13 +91,14 @@ static int lc3_plc_mode_supported(LC3_PlcMode plc_mode)
     }
 }
 
-static int lc3_frame_size_supported(float frame_ms)
+static int lc3_frame_size_supported(int frame_dms)
 {
-    switch ((int)(frame_ms * 10))
+    switch (frame_dms)
     {
     case 25: /* fallthru */
     case 50: /* fallthru */
-    case 100: return 1;
+    case 100:
+            return 1;
     default: return 0;
     }
 }
@@ -138,8 +140,11 @@ int lc3_enc_get_size(int samplerate, int channels)
 int lc3_enc_get_scratch_size(const LC3_Enc *encoder)
 {
     int size = 0;
-    RETURN_IF(encoder == NULL, 0);
-    size = 14 * MAX(encoder->frame_length, 160) + 64;
+     RETURN_IF(encoder == NULL, 0);
+
+    { 
+        size = 14 * MAX(encoder->frame_length, 160) + 64;
+    }
     assert(size <= LC3_ENC_MAX_SCRATCH_SIZE);
     return size;
 }
@@ -161,16 +166,20 @@ int lc3_enc_get_real_bitrate(const LC3_Enc *encoder)
     int ch = 0, totalBytes = 0;
     RETURN_IF(encoder == NULL, 0);
     RETURN_IF(!encoder->lc3_br_set, LC3_BITRATE_UNSET_ERROR);
+    
     for (ch = 0; ch < encoder->channels; ch++)
     {
         totalBytes += encoder->channel_setup[ch]->targetBytes;
     }
-    int bitrate = (totalBytes * 80000)/ encoder->frame_dms;
+    
+    int bitrate = (totalBytes * 80000.0 + encoder->frame_dms - 1) / encoder->frame_dms;
+    
     if (encoder->fs_in == 44100)
     {
     	int rem = bitrate % 480;
-    	bitrate = ((bitrate - rem) / 480)* 441 + (rem * 441) / 480;
+    	bitrate = ((bitrate - rem) / 480) * 441 + (rem * 441) / 480;
     }
+    
     return bitrate;
 }
 
@@ -203,15 +212,16 @@ LC3_Error lc3_enc_set_ep_mode_request(LC3_Enc *encoder, LC3_EpModeRequest epmr)
     return LC3_OK;
 }
 
-LC3_Error lc3_enc_set_frame_ms(LC3_Enc *encoder, float frame_ms)
+LC3_Error lc3_enc_set_frame_dms(LC3_Enc *encoder, int frame_dms)
 {
     RETURN_IF(encoder == NULL, LC3_NULL_ERROR);
-    RETURN_IF(!lc3_frame_size_supported(frame_ms), LC3_FRAMEMS_ERROR);
+    RETURN_IF(!lc3_frame_size_supported(frame_dms), LC3_FRAMEMS_ERROR);
     RETURN_IF(encoder->lc3_br_set, LC3_BITRATE_SET_ERROR);
-    encoder->frame_dms = (int)(frame_ms * 10);
+    encoder->frame_dms = frame_dms;
     set_enc_frame_params(encoder);
     return LC3_OK;
 }
+
 
 LC3_Error lc3_enc_set_bandwidth(LC3_Enc *encoder, int bandwidth)
 {
@@ -241,6 +251,7 @@ static LC3_Error lc3_enc(LC3_Enc *encoder, void **input_samples, int bitdepth, v
     RETURN_IF(bitdepth != 16 && bitdepth != 24, LC3_ERROR);
     RETURN_IF(!encoder->lc3_br_set, LC3_BITRATE_UNSET_ERROR);
     *num_bytes = Enc_LC3(encoder, input_samples, bitdepth, output_bytes, scratch, *num_bytes == -1);
+    
     assert(*num_bytes == lc3_enc_get_num_bytes(encoder));
     return LC3_OK;
 }
@@ -264,13 +275,13 @@ LC3_Error lc3_dec_init(LC3_Dec *decoder, int samplerate, int channels, LC3_PlcMo
     RETURN_IF(!lc3_channels_supported(channels), LC3_CHANNELS_ERROR);
     RETURN_IF(!lc3_plc_mode_supported(plc_mode), LC3_PLCMODE_ERROR);
     return FillDecSetup(decoder, samplerate, channels, plc_mode);
-}
+} 
 
 int lc3_dec_get_size(int samplerate, int channels, LC3_PlcMode plc_mode)
 {
     RETURN_IF(!lc3_samplerate_supported(samplerate), 0);
     RETURN_IF(!lc3_channels_supported(channels), 0);
-    RETURN_IF(!lc3_plc_mode_supported(plc_mode), LC3_PLCMODE_ERROR);
+    RETURN_IF(!lc3_plc_mode_supported(plc_mode), 0);
     return alloc_decoder(NULL, samplerate, channels, plc_mode);
 }
 
@@ -278,7 +289,9 @@ int lc3_dec_get_scratch_size(const LC3_Dec *decoder)
 {
     int size = 0;
     RETURN_IF(decoder == NULL, 0);
-    size = 12 * DYN_MAX_LEN(decoder->fs) + 752;
+    {
+        size = 12 * DYN_MAX_LEN(decoder->fs) + 752;
+    }
     if (decoder->plcMeth != LC3_PLC_STANDARD)
         size += 2 * MAX_LGW + 8 * DYN_MAX_LPROT(decoder->fs) + 8 * DYN_MAX_LEN(decoder->fs);
     assert(size <= LC3_DEC_MAX_SCRATCH_SIZE);
@@ -296,7 +309,13 @@ LC3_Error lc3_dec_set_ep_enabled(LC3_Dec *decoder, int ep_enabled)
 int lc3_dec_get_error_report(const LC3_Dec *decoder)
 {
     RETURN_IF(decoder == NULL, 0);
-    return decoder->error_report;
+    return decoder->error_report == 2047 ? -1 : decoder->error_report & 0x07FF;
+}
+
+int lc3_dec_get_epok_flags(const LC3_Dec *decoder)
+{
+    RETURN_IF(decoder == NULL, 0);
+    return decoder->error_report >> 11;
 }
 
 LC3_EpModeRequest lc3_dec_get_ep_mode_request(const LC3_Dec *decoder)
@@ -305,16 +324,17 @@ LC3_EpModeRequest lc3_dec_get_ep_mode_request(const LC3_Dec *decoder)
     return (LC3_EpModeRequest)decoder->epmr;
 }
 
-LC3_Error lc3_dec_set_frame_ms(LC3_Dec *decoder, float frame_ms)
+LC3_Error lc3_dec_set_frame_dms(LC3_Dec *decoder, int frame_dms)
 {
     RETURN_IF(decoder == NULL, LC3_NULL_ERROR);
-    RETURN_IF(!lc3_frame_size_supported(frame_ms), LC3_FRAMEMS_ERROR);
-    RETURN_IF(decoder->plcMeth == 2 && frame_ms != 10, LC3_FRAMEMS_ERROR);
+    RETURN_IF(!lc3_frame_size_supported(frame_dms), LC3_FRAMEMS_ERROR);
+    RETURN_IF(decoder->plcMeth == 2 && frame_dms != 100, LC3_FRAMEMS_ERROR);
 
-    decoder->frame_dms = (int)(frame_ms * 10);
+    decoder->frame_dms = frame_dms;
     set_dec_frame_params(decoder);
     return LC3_OK;
 }
+
 
 int lc3_dec_get_output_samples(const LC3_Dec *decoder)
 {

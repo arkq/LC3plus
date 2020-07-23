@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #ifndef DEFINES_H
 #define DEFINES_H
@@ -17,11 +18,6 @@
 
 #ifndef LC3_DOUBLE_PRECISION
 #define LC3_SINGLE_PRECISION
-#endif
-
-/* No advanced PLC in basic bluetooth version */
-#if defined(LC3_BASIC_BT)
-#define DISABLE_ADVANCED_PLC
 #endif
 
 
@@ -51,7 +47,6 @@ typedef double LC3_FLOAT;
 #define kiss_fft_scalar double
 #endif
 
-
 typedef int32_t LC3_INT;
 typedef int16_t LC3_INT16;
 typedef uint16_t LC3_UINT16;
@@ -62,27 +57,36 @@ typedef uint32_t LC3_UINT32;
 
 
 /* Release defines */
-#define ENABLE_PLC_MODE_FLAG
-#define ENABLE_PLC_MODE_3_FLAG
-#define ENABLE_PLC
 #define ENABLE_2_5MS_MODE
 #define ENABLE_5MS_MODE
+#define ENABLE_10_MS_MODE
+#define ENABLE_ADVANCED_PLC_FL
+#define ENABLE_ADVANCED_PLC_FL_DEFAULT
 #define ENABLE_BW_CONTROLLER
+#define ENABLE_HR_MODE_FL
+#define ENABLE_PADDING
+#define ENABLE_RFRAME_FL
+#define ENABLE_PLC
+/* flags */
+#define ENABLE_PLC_MODE_FLAG
 #define ENABLE_BANDWIDTH_FLAG
 #define ENABLE_EP_MODE_FLAG
 #define ENABLE_FRAME_MS_FLAG
-#define ENABLE_PADDING
-#ifndef DISABLE_HR
-#define ENABLE_HR_MODE
-#define ENABLE_HR_MODE_FLAG
-#endif
+#define ENABLE_HR_MODE_FL_FLAG
+
+#ifndef NO_POST_REL_CHANGES
+/* Post-release non-bitexact changes */
+
+#endif /* NO_POST_REL_CHANGES */
 
 /* G192 bitstream writing/reading */
+#define G192_REDUNDANCY_FRAME 0x6B22
 #define G192_GOOD_FRAME 0x6B21
 #define G192_BAD_FRAME 0x6B20
 #define G192_ZERO 0x007F
 #define G192_ONE 0x0081
-#define READ_G192FER /* Allow C executable to also read G192 formatted FER files */ 
+#define READ_G192FER /* Allow C executable to also read G192 formatted FER files */
+
 
 
 #define M_PI 3.14159265358979323846
@@ -107,25 +111,18 @@ typedef uint32_t LC3_UINT32;
 
 /* OPTIONS */
 
-/* PACKET LOSS CONCEALMENT */
-
-#ifdef ENABLE_HR_MODE
+#define MAX_SR 96000
 #define EXT_RES_ITER_MAX 20
 #define MAX_BW_BANDS_NUMBER 6
-#define MAX_LEN 960 /* = 10ms at 48kHz */
+#define MAX_LEN MAX_SR/100 /* = 10ms at 96kHz */
 #define MAX_RESBITS 5000
 #define MAX_RESBITS_LEN ((MAX_RESBITS + 7)/8)
-#else
-#define MAX_LEN 480 /* = 10ms at 48kHz */
-#define MAX_BW_BANDS_NUMBER 5
-#define MAX_RESBITS_LEN ((MAX_LEN + 7)/8)
-#endif
 
 #define MAX_CHANNELS 2
 #define MIN_NBYTES 20       /* 16kbps at 8/16/24/32/48kHz */
-#define MAX_NBYTES 625     /* 320kbps at 44.1kHz */
-#define MAX_NBYTES_RED 6400 /* 320kbps at 48kHz */
-#define BYTESBUFSIZE (MAX_NBYTES * MAX_CHANNELS)
+#define MAX_NBYTES 400      /* 320kbps at 48kHz */
+#define MAX_NBYTES2 625
+#define BYTESBUFSIZE (MAX_NBYTES2 * MAX_CHANNELS)
 #define MAX_BW_BIN 400
 #if MAX_BW_BIN > MAX_LEN
 #define MAX_BW MAX_LEN
@@ -134,7 +131,7 @@ typedef uint32_t LC3_UINT32;
 #endif
 
 /* SCF */
-#define M 16 /* LPC_ORDER */
+#define M 16
 #define MAX_BANDS_NUMBER 64
 #define MAX_BANDS_NUMBER_PLC 80
 #define PVQ_MAX_VEC_SIZE M
@@ -157,8 +154,13 @@ typedef uint32_t LC3_UINT32;
 /* OLPA/LTPF */
 #define LEN_12K8 128
 #define LEN_6K4 64
+#define MIN_PITCH_6K4 17
 #define MAX_PITCH_6K4 114
+#define RANGE_PITCH_6K4 98
+#define MIN_PITCH_12K8 32
 #define MAX_PITCH_12K8 228
+#define RES2_PITCH_12K8 157
+#define RES4_PITCH_12K8 127
 #define LTPF_MEMIN_LEN (MAX_PITCH_12K8 + 4)
 
 /* Advanced PLC */

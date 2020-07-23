@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "functions.h"
 
@@ -29,6 +30,16 @@ void process_resamp12k8_fx(Word16 x[], Word16 x_len, Word16 mem_in[], Word16 mem
 
     buf = (Word16 *)scratchAlign(scratchBuffer, 0); /* Size = 2 * (MAX_LEN + MAX_LEN / 8) bytes */
 
+    /* resamp parameters : {upsample-factor, 120 / upsample-factor, down_sample_int_part, down_sample_frac_part } 
+       upsample is to 384 kHz. upsample-facor = 192000 / samp-freq
+       Fractional downsample parameters are calculated from : downsample samp-freq to 128000
+       At 48000 sampling frequency:
+       upsample-factor = 192000 /  48000 = 4
+       120 / upsample-factor = 120 / 4 = 30
+       downsample-ratio = 48000 / 12800 = 3.75 
+       down_sample_int_part = 3
+       down_sample_frac_part = int(0.75 * upsample-factor ) = 0.75 * 4 = 3
+    */
     resamp_upfac    = resamp_params[fs_idx][0]; move16();
     resamp_delay    = resamp_params[fs_idx][1]; move16();
     resamp_off_int  = resamp_params[fs_idx][2]; move16();

@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "lc3.h"
 #include "defines.h"
@@ -51,7 +52,7 @@ int lc3_samplerate_supported(int samplerate)
         return 1;
     case 48000:
         return 1;
-#ifdef ENABLE_HR_MODE_FLAG
+#ifdef ENABLE_HR_MODE_FL_FLAG
     case 96000:
         return 1;
 #endif
@@ -71,7 +72,7 @@ static int lc3_plc_mode_supported(LC3_PlcMode plc_mode)
 
 static int lc3_frame_size_supported(float frame_ms)
 {
-    switch ((int)(frame_ms * 10))
+    switch ((int)(ceil(frame_ms * 10)))
     {
     case 25: /* fallthru */
     case 50: /* fallthru */
@@ -123,13 +124,8 @@ int lc3_enc_get_input_samples(const LC3_Enc *encoder)
 int lc3_enc_get_num_bytes(const LC3_Enc *encoder)
 {
     RETURN_IF(encoder == NULL, 0);
-    int ch = 0, num_bytes = 0;
-    for (ch = 0; ch < encoder->channels; ch ++)
-    {
-    	num_bytes += encoder->channel_setup[ch]->targetBytes;
-    }
-
-    return num_bytes;
+    
+    return encoder->channel_setup[0]->targetBytes * encoder->channels;
 }
 
 int lc3_enc_get_real_bitrate(const LC3_Enc *encoder)
@@ -155,9 +151,7 @@ LC3_Error lc3_enc_set_bitrate(LC3_Enc *encoder, int bitrate)
     RETURN_IF(encoder == NULL, LC3_NULL_ERROR);
     RETURN_IF(bitrate <= 0, LC3_BITRATE_ERROR);
 #ifndef STRIP_HR_MODE_API
-#ifdef ENABLE_HR_MODE
     RETURN_IF(encoder->fs_idx == 5 && encoder->hrmode == 0, LC3_HRMODE_ERROR);
-#endif
 #endif
     return update_enc_bitrate(encoder, bitrate);
 }
@@ -180,7 +174,6 @@ LC3_Error lc3_enc_set_frame_ms(LC3_Enc *encoder, float frame_ms)
 }
 
 #ifndef STRIP_HR_MODE_API
-#ifdef ENABLE_HR_MODE
 LC3_Error lc3_enc_set_hrmode(LC3_Enc* encoder, int hrmode)
 {
     RETURN_IF(encoder == NULL, LC3_NULL_ERROR);
@@ -190,15 +183,12 @@ LC3_Error lc3_enc_set_hrmode(LC3_Enc* encoder, int hrmode)
     return LC3_OK;
 }
 #endif
-#endif
 
 LC3_Error lc3_enc_set_bandwidth(LC3_Enc *encoder, int bandwidth)
 {
     RETURN_IF(encoder == NULL, LC3_NULL_ERROR);
-#ifdef ENABLE_HR_MODE_FLAG
-#ifdef ENABLE_HR_MODE
+#ifdef ENABLE_HR_MODE_FL_FLAG
     RETURN_IF(encoder->hrmode == 1, LC3_HRMODE_BW_ERROR);
-#endif
 #endif
     LC3_INT effective_fs = encoder->fs_in;
     if (encoder->bandwidth != bandwidth) {
@@ -284,26 +274,26 @@ int lc3_dec_get_delay(const LC3_Dec* decoder)
     return decoder->frame_length - 2 * decoder->la_zeroes;
 }
 
-LC3_Error lc3_dec_fl(LC3_Dec* decoder, void* input_bytes, int num_bytes, void** output_samples, int bps)
+LC3_Error lc3_dec_fl(LC3_Dec* decoder, void* input_bytes, int num_bytes, void** output_samples, int bps, int bfi_ext)
 {
     RETURN_IF(!decoder || !input_bytes || !output_samples, LC3_NULL_ERROR);
     RETURN_IF(null_in_list((void**)output_samples, decoder->channels), LC3_NULL_ERROR);
-    return Dec_LC3_fl(decoder, input_bytes, num_bytes, output_samples, bps);
+    return Dec_LC3_fl(decoder, input_bytes, num_bytes, output_samples, bps, bfi_ext);
 }
 
-LC3_Error lc3_dec16(LC3_Dec* decoder, void* input_bytes, int num_bytes, int16_t** output_samples)
+LC3_Error lc3_dec16(LC3_Dec* decoder, void* input_bytes, int num_bytes, int16_t** output_samples, int bfi_ext)
 {
-    return lc3_dec_fl(decoder, input_bytes, num_bytes, (void**)output_samples, 16);
+    return lc3_dec_fl(decoder, input_bytes, num_bytes, (void**)output_samples, 16, bfi_ext);
 }
 
-LC3_Error lc3_dec24(LC3_Dec* decoder, void* input_bytes, int num_bytes, int32_t** output_samples)
+LC3_Error lc3_dec24(LC3_Dec* decoder, void* input_bytes, int num_bytes, int32_t** output_samples, int bfi_ext)
 {
-    return lc3_dec_fl(decoder, input_bytes, num_bytes, (void**)output_samples, 24);
+    return lc3_dec_fl(decoder, input_bytes, num_bytes, (void**)output_samples, 24, bfi_ext);
 }
 
-LC3_Error lc3_dec32(LC3_Dec* decoder, void* input_bytes, int num_bytes, int32_t** output_samples)
+LC3_Error lc3_dec32(LC3_Dec* decoder, void* input_bytes, int num_bytes, int32_t** output_samples, int bfi_ext)
 {
-    return lc3_dec_fl(decoder, input_bytes, num_bytes, (void**)output_samples, 32);
+    return lc3_dec_fl(decoder, input_bytes, num_bytes, (void**)output_samples, 32, bfi_ext);
 }
 
 /* memory functions *********************************************************/
@@ -354,13 +344,20 @@ LC3_Error lc3_free_decoder_structs(LC3_Dec* decoder)
 }
 
 #ifndef STRIP_HR_MODE_API_MODE_API
-#ifdef ENABLE_HR_MODE
 LC3_Error lc3_dec_set_hrmode(LC3_Dec* decoder, int hrmode)
 {
     RETURN_IF(decoder == NULL, LC3_NULL_ERROR);
+    RETURN_IF(decoder->fs_idx < 4 && hrmode != 0, LC3_SAMPLERATE_ERROR);
+    RETURN_IF((decoder->fs_idx == 5) && (hrmode == 0), LC3_HRMODE_ERROR);
     decoder->hrmode = hrmode > 0;
     set_dec_frame_params(decoder);
     return LC3_OK;
 }
 #endif
-#endif
+
+#ifndef STRIP_ERROR_PROTECTION_API_FL
+#endif /* STRIP_ERROR_PROTECTION_API_FL */
+
+#ifndef STRIP_ERROR_PROTECTION_API_FL
+#endif /* STRIP_ERROR_PROTECTION_API_FL */
+

@@ -1,11 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.1.1                               *
+*                        ETSI TS 103 634 V1.2.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
+                                                                               
 
 #include "functions.h"
 
@@ -13,11 +14,12 @@
 
 
 void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[], Word16 *pitch, Word16 *s12k8,
-                     Word16 len, Word16 *normcorr, Word16 *mem_pitch, Word16 s12k8_exp, Word8 *scratchBuffer)
+                     Word16 len, Word16 *normcorr, Word16 *mem_pitch, Word16 s12k8_exp, Word16 frame_dms,
+                     Word8 *scratchBuffer)
 {
     Word32  sum, sum0, sum1, sum2, prod, inv;
     Word16  shift, s6k4_exp, prod_exp, min_pitch, max_pitch;
-    Word16  scale0, scale1, scale2, pitch2, normcorr2, len2;
+    Word16  scale0, scale1, scale2, pitch2, normcorr2, len2, acflen, mem_in_len;
     Word32  max32;
     Word32 *ac;
     Word16 *s6k4;
@@ -26,11 +28,12 @@ void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[]
     Counter m;
     Word32  L_tmp, L_tmp2;
 
+
 #ifdef DYNMEM_COUNT
     Dyn_Mem_In("process_olpa_fx", sizeof(struct {
                    Word32  sum, sum0, sum1, sum2, prod, inv;
                    Word16  shift, s6k4_exp, prod_exp, min_pitch, max_pitch;
-                   Word16  scale0, scale1, scale2, pitch2, normcorr2, len2;
+                   Word16  scale0, scale1, scale2, pitch2, normcorr2, len2, acflen, mem_in_len;
                    Word32  max32;
                    Word32 *ac;
                    Word16 *s6k4;
@@ -45,7 +48,15 @@ void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[]
     ac = (Word32 *)scratchAlign(scratchBuffer, 0); /* Size = 4 * RANGE_PITCH_6K4 = 392 bytes */
 
     /* Downsample input signal by a factor of 2 (12.8kHz -> 6.4kHz) */
-    s6k4    = mem_s6k4 + MAX_PITCH_6K4;
+    mem_in_len = MAX_PITCH_6K4;  move16();
+    len2       = shr(len, 1);
+    acflen     = len2;           move16();
+    IF (sub(frame_dms, 25) == 0)
+    {
+        mem_in_len = add(mem_in_len, 16);
+        acflen     = add(acflen, 16);
+    }
+    s6k4    = mem_s6k4 + mem_in_len;
     sum     = L_mac(L_mac(L_mult(mem_s12k8[0], 4053), mem_s12k8[1], 7712), mem_s12k8[2], 9239);
     *s6k4++ = round_fx(L_mac(L_mac(sum, s12k8[0], 7712), s12k8[1], 4053)); move16();
     sum     = L_mac(L_mac(L_mult(mem_s12k8[2], 4053), s12k8[0], 7712), s12k8[1], 9239);
@@ -60,11 +71,10 @@ void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[]
     mem_s12k8[0] = s12k8[len - 3]; move16();
     mem_s12k8[1] = s12k8[len - 2]; move16();
     mem_s12k8[2] = s12k8[len - 1]; move16();
-    len2         = shr(len, 1);
 
     /* Scale downsampled signal */
-    s6k4          = mem_s6k4 + MAX_PITCH_6K4;
-    scale0        = sub(getScaleFactor16_0(mem_s6k4, MAX_PITCH_6K4), 3);
+    s6k4          = mem_s6k4 + mem_in_len;
+    scale0        = sub(getScaleFactor16_0(mem_s6k4, mem_in_len), 3);
     *mem_s6k4_exp = sub(*mem_s6k4_exp, scale0); move16();
     scale1        = sub(getScaleFactor16_0(s6k4, len2), 3);
     s6k4_exp      = sub(s12k8_exp, scale1);
@@ -81,13 +91,17 @@ void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[]
         shift         = add(scale0, scale2);
         *mem_s6k4_exp = s6k4_exp; move16();
     }
-    Scale_sig(mem_s6k4, MAX_PITCH_6K4, shift);
+    if (sub(frame_dms, 25) == 0)
+    {
+        s6k4 = s6k4 - 16;
+    }
+    Scale_sig(mem_s6k4, mem_in_len, shift);
 
     /* Compute autocorrelation */
     FOR (n = MIN_PITCH_6K4; n <= MAX_PITCH_6K4; n++)
     {
         sum = L_mult0(s6k4[0], s6k4[0 - n]);
-        FOR (m = 1; m < len2; m++)
+        FOR (m = 1; m < acflen; m++)
         {
             sum = L_mac0(sum, s6k4[m], s6k4[m - n]);
         }
@@ -108,11 +122,11 @@ void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[]
         max32 = L_max(L_tmp, max32);
     }
 
-/* Compute normalized correlation */
+    /* Compute normalized correlation */
     sum0 = L_mult0(s6k4[0], s6k4[0 - *pitch]);
     sum1 = L_mac0(1, s6k4[0 - *pitch], s6k4[0 - *pitch]);
     sum2 = L_mac0(1, s6k4[0], s6k4[0]);
-    for (m = 1; m < len2; m++)
+    for (m = 1; m < acflen; m++)
     {
         sum0 = L_mac0(sum0, s6k4[m], s6k4[m - *pitch]);
         sum1 = L_mac0(sum1, s6k4[m - *pitch], s6k4[m - *pitch]);
@@ -160,7 +174,7 @@ void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[]
         sum0 = L_mult0(s6k4[0], s6k4[0 - pitch2]);
         sum1 = L_mac0(1, s6k4[0 - pitch2], s6k4[0 - pitch2]);
         sum2 = L_mac0(1, s6k4[0], s6k4[0]);
-        for (m = 1; m < len2; m++)
+        for (m = 1; m < acflen; m++)
         {
             sum0 = L_mac0(sum0, s6k4[m], s6k4[m - pitch2]);
             sum1 = L_mac0(sum1, s6k4[m - pitch2], s6k4[m - pitch2]);
@@ -197,8 +211,7 @@ void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[]
     *mem_pitch = *pitch; move16();
 
     /* Update memory */
-
-    basop_memmove(mem_s6k4, &mem_s6k4[len2], MAX_PITCH_6K4 * sizeof(Word16));
+    basop_memmove(mem_s6k4, &mem_s6k4[len2], mem_in_len * sizeof(Word16));
 
     /* Upsample pitch by a factor of 2 (6.4kHz -> 12.8kHz) */
     *pitch = shl_pos(*pitch, 1); move16();
