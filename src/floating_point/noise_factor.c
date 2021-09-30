@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -60,45 +60,48 @@ void processNoiseFactor_fl(LC3_INT* fac_ns_idx, LC3_FLOAT x[], LC3_INT xq[], LC3
 
     if (sumZeroLines > 0) {
         for (j = 0; j < kZeroLines; j++) {
-            mean += LC3_FABS(x[zeroLines[j] - 1] / gg);
+            mean += LC3_FABS(x[zeroLines[j] - 1]);
         }
 
-        fac_ns_unq = mean / kZeroLines;
+        fac_ns_unq = mean / (gg * kZeroLines);
     } else {
         fac_ns_unq = 0;
     }
 
-    if (target_bytes <= 20 && frame_dms == 100) {
-        j = 0, k = 0;
-        m = floor(sumZeroLines / kZeroLines);
+    if (kZeroLines > 0)
+    {
+        if (target_bytes <= 20 && frame_dms == 100) {
+            j = 0, k = 0;
+            m = floor(sumZeroLines / kZeroLines);
 
-        for (i = 0; i < kZeroLines; i++) {
-            if (zeroLines[i] <= m) {
-                zL1[j] = zeroLines[i];
-                j++;
+            for (i = 0; i < kZeroLines; i++) {
+                if (zeroLines[i] <= m) {
+                    zL1[j] = zeroLines[i];
+                    j++;
+                }
+
+                if (zeroLines[i] > m) {
+                    zL2[k] = zeroLines[i];
+                    k++;
+                }
             }
 
-            if (zeroLines[i] > m) {
-                zL2[k] = zeroLines[i];
-                k++;
+            mean = 0;
+            for (i = 0; i < j; i++) {
+                mean += LC3_FABS(x[zL1[i] - 1]) / gg;
             }
+
+            nsf1 = mean / j;
+
+            mean = 0;
+            for (i = 0; i < k; i++) {
+                mean += LC3_FABS(x[zL2[i] - 1]) / gg;
+            }
+
+            nsf2 = mean / k;
+
+            fac_ns_unq = MIN(nsf1, nsf2);
         }
-
-        mean = 0;
-        for (i = 0; i < j; i++) {
-            mean += LC3_FABS(x[zL1[i] - 1]) / gg;
-        }
-
-        nsf1 = mean / j;
-
-        mean = 0;
-        for (i = 0; i < k; i++) {
-            mean += LC3_FABS(x[zL2[i] - 1]) / gg;
-        }
-
-        nsf2 = mean / k;
-
-        fac_ns_unq = MIN(nsf1, nsf2);
     }
 
     idx = round(8 - 16 * fac_ns_unq);

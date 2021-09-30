@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -54,6 +54,12 @@ LC3_INT paddingDec_fl(LC3_UINT8* bytes, LC3_INT nbbits, LC3_INT L_spec, LC3_INT 
     LC3_INT lastnz;
     LC3_INT bw_cutoff_idx;
     LC3_INT nbits = ceil(LC3_LOG2(L_spec / 2));
+    
+    if (nbits > nbbits)
+    {
+        return 1;
+    }
+    
     *np_zero = 0;
 
     *total_padding = 0;
@@ -61,7 +67,7 @@ LC3_INT paddingDec_fl(LC3_UINT8* bytes, LC3_INT nbbits, LC3_INT L_spec, LC3_INT 
     bp_side   = (nbbits - 1) >> 3;
     mask_side = 1 << (8 - (nbbits - (bp_side << 3)));
 
-    if (bp_side < 19 || bp_side >= LC3_MAX_BYTES) {
+    if (bp_side < 19 || bp_side >= LC3PLUS_MAX_BYTES) {
         return 1;
     }
     
@@ -156,7 +162,7 @@ void processDecoderEntropy_fl(LC3_UINT8* bytes, LC3_INT numbytes, LC3_INT* mask_
             }
         }
     } else {
-    	*bw_cutoff_idx = fs_idx;
+        *bw_cutoff_idx = fs_idx;
     }
 
     /* Number of TNS filters */

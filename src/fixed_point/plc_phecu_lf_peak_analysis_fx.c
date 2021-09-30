@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -109,7 +109,9 @@ void plc_phEcu_LF_peak_analysis_fx(Word16 *      plocs,      /* i/o  0 ... Lprot
             prel_low  = plocs_prel[0];                move16();
             prel_high = plocs_prel[sub(num_prel, 1)]; move16();
 
-            start = -1; move16();
+            /*   initial assumption:: all original peaks (1 or 2 of them)  are positioned   below  prel_low  */   
+            start =  (*n_plocs);  /* at this point  'start' is the  location_c where to add any harmonics peaks */      
+
             FOR (i = sub(*n_plocs, 1); i >= 0; i--)
             {
                 if (sub(plocs[i], prel_low) >= 0)
@@ -173,7 +175,9 @@ void plc_phEcu_LF_peak_analysis_fx(Word16 *      plocs,      /* i/o  0 ... Lprot
         }
         */
 
-            j = add(start, 1);
+        j = add(start, 1);
+
+        ASSERT(j>=0);
 
         FOR (i = 0; i < num_prel; i++) /* NB this section may  both insert or overwrite old plocs   */
         {

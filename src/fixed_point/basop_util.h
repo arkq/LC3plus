@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -52,6 +52,18 @@ typedef struct
         Word16 im;
     } v;
 } PWord16;
+
+#ifdef ENABLE_HR_MODE
+/* Word32 Packed Type */
+typedef struct
+{
+    struct
+    {
+        Word32 re;
+        Word32 im;
+    } v;
+} PWord32;
+#endif
 
 #define cast16 move16
 
@@ -173,7 +185,7 @@ Word16 BASOP_Util_Divide1616_Scale(Word16  x,  /*!< i  : Numerator*/
 
 /************************************************************************/
 /*!
-  \brief 	Binary logarithm with 7 iterations
+  \brief     Binary logarithm with 7 iterations
 
   \param   x
 
@@ -184,7 +196,7 @@ Word32 BASOP_Util_Log2(Word32 x);
 
 /************************************************************************/
 /*!
-  \brief 	Binary power
+  \brief     Binary power
 
   Date: 06-JULY-2012 Arthur Tritthart, IIS Fraunhofer Erlangen
 
@@ -222,6 +234,12 @@ Word32 BASOP_Util_Log2(Word32 x);
  */
 /************************************************************************/
 Word32 BASOP_Util_InvLog2(Word32 x);
+
+#ifdef ENABLE_HR_MODE
+/* New function which works with positive x, BASOP_Util_InvLog2 does not give 
+   accurate results for x > 0 */
+Word32 BASOP_Util_InvLog2_pos(Word32 x, Word16 *exp);
+#endif
 
 /**
  * \brief Compute dot product of 1 32 bit vectors with itself
@@ -274,6 +292,13 @@ void Copy_Scale_sig(const Word16 x[], /* i  : signal to scale input           Qx
                     const Word16 exp0 /* i  : exponent: x = round(x << exp)   Qx ?exp  */
 );
 
+#ifdef ENABLE_HR_MODE
+void Copy_Scale_sig_32(const Word32 x[], /* i  : signal to scale input           Qx        */
+                       Word16       y[], /* o  : scaled signal output            Qx        */
+                       const Word16 lg,  /* i  : size of x[]                     Q0        */
+                       const Word16 exp0 /* i  : exponent: x = round(x << exp)   Qx ?exp  */
+);
+#endif
 
 Word32 Isqrt(Word32  x,  /* (i)   Q31: normalized value (1.0 > x >= 0.5) */
              Word16 *x_e /* (i/o) Q0 : pointer to exponent */
@@ -283,8 +308,8 @@ Word16 BASOP_Util_Log2_16(Word32 x, Word16 x_e);
 
 Word16 BASOP_Util_InvLog2_16(Word16 x, Word16 *y_e);
 
-#ifdef USE_KISS_FFT
-void fft16(Word32 *re, Word32 *im, Word16 s);
+#ifdef ENABLE_HR_MODE
+Word32 invFixp(Word32 op_m, Word16 *op_e);
 #endif
 
 #define BASOP_CFFT_MAX_LENGTH 480

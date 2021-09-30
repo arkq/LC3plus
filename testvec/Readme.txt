@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -8,7 +8,7 @@
 ******************************************************************************/
 
 =====================================
-LC3plus ETSI Testvector script V0.0.1
+LC3plus ETSI Testvector script V0.0.2
 =====================================
 
 
@@ -18,8 +18,7 @@ WHAT IS THIS SCRIPT?
 
 This script is the LC3plus ETSI testvector script. It checks whether the output of
 your LC3plus build produces the expected results and matches the precalculated
-MD5 hashes for a number of operating points. It is meant to be used for the
-fixed-point version of LC3plus only.
+MD5 hashes for a number of operating points.
 
 The following configurations are tested:
 
@@ -37,17 +36,18 @@ The script compares the MD5 hashes of bitstreams and output WAVEs.
 
 IMPORTANT NOTICE: This is not the conformance tool and tests only a limited number
 of operating points of the LC3plus codec as a pre-test. The full conformance tool
-can be found in 'PACKAGE/conformance/lc3_conformance.py'.
+can be found in 'PACKAGE/conformance/lc3plus_conformance.py'.
 
 =======================
 TO DO BEFORE FIRST USE
 =======================
 
-1) Build the LC3plus executable in the 'src/fixed_point' folder. The script expects an
-executable called 'LC3plus' in the '../src/fixed_point' folder. Alternatively adjust
-the following line in the script:
+1) Build the LC3plus executable in the 'src/fixed_point' or 'src/floating_point' folder.
+The script expects an executable called 'LC3plus' in the '../src/fixed_point' or 
+'../src/floating_point' folder. Alternatively adjust the following lines in the script:
 
-<<<my $EXE_TST = './../src/fixed_point/LC3plus';>>>
+<<<my $EXE_TST_FX = './../src/fixed_point/LC3plus';>>>
+<<<my $EXE_TST_FX = './../src/floating_point/LC3plus';>>>
 
 to match the path to your LC3plus test executable.
 
@@ -55,10 +55,12 @@ to match the path to your LC3plus test executable.
 USAGE
 ======
 
-perl testvecCheck.pl [-create] [-clean] [-log] [-verbose]
+perl testvecCheck.pl [-float] [-fixed] [-create] [-clean] [-log] [-verbose]
 
 Command line options:
 
+-float   : Use the floating point testvectors together with the floating point binary
+-fixed   : Use the fixed point testvectors together with the fixed point binary
 -create  : Only create bitstreams and decoded files with test executable
 -clean   : Cleanup after usage -> delete all temporary files after script has finished
 -log     : Log all commands into logfile
@@ -66,6 +68,12 @@ Command line options:
 -h       : Print help screen
 
 Default usage: Create vectors and test MD5 hash against reference values.
+
+To check the fixed point binary use:
+- perl testvecCheck.pl -fixed
+
+To check the floating point binary use:
+- perl testvecCheck.pl -float
 
 
 =======

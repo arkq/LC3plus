@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -10,9 +10,19 @@
 
 #include "functions.h"
 
-
-void scale_signal24_fx(const Word32 x[], /* i:   time input signal */
-                       Word16 x_scaled[], Word16 *x_exp, Word16 mdct_mem[], Word16 mdct_mem_len,
+void scale_signal24_fx(Word32 x[], /* i:   time input signal */
+#ifdef ENABLE_HR_MODE
+                       Word32 x_scaled[],
+#else
+                       Word16 x_scaled[],
+#endif
+                       Word16 *x_exp,
+#ifdef ENABLE_HR_MODE
+                       Word32 mdct_mem[],
+#else
+                       Word16 mdct_mem[],
+#endif
+                       Word16 mdct_mem_len,
                        Word16 resample_mem_in[], Word16 resample_mem_in_len, Word32 resample_mem_in50[],
                        Word16 resample_mem_out[], Word16 resample_mem_out_len, Word32 mdct_mem32[], Word16 N,
                        Word32 resamp_mem32[], Word16 mem_s12k8[], Word16 *resamp_scale)
@@ -30,6 +40,18 @@ void scale_signal24_fx(const Word32 x[], /* i:   time input signal */
 #endif
 
     /* Scale input for 24 bit case */
+    /* assure 24 bit input */
+    FOR (i = 0; i < N; i++)
+    {
+        IF (x[i] >= 0)
+        {
+            x[i] = L_and(x[i], 0x007fffff);
+        }
+        ELSE
+        {
+            x[i] = (Word32)L_or( (UWord32)x[i], 0xff800000);
+        }
+    }
 
     /* Find maximum exponent */
     scales[0] = sub(15 + 8, getScaleFactor32_0(x, N));
@@ -48,12 +70,20 @@ void scale_signal24_fx(const Word32 x[], /* i:   time input signal */
     s = sub(15 + 8, *x_exp);
     FOR (i = 0; i < N; i++)
     {
+#ifdef ENABLE_HR_MODE
+        x_scaled[i] = L_shl(x[i], s);
+#else
         x_scaled[i] = round_fx_sat(L_shl(x[i], s));
+#endif
     }
 
     FOR (i = 0; i < mdct_mem_len; i++)
     {
+#ifdef ENABLE_HR_MODE
+        mdct_mem[i] = L_shl(mdct_mem32[i], s);
+#else
         mdct_mem[i] = round_fx_sat(L_shl(mdct_mem32[i], s));
+#endif
     }
 
     FOR (i = 0; i < resample_mem_in_len; i++)

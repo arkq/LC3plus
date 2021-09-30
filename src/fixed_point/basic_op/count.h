@@ -172,7 +172,7 @@ void setFrameRate(int samplingFreq, int frameLength);
  */
 
 
-#define WMOPS_DATA_FILENAME	"wmops_data.txt"
+#define WMOPS_DATA_FILENAME    "wmops_data.txt"
 /*
  * WMOPS_DATA_FILENAME is the macro defining the name of the file
  * where the Weighted Million of Operations per Second (wMOPS)
@@ -180,7 +180,7 @@ void setFrameRate(int samplingFreq, int frameLength);
 */
 
 
-#define CODE_PROFILE_FILENAME	"code_profile.txt"
+#define CODE_PROFILE_FILENAME    "code_profile.txt"
 /*
  * CODE_PROFILE_FILENAME is the macro defining the name of the file
  * where the Weighted Million of Operations per Second (WMOPS)
@@ -188,7 +188,7 @@ void setFrameRate(int samplingFreq, int frameLength);
 */
 
 
-#define WMOPS_TOTAL_FILENAME	"wmops_total.txt"
+#define WMOPS_TOTAL_FILENAME    "wmops_total.txt"
 /*
  * WMOPS_TOTAL_FILENAME is the macro defining the name of the file
  * where the Weighted Million of Operations per Second (WMOPS)
@@ -196,7 +196,7 @@ void setFrameRate(int samplingFreq, int frameLength);
 */
 
 
-#define FRAME_RATE	(0.0001F) /*in this version frame_rate can be overwriten online by the new setFrameRate function */
+#define FRAME_RATE    (0.0001F) /*in this version frame_rate can be overwriten online by the new setFrameRate function */
 /* FRAME_RATE of 0.000025 is corresponding to 40ms frame.*/
 /* FRAME_RATE of 0.00005 is corresponding to 20ms frame.*/
 /* FRAME_RATE of 0.0001 is corresponding to 10ms frame.*/

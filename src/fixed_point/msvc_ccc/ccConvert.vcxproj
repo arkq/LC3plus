@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -112,7 +112,7 @@
       <Optimization>Disabled</Optimization>
       <AdditionalIncludeDirectories>..\basic_op;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>X_DEBUG;WIN32;   X_NO_POST_REL_CHANGES;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <MinimalRebuild>true</MinimalRebuild>
+      <MinimalRebuild>false</MinimalRebuild>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <PrecompiledHeader />
@@ -227,6 +227,7 @@
     <ClCompile Include="..\ltpf_decoder_fx.c" />
     <ClCompile Include="..\mdct_fx.c" />
     <ClCompile Include="..\mdct_shaping_fx.c" />
+    <ClCompile Include="..\near_nyquist_detector_fx.c" />
     <ClCompile Include="..\noise_factor_fx.c" />
     <ClCompile Include="..\noise_filling_fx.c" />
     <ClCompile Include="..\olpa_fx.c" />

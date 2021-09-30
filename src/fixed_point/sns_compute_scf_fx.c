@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -156,7 +156,7 @@ void processSnsComputeScf_fx(Word32 *d2_fx, Word16 d2_fx_exp, Word16 fs_idx, Wor
         
         FOR (i = 0; i < M; i++)
         {
-        	scf[i] = mult_r(attdec_damping_factor, sub(scf_smooth[i], L_mean));
+            scf[i] = mult_r(attdec_damping_factor, sub(scf_smooth[i], L_mean));
         }
     }
 

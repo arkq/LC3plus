@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -80,7 +80,11 @@ typedef struct
 {
     Word16 *ltpf_mem_x;       /* LTPF_MEM_X_LEN */
     Word16 *ltpf_mem_y;       /* LTPF_MEM_Y_LEN */
+#ifdef ENABLE_HR_MODE
+    Word32 *stDec_ola_mem_fx; /* MDCT_MEM_LEN_MAX */
+#else
     Word16 *stDec_ola_mem_fx; /* MDCT_MEM_LEN_MAX */
+#endif
     AplcSetup *plcAd;
     Word16 *   q_old_d_fx; /* MAX_BW */
     Word16     q_old_fx_exp;
@@ -115,10 +119,14 @@ typedef struct
 } DecSetup;
 
 /* Constants and sampling rate derived values go in this struct */
-struct LC3_Dec
+struct LC3PLUS_Dec
 {
     DecSetup *    channel_setup[MAX_CHANNELS];
+#ifdef ENABLE_HR_MODE
+    const Word32 *W_fx;
+#else
     const Word16 *W_fx;
+#endif
     const Word16 *bands_offset;
     Word32        fs;           /* sampling rate, 44.1 maps to 48 */
     Word32        fs_out;       /* output sampling rate */
@@ -147,6 +155,7 @@ struct LC3_Dec
     Word16 ltpf_mem_x_len;
     Word16 ltpf_mem_y_len;
     Word16 BW_cutoff_bits;
+    Word16 hrmode;
 };
 
 #endif

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -51,9 +51,9 @@ static int   read_bitstream_frame(FILE *bitstream_file, uint8_t *bytes, int size
 static FILE *fopen_with_ext(const char *file, const char *ext, const char *mode);
 static void  cleanup(void);
 static void  exit_if(int condition, const char *message);
-LC3_Error    channel_coder_pack(LC3_Dec *decoder, UWord8 *input_bytes, int num_bytes_in, void *scratch, int bfi_ext,
+LC3PLUS_Error    channel_coder_pack(LC3PLUS_Dec *decoder, UWord8 *input_bytes, int num_bytes_in, void *scratch, int bfi_ext,
                                 int *lc3_num_bytes, int gross_bytes, int epmode);
-LC3_Error    channel_coder_unpack(LC3_Dec *decoder, UWord8 *input_bytes, int num_bytes_in, void *scratch, int bfi_ext,
+LC3PLUS_Error    channel_coder_unpack(LC3PLUS_Dec *decoder, UWord8 *input_bytes, int num_bytes_in, void *scratch, int bfi_ext,
                                   int *lc3_num_bytes);
 void processReorderBitstream_dec_fx(UWord8 *bytes, Word16 n_pccw, Word16 n_pc, Word16 b_left, Word8 *scratchBuffer);
 
@@ -84,24 +84,24 @@ static const char *const USAGE_MESSAGE =
     "    4: Maximum error protection\n";
 
 static const char *ERROR_MESSAGE[18] = {
-    "",                                                /* LC3_OK                  */
-    "Function call failed!",                           /* LC3_ERROR               */
-    "Frame failed to decode and was concealed!",       /* LC3_DECODE_ERROR        */
-    "Pointer argument is null!",                       /* LC3_NULL_ERROR          */
-    "Invalid sampling rate!",                          /* LC3_SAMPLERATE_ERROR    */
-    "Invalid number of channels!",                     /* LC3_CHANNELS_ERROR      */
-    "Invalid bitrate!",                                /* LC3_BITRATE_ERROR       */
-    "Invalid number of bytes!",                        /* LC3_NUMBYTES_ERROR      */
-    "Invalid PLC method!",                             /* LC3_PLCMODE_ERROR       */
+    "",                                                /* LC3PLUS_OK                  */
+    "Function call failed!",                           /* LC3PLUS_ERROR               */
+    "Frame failed to decode and was concealed!",       /* LC3PLUS_DECODE_ERROR        */
+    "Pointer argument is null!",                       /* LC3PLUS_NULL_ERROR          */
+    "Invalid sampling rate!",                          /* LC3PLUS_SAMPLERATE_ERROR    */
+    "Invalid number of channels!",                     /* LC3PLUS_CHANNELS_ERROR      */
+    "Invalid bitrate!",                                /* LC3PLUS_BITRATE_ERROR       */
+    "Invalid number of bytes!",                        /* LC3PLUS_NUMBYTES_ERROR      */
+    "Invalid PLC method!",                             /* LC3PLUS_PLCMODE_ERROR       */
     "Invalid EP mode!",                                /* LC3_EPCLASS_ERROR       */
-    "Invalid frame ms value!",                         /* LC3_FRAMEMS_ERROR       */
-    "Unaligned pointer!",                              /* LC3_ALIGN_ERROR         */
+    "Invalid frame ms value!",                         /* LC3PLUS_FRAMEMS_ERROR       */
+    "Unaligned pointer!",                              /* LC3PLUS_ALIGN_ERROR         */
     "Invalid channel mode request!",                   /* LC3_CMR_ERROR           */
-    "Bitrate has not been set!",                       /* LC3_BITRATE_UNSET_ERROR */
-    "Function can't be called after bitrate was set!", /* LC3_BITRATE_SET_ERROR   */
-    "Invalid external bad frame index!",               /* LC3_BFI_EXT_ERROR       */
-    "Generic Warning",                                 /* LC3_WARNING             */
-    "Invalid bandwidth frequency!"                     /* LC3_BW_WARNING          */
+    "Bitrate has not been set!",                       /* LC3PLUS_BITRATE_UNSET_ERROR */
+    "Function can't be called after bitrate was set!", /* LC3PLUS_BITRATE_SET_ERROR   */
+    "Invalid external bad frame index!",               /* LC3PLUS_BFI_EXT_ERROR       */
+    "Generic Warning",                                 /* LC3PLUS_WARNING             */
+    "Invalid bandwidth frequency!"                     /* LC3PLUS_BW_WARNING          */
 };
 
 int main(int ac, char **av)
@@ -112,10 +112,10 @@ int main(int ac, char **av)
     int       num_bytes_in = 0, nSamples = 0;
     int       encoder_size = 0, decoder_size = 0, scratch_size = 0;
     int       bfi_ext = 0;
-    LC3_Dec * decoder = NULL;
+    LC3PLUS_Dec * decoder = NULL;
     void *    scratch = NULL;
-    LC3_Error err     = LC3_OK;
-    uint8_t   bytes[LC3_MAX_BYTES];
+    LC3PLUS_Error err     = LC3PLUS_OK;
+    uint8_t   bytes[LC3PLUS_MAX_BYTES];
     int       lc3_num_bytes = 0;
     Word16    syncWord      = G192_GOOD_FRAME;
     int       bitrate_in, epmode_in = 0, epmode_out = 0;
@@ -140,21 +140,27 @@ int main(int ac, char **av)
         open_bitstream_reader(arg.inputFilename, &sampleRate, &bitrate_in, &nChannels, &nSamplesFile, &arg.frame_ms,
                               &epmode_in, &arg.hrmode, arg.formatG192, arg.configFilenameG192);
     exit_if(!input_bitstream, "Error opening bitstream file!");
+#ifndef ENABLE_HR_MODE
     exit_if(arg.hrmode, "HR bitstreams not supported!");
+#endif
 
     /* Setup Decoder */
-    decoder_size = lc3_dec_get_size(sampleRate, nChannels, (LC3_PlcMode)arg.plcMeth);
+    decoder_size = lc3plus_dec_get_size(sampleRate, nChannels, (LC3PLUS_PlcMode)arg.plcMeth);
     decoder      = malloc(decoder_size);
-    err          = lc3_dec_init(decoder, sampleRate, nChannels, (LC3_PlcMode)arg.plcMeth);
+    err          = lc3plus_dec_init(decoder, sampleRate, nChannels, (LC3PLUS_PlcMode)arg.plcMeth
+#ifdef ENABLE_HR_MODE
+                                    , arg.hrmode
+#endif
+                                   );
     exit_if(err, ERROR_MESSAGE[err]);
 
-    err = lc3_dec_set_frame_dms(decoder, (int)(arg.frame_ms * 10));
+    err = lc3plus_dec_set_frame_dms(decoder, (int)(arg.frame_ms * 10));
     exit_if(err, ERROR_MESSAGE[err]);
 
-    err = lc3_dec_set_ep_enabled(decoder, arg.epmode != 0);
+    err = lc3plus_dec_set_ep_enabled(decoder, arg.epmode != 0);
     exit_if(err, ERROR_MESSAGE[err]);
 
-    nSamples = lc3_dec_get_output_samples(decoder);
+    nSamples = lc3plus_dec_get_output_samples(decoder);
 
     /* Open Output Bitstream File */
     if (arg.mode == PACK)
@@ -175,7 +181,7 @@ int main(int ac, char **av)
                                              arg.frame_ms, epmode_out, arg.formatG192, arg.configFilenameG192);
     exit_if(!output_bitstream, "Error creating bitstream file!");
 
-    scratch_size = lc3_dec_get_scratch_size(decoder);
+    scratch_size = lc3plus_dec_get_scratch_size(decoder);
     scratch      = malloc(scratch_size);
     exit_if(!scratch, "Failed to allocate scratch memory!");
 
@@ -212,13 +218,13 @@ int main(int ac, char **av)
                 channel_coder_unpack(decoder, bytes, num_bytes_in, scratch, bfi_ext, &lc3_num_bytes);
             }
 
-            exit_if(err && err != LC3_DECODE_ERROR, ERROR_MESSAGE[err]);
+            exit_if(err && err != LC3PLUS_DECODE_ERROR, ERROR_MESSAGE[err]);
 
             /* write output bitstream */
 
             if (arg.formatG192)
             {
-                if (err == LC3_DECODE_ERROR || bfi_ext != 0)
+                if (err == LC3PLUS_DECODE_ERROR || bfi_ext != 0)
                 {
                     syncWord      = G192_BAD_FRAME;
                     lc3_num_bytes = 0;
@@ -328,7 +334,7 @@ static void exit_if(int condition, const char *message)
     if (condition)
     {
         puts(message);
-        if (condition < LC3_WARNING)
+        if (condition < LC3PLUS_WARNING)
         {
             exit(1);
         }
@@ -357,9 +363,17 @@ static FILE *open_bitstream_writer(const char *file, uint32_t samplerate, int bi
 
     if (f_use)
     {
+#ifdef ENABLE_HR_MODE
+        uint16_t header[10] = {0xcc1c,        sizeof(header), samplerate / 100,
+                              bitrate / 100, channels,       (uint16_t)(frame_ms * 100),
+                              epmode > 0 ? 1 : 0,
+                               signal_len,     signal_len >> 16, 0 /* no HRMODE for ccc */};
+#else
         uint16_t header[9] = {0xcc1c,        sizeof(header), samplerate / 100,
                               bitrate / 100, channels,       (uint16_t)(frame_ms * 100),
-                              epmode,        signal_len,     signal_len >> 16};
+                              epmode > 0 ? 1 : 0, // represents ep_enable
+                              signal_len,     signal_len >> 16};
+#endif
         fwrite(&header, sizeof(header), 1, f_use);
     }
 
@@ -522,11 +536,11 @@ static int read_bitstream_frame(FILE *bitstream_file, uint8_t *bytes, int size, 
     }
 }
 
-LC3_Error channel_coder_pack(LC3_Dec *decoder, UWord8 *bytes, int num_bytes_in, void *scratch, int bfi_ext,
+LC3PLUS_Error channel_coder_pack(LC3PLUS_Dec *decoder, UWord8 *bytes, int num_bytes_in, void *scratch, int bfi_ext,
                              int *lc3_num_bytes, int gross_bytes, int epmode)
 {
     int       ch = 0, bfi = bfi_ext;
-    LC3_Error err         = LC3_OK;
+    LC3PLUS_Error err         = LC3PLUS_OK;
     int       channel_bfi = 0;
 
     BASOP_sub_start("Pack");
@@ -542,7 +556,11 @@ LC3_Error channel_coder_pack(LC3_Dec *decoder, UWord8 *bytes, int num_bytes_in, 
     /* Buffers */
     Word16 *int_scf_fx_exp, tns_order[TNS_NUMFILTERS_MAX];
     UWord8 *resBitBuf;
+#ifdef ENABLE_HR_MODE
+    Word32 *sqQdec;
+#else
     Word16 *sqQdec;
+#endif
     Word16 *int_scf_fx, /* *x_fx,*/ *indexes, *scf_q;
     Word32 *L_scf_idx;
     Word32 *q_d_fx;
@@ -598,6 +616,9 @@ LC3_Error channel_coder_pack(LC3_Dec *decoder, UWord8 *bytes, int num_bytes_in, 
                              h_DecSetup->enable_lpc_weighting, tns_numfilters, lsbMode, lastnz, &gain, tns_order,
                              fac_ns_idx, gg_idx, decoder->frame_dms, decoder->n_pc, 0, shr_pos(nbbits, 3), 1, &gain,
                              &b_left, &gain, sqQdec, &gain, resBitBuf, indexes, &gain, currentScratch
+#ifdef ENABLE_HR_MODE
+                            , decoder->hrmode
+#endif
         );
 
         IF (b_left > 0)
@@ -622,14 +643,14 @@ LC3_Error channel_coder_pack(LC3_Dec *decoder, UWord8 *bytes, int num_bytes_in, 
 
     BASOP_sub_end();
 
-    return bfi == 1 ? LC3_DECODE_ERROR : LC3_OK;
+    return bfi == 1 ? LC3PLUS_DECODE_ERROR : LC3PLUS_OK;
 }
 
-LC3_Error channel_coder_unpack(LC3_Dec *decoder, UWord8 *input_bytes, int num_bytes_in, void *scratch, int bfi_ext,
+LC3PLUS_Error channel_coder_unpack(LC3PLUS_Dec *decoder, UWord8 *input_bytes, int num_bytes_in, void *scratch, int bfi_ext,
                                int *lc3_num_bytes)
 {
     int       ch = 0, bfi = bfi_ext;
-    LC3_Error err = LC3_OK;
+    LC3PLUS_Error err = LC3PLUS_OK;
     int       fec_num_bytes;
     int       channel_bfi, out_bfi;
     Word16    channel_epmr;
@@ -647,7 +668,11 @@ LC3_Error channel_coder_unpack(LC3_Dec *decoder, UWord8 *input_bytes, int num_by
     /* Buffers */
     Word16 *int_scf_fx_exp, tns_order[TNS_NUMFILTERS_MAX];
     UWord8 *resBitBuf;
+#ifdef ENABLE_HR_MODE
+    Word32 *sqQdec;
+#else
     Word16 *sqQdec;
+#endif
     Word16 *int_scf_fx, *indexes, *scf_q;
     Word32 *L_scf_idx;
     Word32 *q_d_fx;
@@ -699,39 +724,6 @@ LC3_Error channel_coder_unpack(LC3_Dec *decoder, UWord8 *input_bytes, int num_by
 
         channel_bfi = channel_bfi > 0;
 
-        //#ifdef ENABLE_PADDING
-        //        if (channel_bfi != 1)
-        //        {
-        //            Word16 padding_len, np_zero;
-        //
-        //            if (paddingDec_fx(input_bytes, shl(*lc3_num_bytes, 3), decoder->yLen, decoder->BW_cutoff_bits,
-        //            decoder->ep_enabled, &padding_len, &np_zero))
-        //            {
-        //                channel_bfi = 1;
-        //            }
-        //
-        //            input_bytes         = input_bytes + np_zero;
-        //            decoder->n_pc = s_max(decoder->n_pc - (2 * np_zero), 0);
-        //
-        //            if (channel_bfi == 2)
-        //            {
-        //                if (decoder->be_bp_right < (8*np_zero))
-        //                {
-        //                    channel_bfi = 0;
-        //                    decoder->be_bp_left = -1;
-        //                    decoder->be_bp_right = -1;
-        //                }
-        //                else
-        //                {
-        //                    decoder->be_bp_right = decoder->be_bp_right - (8 * np_zero);
-        //                    decoder->be_bp_left  = s_max(decoder->be_bp_left - (8 * np_zero), 0);
-        //                }
-        //            }
-        //
-        //            *lc3_num_bytes = *lc3_num_bytes - padding_len;
-        //        }
-        //#endif
-
         // reordering for channelCodecConverter
         DecSetup *h_DecSetup = decoder->channel_setup[ch];
 
@@ -752,6 +744,9 @@ LC3_Error channel_coder_unpack(LC3_Dec *decoder, UWord8 *input_bytes, int num_by
                                  h_DecSetup->enable_lpc_weighting, tns_numfilters, lsbMode, lastnz, &gain, tns_order,
                                  fac_ns_idx, gg_idx, decoder->frame_dms, decoder->n_pc, 0, shr_pos(nbbits, 3), 2, &gain,
                                  &b_left, &gain, sqQdec, &gain, resBitBuf, indexes, &gain, currentScratch
+#ifdef ENABLE_HR_MODE
+                                 , decoder->hrmode
+#endif
             );
 
             IF (b_left > 0)
@@ -769,7 +764,7 @@ LC3_Error channel_coder_unpack(LC3_Dec *decoder, UWord8 *input_bytes, int num_by
 
     BASOP_sub_end();
 
-    return bfi == 1 ? LC3_DECODE_ERROR : LC3_OK;
+    return bfi == 1 ? LC3PLUS_DECODE_ERROR : LC3PLUS_OK;
 }
 
 void processReorderBitstream_dec_fx(UWord8 *bytes, Word16 n_pccw, Word16 n_pc, Word16 b_left, Word8 *scratchBuffer)
@@ -777,7 +772,7 @@ void processReorderBitstream_dec_fx(UWord8 *bytes, Word16 n_pccw, Word16 n_pc, W
     Word16  block_bytes;
     UWord8 *bytes_tmp;
 
-    bytes_tmp = (UWord8 *)scratchAlign(scratchBuffer, 0); /* Size = LC3_MAX_BYTES */
+    bytes_tmp = (UWord8 *)scratchAlign(scratchBuffer, 0); /* Size = LC3PLUS_MAX_BYTES */
 
     if (n_pccw == 0)
     {

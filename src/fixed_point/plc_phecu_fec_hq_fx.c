@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -1595,10 +1595,6 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          /* mix add the two windowed components */
          ola_add(&rec_buf[copy_len], ola_old, &rec_buf[copy_len], ola_len); /* OPT:  sat check */
 
-
-/*#endif   */ /*  TBD belongs to what  IFdef ? */
-
-
          my_wtda_fx(rec_buf,
             win2ms_init,    /* i:  2 ms initial part of pre_tda window */
             win16ms_center, /* i:  16 ms combined part  of pre_tda IWHR+MDCT-ana  */
@@ -1677,7 +1673,7 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          {
             FOR(i = 0; i < Lprot; i++)
             {
-               *pX++ = extract_h(L_shl(*pX_L++, fft_scale)); move16();
+               *pX++ = extract_h(L_shl_sat(*pX_L++, fft_scale)); move16();
             }
          }
          /* Scratch  L_x may be released */
@@ -2494,60 +2490,6 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          BASOP_sub_sub_end();
       }
 
-#ifdef NONBE_PLC2_SINQ10_WMOPS_SAVE
-      void get_sin_cosQ10optOpt(Word16 phase,    /* Q10 0..1023  i.e. 1024=2*pi */
-         Word16 * ptrSin, /* Q15 */
-         Word16 * ptrCos  /* Q15 */
-      )
-      {
-         Word16   idx;
-         Word16 segm_sin ;
-         Word16  offset_sub[5] = { 0,256,512,768,1024 };
-         Word16  neg_flags_sin[5] = { 32767, 32767, -32768,-32768, 32767 };
-         Word16  rev_flags_sin[5]     = { 0,1,0,1,0 };
-  
-         Word16  *rev_flags_cos, *neg_flags_cos;
-#ifdef DYNMEM_COUNT
-         Dyn_Mem_In("get_sin_cosQ10OptOpt", sizeof(struct { Word16 sign_val, idx, idx2, idx3, segm_sin, segm_cos; }));
-#endif
-
-         BASOP_sub_sub_start("PhECU::get_sin_cosQ10optOpt");
-
-         /* sin table  has a range up to  pi/2  (256+1)=257 coeffs*/
-
-         rev_flags_cos = &(rev_flags_sin[1]); /*ptr init */
-         neg_flags_cos = &(neg_flags_sin[1]); /*ptr init */
-
-         segm_sin = shr_pos_pos(phase, 8);
-         ASSERT(segm_sin <= 3);
-
-         idx = sub(phase, offset_sub[segm_sin]);   
-         if ( rev_flags_sin[segm_sin] != 0)
-         {
-            idx = sub(256, idx); /* conditional rev for  sin  part  */
-         }
-
-         ASSERT(idx >= 0 && idx <= 256);
-
-
-         *ptrSin = mult(sin_quarterQ15_fx[idx], neg_flags_sin[segm_sin]) ;  /* no move if inlined*/
-
-         /*cos*/
-         idx = sub( 256, idx );  /* always rev for cos part  */
-         
-         ASSERT(idx >= 0 && idx <= 256);
-
-         *ptrCos = mult(sin_quarterQ15_fx[idx], neg_flags_cos[segm_sin]) ;  move16();
-
-
-#ifdef DYNMEM_COUNT
-         Dyn_Mem_Out();
-#endif
-         BASOP_sub_sub_end();
-      }
-#endif 
-
-
       void get_sin_cosQ10opt(Word16 phase,    /* Q10 0..1023  i.e. 1024=2*pi */
          Word16 * ptrSin, /* Q15 */
          Word16 * ptrCos  /* Q15 */
@@ -2611,9 +2553,6 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          Dyn_Mem_Out();
 #endif
          BASOP_sub_sub_end();
-
-#ifdef NONBE_PLC2_SINQ10_WMOPS_SAVE
-#endif 
       }
 
 

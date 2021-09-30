@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -12,11 +12,15 @@
 
 void processEncoderEntropy_fl(LC3_UINT8* bytes, LC3_INT* bp_side, LC3_INT* mask_side, LC3_INT numbytes, LC3_INT bw_cutoff_bits,
                               LC3_INT bw_cutoff_idx, LC3_INT lastnz, LC3_INT N, LC3_INT lsbMode, LC3_INT gg_idx, LC3_INT num_tns_filters,
-                              LC3_INT* tns_order, LC3_INT* ltpf_idx, LC3_INT* scf_idx, LC3_INT fac_ns_idx)
+                              LC3_INT* tns_order, LC3_INT* ltpf_idx, LC3_INT* scf_idx, LC3_INT fac_ns_idx
+                              , LC3_INT bfi_ext, LC3_INT fs_idx
+                              )
 {
     LC3_UINT8* ptr;
     LC3_INT      i = 0, submodeMSB = 0, submodeLSB = 0, tmp = 0, gainMSB = 0, gainLSB = 0;
     LC3_INT      gainMSBbits[4] = {1, 1, 2, 2}, gainLSBbits[4] = {0, 1, 0, 1};
+    
+    LC3_INT16 lastnzTrigger[5] = {63, 127, 127, 255, 255};
 
     *bp_side   = numbytes - 1;
     *mask_side = 1;
@@ -28,7 +32,13 @@ void processEncoderEntropy_fl(LC3_UINT8* bytes, LC3_INT* bp_side, LC3_INT* mask_
     }
 
     /* Last non zero touple */
-    write_uint_backward_fl(ptr, bp_side, mask_side, lastnz / 2 - 1, ceil(LC3_LOG2(N / 2)));
+    if (bfi_ext == 1) {
+        write_uint_backward_fl(ptr, bp_side, mask_side, lastnzTrigger[fs_idx], ceil(LC3_LOG2(N >> 1)));
+    }
+    else
+    {
+        write_uint_backward_fl(ptr, bp_side, mask_side, lastnz / 2 - 1, ceil(LC3_LOG2(N / 2)));
+    }
 
     /* LSB mode bit */
     write_bit_backward_fl(ptr, bp_side, mask_side, lsbMode);

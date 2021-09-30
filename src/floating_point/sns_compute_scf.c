@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -83,7 +83,7 @@ void processSnsComputeScf_fl(LC3_FLOAT* x, LC3_INT tilt, LC3_INT xLen, LC3_FLOAT
     x_tmp2[xLen - 1] = x[xLen - 1];
 
     for (i = 0; i < xLen; i++) {
-        x[i] = 0.5 * x[i] + 0.25 * x_tmp1[i] + 0.25 * x_tmp2[i];
+        x[i] = 0.5 * x[i] + 0.25 * (x_tmp1[i] + x_tmp2[i]);
     }
 
     /* Pre-emphasis */

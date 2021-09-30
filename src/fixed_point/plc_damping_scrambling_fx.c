@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -27,10 +27,11 @@ void processPLCDampingScrambling_main_fx(Word16 bfi, Word16 concealMethod, Word1
     {
         processDampScramb = 0;  move16();
         test();
-        IF (sub(concealMethod, 4) == 0 || sub(bfi, 2) == 0)
+        IF (sub(concealMethod, LC3_CON_TEC_NS_ADV) == 0 || sub(bfi, 2) == 0)
         {
             processDampScramb = 1;  move16();
         }
+        
         IF (sub(bfi, 1) == 0)
         {
             processPLCDampingScrambling_fx(spec, L_spec, ns_nbLostFramesInRow, stabFac,
@@ -56,7 +57,7 @@ void processPLCDampingScrambling_fx(Word32 spec[], Word16 L_spec, Word16 nbLostF
                                     Word16 *cum_fading_fast, Word16 *seed, Word16 spec_inv_idx)
 {
     Counter i;
-    Word16 xLostFramesInRow, slow, fast, tmp16;
+    Word16 lossDuration_dms, slow, fast, tmp16;
     Word16 plc_start_inFrames, plc_end_inFrames, plc_duration_inFrames, linFuncStartStop;
     Word16 randThreshold, ad_threshFac, energThreshold, s, s2, s3, mean_energy16;
     Word32 frame_energy, mean_nrg, fac;
@@ -65,7 +66,7 @@ void processPLCDampingScrambling_fx(Word32 spec[], Word16 L_spec, Word16 nbLostF
 #ifdef DYNMEM_COUNT
     Dyn_Mem_In("processPLCDampingScrambling_fx", sizeof(struct {
         Counter i;
-        Word16 xLostFramesInRow, slow, fast, tmp16;
+        Word16 lossDuration_dms, slow, fast, tmp16;
         Word16 plc_start_inFrames, plc_end_inFrames, plc_duration_inFrames, linFuncStartStop;
         Word16 randThreshold, ad_threshFac, energThreshold, s, s2, s3, mean_energy16;
         Word32 frame_energy, mean_nrg, fac;
@@ -86,14 +87,6 @@ void processPLCDampingScrambling_fx(Word32 spec[], Word16 L_spec, Word16 nbLostF
     tmp16 = mult(6554 /*0.2*/, stabFac);
     slow  = add(26214 /*0.8*/, tmp16);
     fast  = add( 9830 /*0.3*/, tmp16);
-
-    /** adjust number of consecutive losses to frame length */
-    xLostFramesInRow = nbLostFramesInRow;  move16();
-    SWITCH (frame_dms)
-    {
-    case 25: nbLostFramesInRow = shr(add(nbLostFramesInRow, 3), 2); BREAK;
-    case 50: nbLostFramesInRow = shr(add(nbLostFramesInRow, 1), 1); BREAK;
-    }
 
 
     SWITCH (frame_dms)
@@ -152,39 +145,19 @@ void processPLCDampingScrambling_fx(Word32 spec[], Word16 L_spec, Word16 nbLostF
 
         IF (spec_inv_idx == 0)
         {
-            IF (sub(nbLostFramesInRow, PLC_FADEOUT_IN_MS/10) > 0)
+            lossDuration_dms = i_mult(nbLostFramesInRow, frame_dms);
+            IF (sub(lossDuration_dms, PLC_FADEOUT_IN_MS*10) > 0)
             {
                 *cum_fflcAtten = 0;  move16();
                 fflcAtten = 0;  move16();
             }
-            ELSE IF (sub(nbLostFramesInRow, 2) > 0)
+            ELSE IF (sub(lossDuration_dms, 200) > 0)
             {
-                fflcAtten = PLC34_ATTEN_FAC_100_FX;
-
                 SWITCH (frame_dms)
                 {
-                case 25:
-                    IF (sub(fflcAtten, 32767) < 0)
-                    {
-                        tmp16  = 0;
-                        fflcAtten = Sqrt16(fflcAtten, &tmp16);  move16();
-                        fflcAtten = shl(fflcAtten, tmp16);
-                    }
-                    IF (sub(fflcAtten, 32767) < 0)
-                    {
-                        tmp16  = 0;
-                        fflcAtten = Sqrt16(fflcAtten, &tmp16);  move16();
-                        fflcAtten = shl(fflcAtten, tmp16);
-                    }
-                    BREAK;
-                case 50:
-                    IF (sub(fflcAtten, 32767) < 0)
-                    {
-                        tmp16  = 0;
-                        fflcAtten = Sqrt16(fflcAtten, &tmp16);  move16();
-                        fflcAtten = shl(fflcAtten, tmp16);
-                    }
-                    BREAK;
+                case  25: fflcAtten = PLC34_ATTEN_FAC_025_FX; BREAK;
+                case  50: fflcAtten = PLC34_ATTEN_FAC_050_FX; BREAK;
+                case 100: fflcAtten = PLC34_ATTEN_FAC_100_FX; BREAK;
                 }
             }
             IF ( sub(fflcAtten, 32767) < 0 )
@@ -201,16 +174,16 @@ void processPLCDampingScrambling_fx(Word32 spec[], Word16 L_spec, Word16 nbLostF
         SWITCH (frame_dms)
         {
         case 25:
-            plc_start_inFrames = (10*PLC4_TRANSIT_START_IN_MS) / 25;  move16();
-            plc_end_inFrames   = (10*PLC4_TRANSIT_END_IN_MS) / 25;  move16();
+            plc_start_inFrames = (10*PLC4_TRANSIT_START_IN_MS) /  25;  move16();
+            plc_end_inFrames   = (10*PLC4_TRANSIT_END_IN_MS)   /  25;  move16();
             BREAK;
         case 50:
-            plc_start_inFrames = PLC4_TRANSIT_START_IN_MS / 5;  move16();
-            plc_end_inFrames   = PLC4_TRANSIT_END_IN_MS / 5;  move16();
+            plc_start_inFrames = (10*PLC4_TRANSIT_START_IN_MS) /  50;  move16();
+            plc_end_inFrames   = (10*PLC4_TRANSIT_END_IN_MS)   /  50;  move16();
             BREAK;
         default:
-            plc_start_inFrames = PLC4_TRANSIT_START_IN_MS / 10;  move16();
-            plc_end_inFrames   = PLC4_TRANSIT_END_IN_MS / 10;  move16();
+            plc_start_inFrames = (10*PLC4_TRANSIT_START_IN_MS) / 100;  move16();
+            plc_end_inFrames   = (10*PLC4_TRANSIT_END_IN_MS)   / 100;  move16();
         }
 
         if (pitch_present == 0)
@@ -219,11 +192,11 @@ void processPLCDampingScrambling_fx(Word32 spec[], Word16 L_spec, Word16 nbLostF
         }
         plc_duration_inFrames = sub(plc_end_inFrames, plc_start_inFrames);
 
-        IF (sub(xLostFramesInRow, plc_start_inFrames) <= 0)
+        IF (sub(nbLostFramesInRow, plc_start_inFrames) <= 0)
         {
             linFuncStartStop = 32767;  move16();
         }
-        ELSE IF (sub(xLostFramesInRow, plc_end_inFrames) >= 0)
+        ELSE IF (sub(nbLostFramesInRow, plc_end_inFrames) >= 0)
         {
             linFuncStartStop =     0;  move16();
         }
@@ -235,7 +208,7 @@ void processPLCDampingScrambling_fx(Word32 spec[], Word16 L_spec, Word16 nbLostF
               b = -plc_end_inFrames; % shift on x axis
               linFuncStartStop = m * (x + b);
             */
-            linFuncStartStop = div_s(sub(plc_end_inFrames, xLostFramesInRow), plc_duration_inFrames);
+            linFuncStartStop = div_s(sub(plc_end_inFrames, nbLostFramesInRow), plc_duration_inFrames);
         }
 
         /** sign scrambling */
@@ -283,7 +256,7 @@ void processPLCDampingScrambling_fx(Word32 spec[], Word16 L_spec, Word16 nbLostF
         mean_nrg = L_shl_sat(L_deposit_l(energThreshold), s3); /* exp = 0 */
         fac = mult(sub(cum_fading_slow_local, cum_fading_fast_local), energThreshold);
         fac = L_shl_sat(L_deposit_l(fac), s3); /* exp = 0 */
-
+        
         FOR (i = spec_inv_idx; i < L_spec; i++)
         {
             if (L_sub(L_abs_sat(spec[i]), mean_nrg) < 0)
@@ -294,7 +267,7 @@ void processPLCDampingScrambling_fx(Word32 spec[], Word16 L_spec, Word16 nbLostF
             {
                 if (spec[i] > 0)
                 {
-                    spec[i] = L_add(Mpy_32_16(spec[i], cum_fading_fast_local), fac);
+                    spec[i] = L_add_sat(Mpy_32_16(spec[i], cum_fading_fast_local), fac);
                 }
                 else if (spec[i] == 0)
                 {
@@ -302,7 +275,7 @@ void processPLCDampingScrambling_fx(Word32 spec[], Word16 L_spec, Word16 nbLostF
                 }
                 else
                 {
-                    spec[i] = L_sub(Mpy_32_16(spec[i], cum_fading_fast_local), fac);
+                    spec[i] = L_sub_sat(Mpy_32_16(spec[i], cum_fading_fast_local), fac);
                 }
             }
         }

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -12,24 +12,12 @@
 #define IIS_FFT_H
 
 #include "../structs.h"
+#include "cfft.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef struct T_IIS_FFT* HANDLE_IIS_FFT;
-
-typedef enum {
-    IIS_FFT_NO_ERROR = 0,
-    IIS_FFT_INTERNAL_ERROR, /**< a mystical error appeard */
-    IIS_FFT_LENGTH_ERROR,   /**< the requested fft length is not supported */
-    IIS_FFT_MEMORY_ERROR    /**< memory allocation failed */
-} IIS_FFT_ERROR;
-
-typedef enum {
-    IIS_FFT_FWD = -1, /**< forward transform */
-    IIS_FFT_BWD = 1   /**< inverse / backward transform */
-} IIS_FFT_DIR;
 
 /*!
  *  \brief          n-point complex FFT
@@ -89,17 +77,17 @@ IIS_FFT_ERROR LC3_IIS_CFFT_Create(HANDLE_IIS_FFT* handle, LC3_INT len, IIS_FFT_D
  *  \brief          computes the forward or backward fourier transform of a real signal
  *
  *                  For complex data (in or out) the real part of the Nyquist band (len / 2 + 1) is stored
- *					in the imaginary part of the DC band (0). This allows for the complex data of
- *real to complex transforms to fit into the same buffer. For this to work length must be even.
+ *                  in the imaginary part of the DC band (0). This allows for the complex data of
+ *                  real to complex transforms to fit into the same buffer. For this to work length must be even.
  *
- *					Complex to real transforms are normalized (1.0/len). Input and ouput buffers may
+ *                    Complex to real transforms are normalized (1.0/len). Input and ouput buffers may
  *be identical.
  *
  *  \param[in]      handle      FFT handle
  *  \param[in]      in          pointer to the input array containing real values for the forward transform (FFT)
  *                              or packed complex values (Perm) for the backward transform (IFFT)
  *  \param[out]     out         pointer to the output array containing real values resulted from the backward transform
- *(IFFT) or packed complex (perm) values reulted from the forward transform
+ *                              (IFFT) or packed complex (perm) values reulted from the forward transform
  *
  *  \return         IIS_FFT_NO_ERROR on success
  */

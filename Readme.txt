@@ -1,7 +1,7 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
-*                        Software Version V1.4.10ETSI                         *
+*                        Software Version V1.6.4ETSI                          *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
@@ -18,12 +18,13 @@ the latest updates introduced by 3GPP and/or IEEE 754 floating-point arithmetic.
 
 The following structure outlines the content of this package.
 
+-/conformance         : conformance script with example configuration file and
+                        Readme
+-/fec_control_unit    : example fec control unit script and Readme
 -/src/fixed_point     : fixed-point source files, makefile and Visual Studio
                         solution
 -/src/floating_point  : floating-point source files, makefile and Visual Studio
                         solution
--/conformance         : conformance script with example configuration file and
-                        Readme
 -/testvec             : testvector package with script. Verification that LC3plus
                         build on your system operates as expected by comparing to
                         pre-calculated MD5 hashes
@@ -35,43 +36,46 @@ Please refer to the respective Readme files for more information.
 Features
 --------
     - Supported sampling rates: 8 kHz, 16 kHz, 24 kHz, 32 kHz, 44.1 kHz,
-                                      48 kHz, 96 kHz
-    - Supported bit rates: 20 bytes ... 400 bytes per frame per channel
+                                48 kHz, 96 kHz
     - Multichannel support by multi-mono coding
     - Support of audio sample depth: 16 bits and 24 bits
     - Frame duration of 10 ms, 5 ms and 2.5 ms
-    - Supported bit rates:
-        - frame duration 10 ms:  16 kbps ... 320 kbps per channel
-        - frame duration 5 ms:   32 kbps ... 640 kbps per channel
-        - frame duration 2.5 ms: 64 kbps ... 1280 kbps per channel
-    - High resolution audio mode for 48 kHz and 96 kHz and higher SNR.
-    -- Supported bit rates for 48 kHz
-        - frame duration 10 ms:  124.8 ... 500 kbps per channel
-        - frame duration 5 ms:   148.8 ... 600 kbps per channel
-        - frame duration 2.5 ms: 172.8 ... 672 kbps per channel
-    -- Supported bit rates for 96 kHz
-        - frame duration 10 ms:  149.6 ... 500 kbps per channel
-        - frame duration 5 ms:   174.4 ... 600 kbps per channe
-        - frame duration 2.5 ms: 198.4 ... 672 kbps per channel
-
+    - Supported bit rates as outlined in Table 5.1 and Table 5.2 of TS 103 634
     - Packet loss concealment as defined in ETSI TS 103 634
-
-The fixed-point source code currently has limited support for the
-following functions:
-    - High resolution mode
-
-The floating-point source code currently has limited support for the
-following functions:
-    - Packet loss concealment
-    - Error protection (LC3plus channel coder)
-    - Partial concealment
-
 
 Changelog
 ---------
   Latest non-bitexact changes are encapsulated in defines listed in defines.h
   for review.
 
+    - V1.6.4ETSI 2021-10-01 (ETSI TS 103 634 V1.3.1)
+       - General
+            - Updated software version and ETSI TS version
+  
+    - V1.6.3ETSI 2021-08-01 (ETSI TS 103 634 V1.2.5)
+       - General
+            - Implemented CR1 on TS 103 634 V1.2.4 (changes marked with defines CR6)
+            - Accepted CR1 to CR5
+  
+    - V1.6.2ETSI 2021-06-23 (ETSI TS 103 634 V1.2.4)
+       - General
+            - Implemented CR1 on TS 103 634 V1.2.3 (changes marked with defines CR5)
+            - Major Features
+                 - Added high resolution audio support and improved precision coding for regular modes
+                   in fixed-point code (wrapped in the define ENABLE_HR_MODE)
+                 - Added support for fallback bitrates for the high resolution mode
+                   for critical conditions
+
+    - V1.6.0ETSI 2021-05-25 (ETSI TS 103 634 V1.2.3)
+       - General
+            - Implemented CR1 on TS 103 634 V1.2.2 (changes marked with defines CR4)
+
+    - V1.4.12ETSI 2021-03-03 (ETSI TS 103 634 V1.2.2)
+       - General
+            - Implemented CR1 on TS 103 634 V1.2.1 (changes marked with defines CR3)
+            - Major Features
+                 - Added concealment and forward error protection for floating point code
+                 - Limited bit rate to 320 kbps for regular modes
     - V1.4.10ETSI 2020-07-23 (ETSI TS 103 634 V1.2.1)
        - General
             - Accepted CR2 defines
@@ -121,10 +125,9 @@ Building
 
 
 The floating-point source code introduces a floating-point data type and
-corresponding functions via macros labeled LC3_XYZ. By default they use single
+corresponding functions via macros labeled LC3_XYZ. They use single
 precision floating point format to represent data and perform mathematical
-operations. Double precision floating point format can be acitivated by enabling
-the define LC3_DOUBLE_PRECISION.
+operations. 
 
 
 Usage
@@ -183,9 +186,9 @@ Usage
         16-bit values, non-zero values indicating a detected frame loss
 
 
-    The high-resolution mode is only available in the floating-point source code.
-    It is mandatory for usage with 96 kHz sampling frequency and can also be used
-    with 48 kHz sampling frequency. To enable the high-resolution mode call
+    The high-resolution mode is mandatory for usage with 96 kHz sampling frequency 
+    and can also be used with 48 kHz sampling frequency. 
+    To enable the high-resolution mode call
 
         ./LC3plus -hrmode INPUT.wav OUTPUT.wav BITRATE
 
@@ -311,19 +314,18 @@ Binary File Format
     not standardized and may change in the future.
     The file starts with a config header structure as follows.
 
-    Field         Bytes   Content
-    ------------------------------------------------------------
-    file_id       2       file identifier, value 0xcc1c
-    header_size   2       total config header size in bytes
-    samplingrate  2       sampling frequency / 100
-    bitrate       2       bitrate / 100
-    channels      2       number of channels
-    frame_ms      2       Frame duration in ms * 100
-    epmode        2       error protection, 0: off, non-zero: on
-    signal_len    4       input signal length in samples
-
-    Note: the floating-point implementation adds an additional field
-    hrmode        2       high resolution mode on/off
+    Field            Bytes   Content
+    ------------------------------------------------------------------
+    file_id           2       file identifier, value 0xcc1c
+    header_size       2       total config header size in bytes
+    samplingrate      2       sampling frequency / 100
+    bitrate           2       bitrate / 100
+    channels          2       number of channels
+    frame_ms          2       Frame duration in ms * 100
+    epmode            2       error protection, 0: off, non-zero: on
+    signal_len        2       input signal length in samples
+    signal_len_red    2       signal_len >> 16
+    hrmode            2       high resolution mode, 0: off, 1: on
 
     All fields are stored in little-endian byte order. The config header could
     be extended in the future so readers should seek to header_size to skip any
@@ -331,4 +333,6 @@ Binary File Format
     The header is immediately followed by a series of coded audio frames, where
     each frame consists of a two-byte frame length information and the current
     coded frame.
+    For multichannel audio, the coded audio frames for each channel are concatenated and the 
+    length refers to the sum of the frame lengths.
 

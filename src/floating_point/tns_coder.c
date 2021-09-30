@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -168,7 +168,9 @@ LC3_INT findRC_idx(const LC3_FLOAT* in1, const LC3_FLOAT* in2, LC3_FLOAT checkVa
 }
 
 void processTnsCoder_fl(LC3_FLOAT* x, LC3_INT bw_cutoff_idx, LC3_INT bw_fcbin, LC3_INT fs, LC3_INT N, LC3_INT frame_dms, LC3_INT nBits,
-                        LC3_INT* order_out, LC3_INT* rc_idx, LC3_INT* tns_numfilters, LC3_INT* bits_out)
+                        LC3_INT* order_out, LC3_INT* rc_idx, LC3_INT* tns_numfilters, LC3_INT* bits_out
+                        , LC3_INT16 near_nyquist_flag
+)
 {
     LC3_INT i = 0, stopfreq[2] = {0}, startfreq[2] = {0}, f = 0, numfilters = 0, maxOrder = 0, bits = 0, sub = 0,
         subdiv_startfreq = 0, subdiv_stopfreq = 0, j = 0, rc_idx_tmp[8] = {0}, order_tmp[8] = {0}, tmp = 0, tns = 0;
@@ -257,7 +259,8 @@ void processTnsCoder_fl(LC3_FLOAT* x, LC3_INT bw_cutoff_idx, LC3_INT bw_fcbin, L
                 sum += x[i] * x[i];
             }
 
-            if (sum == 0) {
+            if (sum < LC3_EPS)
+            {
                 zero_float(r, 9);
                 r[0] = 1;
                 break;
@@ -282,7 +285,7 @@ void processTnsCoder_fl(LC3_FLOAT* x, LC3_INT bw_cutoff_idx, LC3_INT bw_fcbin, L
 
         predGain = r[0] / error_lev;
 
-        if (predGain > minPredictionGain) {
+        if (predGain > minPredictionGain && near_nyquist_flag == 0) {
             tns = 1;
         } else {
             tns = 0;
@@ -319,6 +322,13 @@ void processTnsCoder_fl(LC3_FLOAT* x, LC3_INT bw_cutoff_idx, LC3_INT bw_fcbin, L
             }
 
             order_out[f] = order_tmp[j - 1];
+            // Disable TNS if order is 0:
+            if (order_out[f] == 0) {
+                tns = 0;
+
+                // Jump to else statement
+                goto tns_disabled;
+            }
             tmp = order[order_out[f] - 1];
 
             /* Huffman Coding of PARCOR coefficients */
@@ -356,6 +366,7 @@ void processTnsCoder_fl(LC3_FLOAT* x, LC3_INT bw_cutoff_idx, LC3_INT bw_fcbin, L
             }
         }
     }
+tns_disabled:
 
     *tns_numfilters = numfilters;
     *bits_out       = bits;

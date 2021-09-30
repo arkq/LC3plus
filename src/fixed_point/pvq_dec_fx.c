@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -52,21 +52,35 @@ Word16 pvq_dec_deidx_fx(                          /* out BER detected 1 , ok==0 
 }
 
 
+
+#ifdef ENABLE_HR_MODE
+void pvq_dec_scale_vec_fx(const Word32 *inQ29, Word16 adjGainQ13, Word32 *outQ)
+#else
 void pvq_dec_scale_vec_fx(const Word16 *inQ14, Word16 adjGainQ13, Word16 *outQ14)
+#endif
 {
     Dyn_Mem_Deluxe_In(
         Counter i;
     );
     FOR (i = 0; i < M; i++)
     {
+#ifdef ENABLE_HR_MODE
+        outQ[i] = L_shr(L_add(outQ[i], Mpy_32_16(inQ29[i], adjGainQ13)), 1);
+        move16();
+#else
         outQ14[i] = add(outQ14[i], mult_r(adjGainQ13, inQ14[i])); move16();
+#endif
     }
     Dyn_Mem_Deluxe_Out();
 }
 
 
 void pvq_dec_en1_normQ14_fx(/*  Have to be used EXACTLY the same way in both  both encoder and decoder */
+#ifdef ENABLE_HR_MODE
+                            Word32 *      xq, /* o:   en1 normalized decoded vector (Q14)   */
+#else
                             Word16 *      xq, /* o:   en1 normalized decoded vector (Q14)   */
+#endif
                             const Word16 *y,  /* i:   decoded vector (non-scaled int)  */
                             const Word16  k_val_max,
                             /* i:   max possible K   in Q0 kO or kA   */ /* OPT:  not BE , use dynamic max  pulse
@@ -74,7 +88,16 @@ void pvq_dec_en1_normQ14_fx(/*  Have to be used EXACTLY the same way in both  bo
                             const Word16 dim                             /* i:   Length of vector                 */
 )
 {
-
+#ifdef ENABLE_HR_MODE
+    Dyn_Mem_Deluxe_In(
+        Counter i;
+        Word32  L_tmp;
+        Word16  shift_num, shift_tot;
+        Word32  isqrtQ31_local; 
+        Word16  tmp, exp, exp_shift;
+        Word32  L_yy;
+    );
+#else
     Dyn_Mem_Deluxe_In(
         Counter i;
         Word32  L_tmp;
@@ -82,6 +105,7 @@ void pvq_dec_en1_normQ14_fx(/*  Have to be used EXACTLY the same way in both  bo
         Word16  isqrtQ16_local, tmp, exp, exp_shift;
         Word32  L_yy;
     );
+#endif
 
 /* energy normalization starts here */
     L_yy = L_mult0(y[0], y[0]);
@@ -93,7 +117,11 @@ void pvq_dec_en1_normQ14_fx(/*  Have to be used EXACTLY the same way in both  bo
     IF (L_sub(L_yy, SQRT_EN_MAX_FX) < 0)
     {
         ASSERT(L_yy > 4);                               /* Q16 isqrt table lookup not valid below  5  */
+#ifdef ENABLE_HR_MODE
+        isqrtQ31_local = isqrt_Q31tab[L_yy]; move16(); /* 1 cycle */
+#else
         isqrtQ16_local = isqrt_Q16tab[L_yy]; move16(); /* 1 cycle */
+#endif
     }
     ELSE
     {
@@ -101,16 +129,26 @@ void pvq_dec_en1_normQ14_fx(/*  Have to be used EXACTLY the same way in both  bo
         exp            = 15; move16(); /* set ISqrt16() exp_in to get delta exp out near 0  when Lyy is in Q0  */
         tmp            = ISqrt16(extract_l(L_yy),
                       &exp); /* exp  out is now a delta shift with a later tmp Q15 multiplication in mind  */
+#ifdef ENABLE_HR_MODE
+        exp_shift      = add(exp, 16);   /*  up to Q16 */
+        isqrtQ31_local = L_shl(L_deposit_l(tmp), exp_shift); /* new mantissa in a fixed  Q16  */
+#else
         exp_shift      = add(exp, 16 - 15);   /*  up to Q16 */
         isqrtQ16_local = shl(tmp, exp_shift); /* new mantissa in a fixed  Q16  */
+#endif
     }
 
     shift_num = norm_s(k_val_max);      /* simply account for the preknown fixed max possible pulseamp in y */
     shift_tot = sub(14 - 1, shift_num); /* upshift  to get  to Q14 */
     FOR (i = 0; i < dim; i++) /*  upshifted y[i]  used    */
     {
+#ifdef ENABLE_HR_MODE
+        L_tmp = Mpy_32_16(isqrtQ31_local, shl_pos(y[i], shift_num)); /* Q(16+0+shift_num +1    =   shift_num+1  */
+        xq[i] = L_shl(L_tmp, shift_tot + 1); move32();     /* Q30 ,      */
+#else
         L_tmp = L_mult(isqrtQ16_local, shl_pos(y[i], shift_num)); /* Q(16+0+shift_num +1    =   shift_num+1  */
         xq[i] = round_fx(L_shl(L_tmp, shift_tot)); move16();     /* Q14 ,      */
+#endif
     }
 
     Dyn_Mem_Deluxe_Out();

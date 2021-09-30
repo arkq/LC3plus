@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -17,6 +17,9 @@
 void processPerBandEnergy_fx(Word32 *d2_fx, Word16 *d2_fx_exp, Word32 *d_fx, Word16 d_fx_exp,
                              const Word16 *band_offsets, Word16 fs_idx, Word16 n_bands, Word16 linear, Word16 frame_dms,
                              Word8 *scratchBuffer
+#ifdef ENABLE_HR_MODE
+                             , Word16 hrmode
+#endif
 )
 {
     Dyn_Mem_Deluxe_In(Counter i, k, band; Word16 s; Word16 s1; Word16 s2; Word32 nrg; Word16 smax; Word16 tmp16;
@@ -26,6 +29,15 @@ void processPerBandEnergy_fx(Word32 *d2_fx, Word16 *d2_fx_exp, Word32 *d_fx, Wor
 
     d2_band_fx_exp = (Word16 *)scratchAlign(scratchBuffer, 0); /* Size = 2 * MAX_BANDS_NUMBER_PLC bytes */
 
+#ifdef ENABLE_HR_MODE
+    if (hrmode)
+    {
+        maxBwBin = MAX_BW_HR;
+        fs_idx = fs_idx + 1;
+        move16();
+    }
+    else
+#endif
     {
         maxBwBin = MAX_BW;
         move16();
@@ -61,6 +73,14 @@ void processPerBandEnergy_fx(Word32 *d2_fx, Word16 *d2_fx_exp, Word32 *d_fx, Wor
 
     IF (sub(linear, 1) == 0)
     {
+    
+    #ifdef ENABLE_HR_MODE
+        if (hrmode)
+        {
+            fs_idx = fs_idx - 1;
+        }
+    #endif
+
         SWITCH (frame_dms)
         {
         case 25:
@@ -179,11 +199,24 @@ void processPerBandEnergy_fx(Word32 *d2_fx, Word16 *d2_fx_exp, Word32 *d_fx, Wor
         }
 
         nbands = sub(band_offsets[band + 1], band_offsets[band]);
+#ifdef ENABLE_HR_MODE
+        if (nbands < 32)
+        {
+            nbands = s_min(s_max(0, nbands), 31);
+            /* specify headroom, it can be reduced by one due to use of L_mac0 */
+            s2 = sub(s1, bands_nrg_scale[nbands]);
+        }
+        else
+        {
+            /* Active only in the 96 kHz case */
+            s2 = sub(s1, 5);
+        }
+#else
         ASSERT(nbands < 32);
         nbands = s_min(s_max(0, nbands), 31);
-		/* specify headroom, it can be reduced by one due to use of L_mac0 */
+        /* specify headroom, it can be reduced by one due to use of L_mac0 */
         s2 = sub(s1, bands_nrg_scale[nbands]);
-
+#endif
         
         /* calculate energy per band */
         nrg = 0;
@@ -221,7 +254,7 @@ void processPerBandEnergy_fx(Word32 *d2_fx, Word16 *d2_fx_exp, Word32 *d_fx, Wor
     }
 
     /* Save exponent for all bands */
-    *d2_fx_exp = add(shl_pos(d_fx_exp, 1), smax);
+    *d2_fx_exp = s_max(add(shl_pos(d_fx_exp, 1), smax), -32);
     move16();
 
     Dyn_Mem_Deluxe_Out();

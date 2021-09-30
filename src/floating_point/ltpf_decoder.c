@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -13,7 +13,9 @@
 void process_ltpf_decoder_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_FLOAT* y, LC3_INT fs, LC3_FLOAT* mem_old_x, LC3_FLOAT* mem_old_y,
                              LC3_INT* mem_pitch_int, LC3_INT* mem_pitch_fr, LC3_FLOAT* mem_gain, LC3_INT* mem_beta_idx, LC3_INT bfi,
                              LC3_INT* param, LC3_INT* mem_param, LC3_INT conf_beta_idx, LC3_FLOAT conf_beta, LC3_INT concealMethod,
-                             LC3_FLOAT damping)
+                             LC3_FLOAT damping
+                             , LC3_INT *mem_ltpf_active
+)
 {
     LC3_INT i = 0, j = 0, n = 0, N = 0, L_past_x = 0, N4 = 0, N34 = 0,
         pitch_int = 0, pitch_fr = 0, p1 = 0, p2 = 0, L_past_y = 0, inter_len = 0, tilt_len = 0,
@@ -25,18 +27,7 @@ void process_ltpf_decoder_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_FLOAT* y, LC3_INT f
     const LC3_FLOAT *inter_filter[4], *tilt_filter[4];
 
 
-    UNUSED(damping);
-
     conf_alpha = 0.85;
-
-    if (bfi == 1 && concealMethod == 0)
-    {
-        param[0] = 0;
-        param[1] = 0;
-        pitch_int = 0;
-        pitch_fr  = 0;
-        gain = 0;
-    }
 
     if (bfi != 1) {
         /* Decode pitch */
@@ -75,10 +66,56 @@ void process_ltpf_decoder_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_FLOAT* y, LC3_INT f
             gain = 0;
         }
     }
+    else if (concealMethod > 0) {
+        if (conf_beta_idx < 0) {
+            if (mem_param[1] && *mem_beta_idx >= 0)
+            {
+                conf_beta_idx = *mem_beta_idx;
+            }
+        }
 
+        memmove(param, mem_param, sizeof(LC3_INT32) * 3);
+        if (concealMethod == 2)
+        {
+            /* cause the ltpf to "fade_out" and only filter during initial 2.5 ms and then its buffer during 7.5 ms */
+            assert(bfi == 1);
+            param[1] = 0; /* ltpf_active = 0 */
+        }
 
-    if (conf_beta > 0)
-    {
+        pitch_int = *mem_pitch_int;
+        pitch_fr  = *mem_pitch_fr;
+        gain      = (LC3_FLOAT) *mem_gain * damping;
+    }
+
+        if ((conf_beta <= 0) && (*mem_ltpf_active == 0))
+        {
+            if (fs == 8000 || fs == 16000) {
+                tilt_len = 4 - 2;
+            }
+            else if (fs == 24000) {
+                tilt_len = 6 - 2;
+            }
+            else if (fs == 32000) {
+                tilt_len = 8 - 2;
+            }
+            else if (fs == 44100 || fs == 48000) {
+                tilt_len = 12 - 2;
+            }
+
+            N = xLen;
+            old_x_len = tilt_len;
+            inter_len = MAX(fs, 16000) / 8000;
+            old_y_len = ceilf((LC3_FLOAT)228.0 * fs / 12800.0) + inter_len;     /* 228.0 needed to make use of ceil */
+
+            move_float(mem_old_y, &mem_old_y[N], (old_y_len - N));
+            move_float(&mem_old_y[old_y_len - N], x, N);
+            move_float(mem_old_x, &x[N - old_x_len], old_x_len);
+
+            *mem_ltpf_active = 0;
+        }
+        else
+        {
+            inter_len_r = 0; tilt_len_r = 0;
         if (fs == 8000 || fs == 16000) {
             inter_filter[0] = conf_inter_filter_16[0];
             inter_filter[1] = conf_inter_filter_16[1];
@@ -138,7 +175,7 @@ void process_ltpf_decoder_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_FLOAT* y, LC3_INT f
         /* Init buffers */
         N         = xLen;
         old_x_len = tilt_len;
-        old_y_len = ceil(228 * fs / 12800) + inter_len;
+        old_y_len = ceilf(228.0 * fs / 12800.0) + inter_len;
         L_past_x = old_x_len;
         move_float(buf_x, mem_old_x, old_x_len);
         move_float(&buf_x[old_x_len], x, xLen);
@@ -305,6 +342,8 @@ void process_ltpf_decoder_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_FLOAT* y, LC3_INT f
         /* Update memory */
         move_float(mem_old_x, &buf_x[N], old_x_len);
         move_float(mem_old_y, &buf_y[N], old_y_len);
+
+        *mem_ltpf_active = (conf_beta > 0);
     }
 
     /* Update ltpf param memory */

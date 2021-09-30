@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -44,7 +44,7 @@ void process_ltpf_decoder_fx(Word16 *x_e, Word16 L_frame, Word16 old_x_len, Word
 
 
     test();
-    IF ((sub(bfi, 1) == 0) && (concealMethod == 0))
+    IF ((sub(bfi, 1) == 0) && (sub(concealMethod, LC3_CON_TEC_NS_STD) == 0))
     {
         ltpf        = 0; move16();
         ltpf_active = 0; move16();
@@ -80,7 +80,16 @@ void process_ltpf_decoder_fx(Word16 *x_e, Word16 L_frame, Word16 old_x_len, Word
                 pitch_fr  = 0; move16();
             }
             pitch     = add(shl_pos(pitch_int, 2), pitch_fr);
-            pitch     = mult_r(shl_pos(pitch, 2), pitch_scale[fs_idx]);
+#ifdef ENABLE_HR_MODE
+            IF (sub(fs_idx, 5) == 0)
+            {
+                pitch = round_fx(L_shl_pos(L_mult(shl_pos(pitch, 2), pitch_scale[4]), 1));
+            }
+            ELSE
+#endif
+            {
+                pitch = mult_r(shl_pos(pitch, 2), pitch_scale[fs_idx]);
+            }
             pitch_int = shr_pos(pitch, 2);
             pitch_fr  = sub(pitch, shl_pos(pitch_int, 2));
         }
@@ -101,7 +110,7 @@ void process_ltpf_decoder_fx(Word16 *x_e, Word16 L_frame, Word16 old_x_len, Word
             gain = gain_scale_fac[scale_fac_idx]; move16();
         }
     }
-    ELSE IF (concealMethod > 0)
+    ELSE IF (sub(concealMethod, LC3_CON_TEC_NS_STD) != 0)
     {
         /* fix to avoid not initialized filtering for concelament 
            might be necessary in case of bit errors or rate switching */
@@ -114,7 +123,7 @@ void process_ltpf_decoder_fx(Word16 *x_e, Word16 L_frame, Word16 old_x_len, Word
         
         ltpf_active = *mem_ltpf_active; move16();
 
-        if ((sub(concealMethod, 2) == 0))
+        if ((sub(concealMethod, LC3_CON_TEC_PHASE_ECU) == 0))
         { /* always start fade off to save filtering WMOPS for the remaining 7.5 ms  */
             assert(bfi == 1);
             ltpf_active = 0; move16(); /*always start fade off , still maintain  *mem_ltpf_active */
@@ -186,9 +195,13 @@ void process_ltpf_decoder_fx(Word16 *x_e, Word16 L_frame, Word16 old_x_len, Word
         /* Input/Output buffers */
         x = old_x + old_x_len;
         y = old_y + old_y_len;
-		
-		N4  = ltpf_overlap_len[fs_idx]; move16();
-		N34 = sub(L_frame, N4);         move16();
+        
+#ifdef ENABLE_HR_MODE
+        assert(fs_idx < 5 && "Ltpf not supported for 96kHz!\n");
+#endif
+        
+        N4  = ltpf_overlap_len[fs_idx]; move16();
+        N34 = sub(L_frame, N4);         move16();
 
         /* Input */
         basop_memmove(x, x_in, (L_frame) * sizeof(Word16));

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -56,13 +56,17 @@ typedef struct {
     uint8_t resBits[MAX_RESBITS_LEN];
     LC3_INT regBits;
     
+    LC3_INT16 n_pc;
+    LC3_INT16 n_pccw;
+    LC3_INT16 be_bp_left;
+    LC3_INT16 be_bp_right;
 
     Mdct mdctStruct;
     Dct2 dct2StructSNS;
 } EncSetup;
 
 /* Constants and sampling rate derived values go in this struct */
-struct LC3_Enc {
+struct LC3PLUS_Enc {
     EncSetup*  channel_setup[MAX_CHANNELS];
     const LC3_INT* W_fx;
     const LC3_INT* bands_offset;
@@ -92,15 +96,23 @@ struct LC3_Enc {
     LC3_INT BW_cutoff_bits;
     LC3_INT r12k8_mem_in_len;
     LC3_INT r12k8_mem_out_len;
+    LC3_INT16 near_nyquist_index;
+    LC3_INT16 near_nyquist_flag;
     LC3_INT tnsMaxOrder;
     LC3_INT hrmode;
     LC3_INT bandwidth;
+    LC3_INT  bandwidth_preset;
+    LC3_INT  bw_ctrl_active;
     LC3_INT bw_ctrl_cutoff_bin;
     LC3_INT bw_index;
     LC3_FLOAT sns_damping;
     LC3_INT attdec_nblocks;
     LC3_FLOAT attdec_damping;
     LC3_INT attdec_hangover_thresh;
+    
+    LC3_INT16 combined_channel_coding;
+    LC3_INT16 epmr;
+    LC3_INT lfe;
 };
 
 #endif

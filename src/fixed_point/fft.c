@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -11,8 +11,12 @@
 #include "functions.h"
 #include "rom_basop_util.h"
 
+#ifdef ENABLE_FFT_RESCALE
+#ifndef FFT_RESCALE_HR
+#define FFT_RESCALE_HR 3
+#endif
+#endif
 
-#ifndef USE_KISS_FFT
 #define SCALEFACTORN2 3
 #define SCALEFACTOR4 3
 #define SCALEFACTOR5 4
@@ -22,6 +26,10 @@
 #define SCALEFACTOR30_2 1
 #define SCALEFACTOR32_1 5
 #define SCALEFACTOR32_2 1
+
+#ifdef ENABLE_HR_MODE
+#define Mpy_32_xx Mpy_32_32
+#else
 #define Mpy_32_xx Mpy_32_16
 #endif
 
@@ -46,9 +54,24 @@
 #define SCALEFACTOR256 9
 #define SCALEFACTOR384 11
 
-#ifndef USE_KISS_FFT
+#ifdef ENABLE_HR_MODE
+#ifndef ENABLE_FFT_30X16
+#define SCALEFACTOR480 10
+#else
+#define SCALEFACTOR480 11
+#endif
+#endif
 
+#ifdef ENABLE_HR_MODE
+#undef  L_shr_pos
+#define L_shr_pos(x, y) (L_shr(L_add(L_shr((x), ((y)-1)),1),1))
+#endif
+
+#ifdef ENABLE_HR_MODE
+#define FFTC(x) ((Word32)x)
+#else
 #define FFTC(x) WORD322WORD16((Word32)x)
+#endif
 
 #define C31 (FFTC(0x91261468)) /* FL2WORD32( -0.86602540) -sqrt(3)/2 */
 
@@ -80,6 +103,28 @@
 #define C81_32 (0x5a82799a) /* FL2WORD32( 7.071067811865475e-1) */
 #define C82_32 (0xa57d8666) /* FL2WORD32(-7.071067811865475e-1) */
 
+#if defined(ENABLE_HR_MODE)
+
+#    define cplxMpy4_16_0(re, im, a, b, c, d)                                                                              \
+     do                                                                                                                 \
+    {                                                                                                                  \
+        re = L_sub(Mpy_32_xx(a, c), Mpy_32_xx(b, d));                                                                  \
+        move32();                                                                                                      \
+        im = L_add(Mpy_32_xx(a, d), Mpy_32_xx(b, c));                                                                  \
+        move32();                                                                                                      \
+    } while (0)
+
+#    define cplxMpy4_16_1(re, im, a, b)                                                                                    \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        re = a;                                                                                                        \
+        move32();                                                                                                      \
+        im = b;                                                                                                        \
+        move32();                                                                                                      \
+    } while (0)
+
+#  endif
+
 #define Mpy3_0(s12, s13, s14, s15, t0, t1, t2, t3)                                                                     \
     do                                                                                                                 \
     {                                                                                                                  \
@@ -98,6 +143,15 @@
         b  = L_add(Mpy_32_32(as, d), Mpy_32_32(bs, c));                                                                \
     } while (0)
 
+#ifdef ENABLE_HR_MODE
+#define cplxMpy4_4_0(re, im, a, b, c, d)                                                                               \
+    re = L_shr_pos(L_sub(Mpy_32_xx(a, c), Mpy_32_xx(b, d)), SCALEFACTOR60 - SCALEFACTOR15);                            \
+    im = L_shr_pos(L_add(Mpy_32_xx(a, d), Mpy_32_xx(b, c)), SCALEFACTOR60 - SCALEFACTOR15);
+
+#    define cplxMpy4_4_1(re, im, a, b)                                                                                     \
+    re = L_shr_pos(a, SCALEFACTOR60 - SCALEFACTOR15);                                                                  \
+    im = L_shr_pos(b, SCALEFACTOR60 - SCALEFACTOR15);
+#else
 #define cplxMpy4_4_0(re, im, a, b, c, d)                                                                               \
     re = L_shr(L_sub(Mpy_32_xx(a, c), Mpy_32_xx(b, d)), SCALEFACTOR60 - SCALEFACTOR15);                                \
     im = L_shr(L_add(Mpy_32_xx(a, d), Mpy_32_xx(b, c)), SCALEFACTOR60 - SCALEFACTOR15);
@@ -105,7 +159,7 @@
 #define cplxMpy4_4_1(re, im, a, b)                                                                                     \
     re = L_shr(a, SCALEFACTOR60 - SCALEFACTOR15);                                                                      \
     im = L_shr(b, SCALEFACTOR60 - SCALEFACTOR15);
-
+#endif
 
 #define cplxMpy4_8_0(re, im, a, b, c, d)                                                                               \
     do                                                                                                                 \
@@ -926,14 +980,14 @@ static void fft12(Word32 *pInput)
 
     /* First 3*2 samples are shifted right by 2 before output */
     r1      = L_add(L_shr_pos(pSrc[8], 2), L_shr_pos(pSrc[16], 2));
-    r2      = Mpy_32_16(L_sub(L_shr_pos(pSrc[8], 2), L_shr_pos(pSrc[16], 2)), C31);
+    r2      = Mpy_32_xx(L_sub(L_shr_pos(pSrc[8], 2), L_shr_pos(pSrc[16], 2)), C31);
     pD      = L_shr_pos(pSrc[0], 2);
     pDst[0] = L_shr_pos(L_add(pD, r1), 1);
     r1      = L_sub(pD, L_shr_pos(r1, 1));
 
     /* imaginary part */
     s1      = L_add(L_shr_pos(pSrc[9], 2), L_shr_pos(pSrc[17], 2));
-    s2      = Mpy_32_16(L_sub(L_shr_pos(pSrc[9], 2), L_shr_pos(pSrc[17], 2)), C31);
+    s2      = Mpy_32_xx(L_sub(L_shr_pos(pSrc[9], 2), L_shr_pos(pSrc[17], 2)), C31);
     pD      = L_shr_pos(pSrc[1], 2);
     pDst[1] = L_shr_pos(L_add(pD, s1), 1);
     s1      = L_sub(pD, L_shr_pos(s1, 1));
@@ -960,14 +1014,14 @@ static void fft12(Word32 *pInput)
         /* sample 2,3 4,5 are shifted right by 1 and complex multiplied before output */
 
         r1      = L_add(L_shr_pos(pSrc[8], 2), L_shr_pos(pSrc[16], 2));
-        r2      = Mpy_32_16(L_sub(L_shr_pos(pSrc[8], 2), L_shr_pos(pSrc[16], 2)), C31);
+        r2      = Mpy_32_xx(L_sub(L_shr_pos(pSrc[8], 2), L_shr_pos(pSrc[16], 2)), C31);
         pD      = L_shr_pos(pSrc[0], 2);
         pDst[0] = L_shr_pos(L_add(pD, r1), 1);
         r1      = L_sub(pD, L_shr_pos(r1, 1));
 
         /* imaginary part */
         s1      = L_add(L_shr_pos(pSrc[9], 2), L_shr_pos(pSrc[17], 2));
-        s2      = Mpy_32_16(L_sub(L_shr_pos(pSrc[9], 2), L_shr_pos(pSrc[17], 2)), C31);
+        s2      = Mpy_32_xx(L_sub(L_shr_pos(pSrc[9], 2), L_shr_pos(pSrc[17], 2)), C31);
         pD      = L_shr_pos(pSrc[1], 2);
         pDst[1] = L_shr_pos(L_add(pD, s1), 1);
         s1      = L_sub(pD, L_shr_pos(s1, 1));
@@ -997,14 +1051,14 @@ static void fft12(Word32 *pInput)
     /* sample 2,3 is shifted right by 1 and complex multiplied with (0.0,+1.0) */
     /* sample 4,5 is shifted right by 1 and complex multiplied with (-1.0,0.0) */
     r1      = L_add(L_shr_pos(pSrc[8], 2), L_shr_pos(pSrc[16], 2));
-    r2      = Mpy_32_16(L_sub(L_shr_pos(pSrc[8], 2), L_shr_pos(pSrc[16], 2)), C31);
+    r2      = Mpy_32_xx(L_sub(L_shr_pos(pSrc[8], 2), L_shr_pos(pSrc[16], 2)), C31);
     pD      = L_shr_pos(pSrc[0], 2);
     pDst[0] = L_shr_pos(L_add(pD, r1), 1);
     r1      = L_sub(pD, L_shr_pos(r1, 1));
 
     /* imaginary part */
     s1      = L_add(L_shr_pos(pSrc[9], 2), L_shr_pos(pSrc[17], 2));
-    s2      = Mpy_32_16(L_sub(L_shr_pos(pSrc[9], 2), L_shr_pos(pSrc[17], 2)), C31);
+    s2      = Mpy_32_xx(L_sub(L_shr_pos(pSrc[9], 2), L_shr_pos(pSrc[17], 2)), C31);
     pD      = L_shr_pos(pSrc[1], 2);
     pDst[1] = L_shr_pos(L_add(pD, s1), 1);
     s1      = L_sub(pD, L_shr_pos(s1, 1));
@@ -3361,11 +3415,23 @@ static void fft40(Word32 *re, Word32 *im, Word16 sx, Word32 *x)
  */
 
 
-static void fftN2(Word32 *re, Word32 *im, const Word16 *W, Word16 dim1, Word16 dim2, Word16 sx, Word16 sc, Word32 *x,
-                  Word16 Woff)
+static void fftN2(Word32 *re, Word32 *im,
+#ifdef ENABLE_HR_MODE
+                  const Word32 *W,
+#else
+                  const Word16 *W,
+#endif
+                  Word16 dim1, Word16 dim2, Word16 sx, Word16 sc,
+                  Word16 Woff
+                  , Word8 *scratchBuffer
+#ifdef ENABLE_FFT_RESCALE
+                  , Word16 *scale
+#endif
+                  )
 {
     Dyn_Mem_Deluxe_In(Counter i, j;);
 
+    Word32 *x = scratchAlign(scratchBuffer, 0);
 
     FOR (i = 0; i < dim2; i++)
     {
@@ -3405,6 +3471,7 @@ static void fftN2(Word32 *re, Word32 *im, const Word16 *W, Word16 dim1, Word16 d
         {
             fft15(&x[i * 2 * dim1], &x[i * 2 * dim1 + 1], 2);
         }
+        
         BREAK;
     case 16:
         FOR (i = 0; i < dim2; i++)
@@ -3430,8 +3497,38 @@ static void fftN2(Word32 *re, Word32 *im, const Word16 *W, Word16 dim1, Word16 d
             fft32(&x[i * 2 * dim1], &x[i * 2 * dim1 + 1], 2);
         }
         BREAK;
+#ifdef ENABLE_HR_MODE
+#if (defined LC3_FFT15)
+    case 60:
+        FOR (i = 0; i < dim2; i++)
+        {
+#ifndef ENABLE_FFT_RESCALE
+            fftN2(&x[i * 2 * dim1], &x[i * 2 * dim1 + 1], RotVector_480, 15, 4, sx, 4, 60, scratch);
+#else
+            fftN2(&x[i * 2 * dim1], &x[i * 2 * dim1 + 1], RotVector_480, 15, 4, sx, 4, 60, scratch, NULL);
+#endif
+        }
+        BREAK;
+#endif
+#endif
     default: ASSERT(0);
     }
+    
+#ifdef ENABLE_FFT_RESCALE
+    IF (scale)
+    {
+        *scale = s_max(sub(getScaleFactor32(x, dim1 * dim2 * 2), FFT_RESCALE_HR), 0); move16();
+
+#if defined(FUNCTION_scaleValues_32)
+        scaleValues_32(x, dim1 * dim2, *scale);
+#else
+        FOR (i = 0; i < dim1 * dim2 * 2; i++)
+        {
+            x[i] = L_shl_pos(x[i], *scale); move32();
+        }
+    }
+#endif
+#endif
 
     SWITCH (dim2)
     {
@@ -3486,6 +3583,7 @@ static void fftN2(Word32 *re, Word32 *im, const Word16 *W, Word16 dim1, Word16 d
             im[sx * i + sx * 3 * dim1] = L_add(t03, t07);
             move32();
         }
+        
         BREAK;
     }
     case 8:
@@ -3644,6 +3742,53 @@ static void fftN2(Word32 *re, Word32 *im, const Word16 *W, Word16 dim1, Word16 d
         }
         BREAK;
     }
+    
+#if defined(ENABLE_HR_MODE)
+    case 16:
+    {
+        Word32 y[2 * 20];
+        FOR (j = 0; j < dim2; j++)
+        {
+            cplxMpy4_16_1(y[2 * j], y[2 * j + 1], x[2 * 0 + 2 * j * dim1], x[2 * 0 + 2 * j * dim1 + 1]);
+        }
+        
+        fft16(&y[0], &y[1], 2);
+        FOR (j = 0; j < dim2; j++)
+        {
+            re[sx * 0 + sx * j * dim1] = y[2 * j];
+            move32();
+            im[sx * 0 + sx * j * dim1] = y[2 * j + 1];
+            move32();
+        }
+
+        FOR (i = 1; i < dim1; i++)
+        {
+            cplxMpy4_16_1(y[2 * (0 + 0)], y[2 * (0 + 0) + 1], x[2 * i + 2 * (0 + 0) * dim1],
+                          x[2 * i + 2 * (0 + 0) * dim1 + 1]);
+            cplxMpy4_16_0(y[2 * (0 + 1)], y[2 * (0 + 1) + 1], x[2 * i + 2 * (0 + 1) * dim1],
+                          x[2 * i + 2 * (0 + 1) * dim1 + 1], W[sc * i + sc * (0 + 1) * dim1 - Woff],
+                          W[sc * i + sc * (0 + 1) * dim1 + 1 - Woff]);
+            FOR (j = 2; j < dim2; j = j + 2)
+            {
+                cplxMpy4_16_0(y[2 * (j + 0)], y[2 * (j + 0) + 1], x[2 * i + 2 * (j + 0) * dim1],
+                              x[2 * i + 2 * (j + 0) * dim1 + 1], W[sc * i + sc * (j + 0) * dim1 - Woff],
+                              W[sc * i + sc * (j + 0) * dim1 + 1 - Woff]);
+                cplxMpy4_16_0(y[2 * (j + 1)], y[2 * (j + 1) + 1], x[2 * i + 2 * (j + 1) * dim1],
+                              x[2 * i + 2 * (j + 1) * dim1 + 1], W[sc * i + sc * (j + 1) * dim1 - Woff],
+                              W[sc * i + sc * (j + 1) * dim1 + 1 - Woff]);
+            }
+            fft16(&y[0], &y[1], 2);
+            FOR (j = 0; j < dim2; j++)
+            {
+                re[sx * i + sx * j * dim1] = y[2 * j];
+                move32();
+                im[sx * i + sx * j * dim1] = y[2 * j + 1];
+                move32();
+            }
+        }
+        BREAK;
+    }
+#    endif
     default: ASSERT(0);
     }
 
@@ -3667,6 +3812,16 @@ static void fftN2(Word32 *re, Word32 *im, const Word16 *W, Word16 dim1, Word16 d
 /* x is the scratch buffer */
 void BASOP_cfft(Word32 *re, Word32 *im, Word16 length, Word16 s, Word16 *scale, Word32 *x)
 {
+#if (defined ENABLE_FFT_RESCALE) && ((defined LC3_FFT30) || (defined ENABLE_HR_MODE))
+    Word16 fftN2scale = 0;
+#endif
+
+#ifdef ENABLE_HR_MODE
+    Word8 scratch[6128] = {0};
+#else
+    Word8 scratch[4068] = {0};
+#endif
+    
     SWITCH (length)
     {
 
@@ -3701,80 +3856,149 @@ void BASOP_cfft(Word32 *re, Word32 *im, Word16 length, Word16 s, Word16 *scale, 
         move16();
         BREAK;
     case 48:
-        fftN2(re, im, RotVector_32_12, 4, 12, s, 16, x, 64);
+#ifndef ENABLE_FFT_RESCALE
+        fftN2(re, im, RotVector_32_12, 4, 12, s, 16, 64, scratch);
+#else
+        fftN2(re, im, RotVector_32_12, 4, 12, s, 16, 64, scratch, NULL);
+#endif
         *scale = add(*scale, SCALEFACTOR48);
         move16();
         BREAK;
     case 60:
-        fftN2(re, im, RotVector_480, 15, 4, s, 4, x, 60);
+#ifndef ENABLE_FFT_RESCALE
+        fftN2(re, im, RotVector_480, 15, 4, s, 4, 60, scratch);
+#else
+        fftN2(re, im, RotVector_480, 15, 4, s, 4, 60, scratch, NULL);
+#endif
         *scale = add(*scale, SCALEFACTOR60);
         move16();
         BREAK;
     case 64:
-        fftN2(re, im, RotVector_32_8, 8, 8, s, 8, x, 64);
+#ifndef ENABLE_FFT_RESCALE
+        fftN2(re, im, RotVector_32_8, 8, 8, s, 8, 64, scratch);
+#else
+        fftN2(re, im, RotVector_32_8, 8, 8, s, 8, 64, scratch, NULL);
+#endif
         *scale = add(*scale, SCALEFACTOR64);
         move16();
         BREAK;
     case 80:
-        fftN2(re, im, RotVector_320, 10, 8, s, 4, x, 40);
+#ifndef ENABLE_FFT_RESCALE
+        fftN2(re, im, RotVector_320, 10, 8, s, 4, 40, scratch);
+#else
+        fftN2(re, im, RotVector_320, 10, 8, s, 4, 40, scratch, NULL);
+#endif
         *scale = add(*scale, SCALEFACTOR80);
         move16();
         BREAK;
     case 90:
-        fftN2(re, im, RotVector_15_6, 15, 6, s, 2, x, 30);
+#ifndef ENABLE_FFT_RESCALE
+        fftN2(re, im, RotVector_15_6, 15, 6, s, 2, 30, scratch);
+#else
+        fftN2(re, im, RotVector_15_6, 15, 6, s, 2, 30, scratch, NULL);
+#endif
         *scale = add(*scale, SCALEFACTOR90);
         move16();
         BREAK;
-    case 96:
-        fftN2(re, im, RotVector_32_12, 8, 12, s, 8, x, 64);
-        *scale = add(*scale, SCALEFACTOR96);
-        move16();
-        BREAK;
+
     case 120:
-        fftN2(re, im, RotVector_480, 15, 8, s, 4, x, 60);
+#ifndef ENABLE_FFT_RESCALE
+        fftN2(re, im, RotVector_480, 15, 8, s, 4, 60, scratch);
+#else
+        fftN2(re, im, RotVector_480, 15, 8, s, 4, 60, scratch, NULL);
+#endif
         *scale = add(*scale, SCALEFACTOR120);
         move16();
         BREAK;
     case 128:
-        fftN2(re, im, RotVector_32_8, 16, 8, s, 4, x, 64);
+#ifndef ENABLE_FFT_RESCALE
+        fftN2(re, im, RotVector_32_8, 16, 8, s, 4, 64, scratch);
+#else
+        fftN2(re, im, RotVector_32_8, 16, 8, s, 4, 64, scratch, NULL);
+#endif
         *scale = add(*scale, SCALEFACTOR128);
         move16();
         BREAK;
     case 160:
-        fftN2(re, im, RotVector_320, 20, 8, s, 2, x, 40);
+#ifndef ENABLE_FFT_RESCALE
+        fftN2(re, im, RotVector_320, 20, 8, s, 2, 40, scratch);
+#else
+        fftN2(re, im, RotVector_320, 20, 8, s, 2, 40, scratch, NULL);
+#endif
         *scale = add(*scale, SCALEFACTOR160);
         move16();
         BREAK;
     case 180:
-        fftN2(re, im, RotVector_360, 15, 12, s, 4, x, 60);
+#ifndef ENABLE_FFT_RESCALE
+        fftN2(re, im, RotVector_360, 15, 12, s, 4, 60, scratch);
+#else
+        fftN2(re, im, RotVector_360, 15, 12, s, 4, 60, scratch, NULL);
+#endif
         *scale = add(*scale, SCALEFACTOR180);
         move16();
         BREAK;
     case 192:
-        fftN2(re, im, RotVector_32_12, 16, 12, s, 4, x, 64);
+#ifndef ENABLE_FFT_RESCALE
+        fftN2(re, im, RotVector_32_12, 16, 12, s, 4, 64, scratch);
+#else
+        fftN2(re, im, RotVector_32_12, 16, 12, s, 4, 64, scratch, NULL);
+#endif
         *scale = add(*scale, SCALEFACTOR192);
         move16();
         BREAK;
     case 240:
-        fftN2(re, im, RotVector_480, 30, 8, s, 2, x, 60);
+#ifndef ENABLE_FFT_RESCALE
+        fftN2(re, im, RotVector_480, 30, 8, s, 2, 60, scratch);
         *scale = add(*scale, SCALEFACTOR240);
+#else
+        fftN2(re, im, RotVector_480, 30, 8, s, 2, 60, scratch, &fftN2scale);
+        *scale = add(*scale, SCALEFACTOR240);
+        *scale = sub(*scale, fftN2scale); move16();
+#endif
         move16();
         BREAK;
     case 256:
-        fftN2(re, im, RotVector_32_8, 32, 8, s, 2, x, 64);
+#ifndef ENABLE_FFT_RESCALE
+        fftN2(re, im, RotVector_32_8, 32, 8, s, 2, 64, scratch);
+#else
+        fftN2(re, im, RotVector_32_8, 32, 8, s, 2, 64, scratch, NULL);
+#endif
         *scale = add(*scale, SCALEFACTOR256);
         move16();
         BREAK;
     case 384:
-        fftN2(re, im, RotVector_32_12, 32, 12, s, 2, x, 64);
+#ifndef ENABLE_FFT_RESCALE
+        fftN2(re, im, RotVector_32_12, 32, 12, s, 2, 64, scratch);
+#else
+        fftN2(re, im, RotVector_32_12, 32, 12, s, 2, 64, scratch, NULL);
+#endif
         *scale = add(*scale, SCALEFACTOR384);
         move16();
         BREAK;
+#ifdef ENABLE_HR_MODE
+    case 480:
+#ifndef ENABLE_FFT_RESCALE
+#ifndef ENABLE_FFT_30X16
+        fftN2(re, im, RotVector_960, 60, 8, s, 2, 120, scratch);
+#else
+        fftN2(re, im, RotVector_30_16, 30, 16, s, 2, 60, scratch);  
+#endif
+        *scale = add(*scale, SCALEFACTOR480); move16();
+#else
+#ifndef ENABLE_FFT_30X16
+        fftN2(re, im, RotVector_960, 60, 8, s, 2, 120, scratch, &fftN2scale);
+#else
+        fftN2(re, im, RotVector_30_16, 30, 16, s, 2, 60, scratch, &fftN2scale);
+#endif
+        *scale = add(*scale, SCALEFACTOR480); move16();
+        *scale = sub(*scale, fftN2scale); move16();
+#endif
+        BREAK;
+#endif
     default: ASSERT(0);
     }
 }
 
-#endif /* !USE_KISS_FFT */
 
 #define RFFT_TWIDDLE1(x, t1, t2, t3, t4, w1, w2, xb0, xb1, xt0, xt1)                                                   \
     do                                                                                                                 \
@@ -3959,144 +4183,3 @@ void BASOP_irfftN(Word32 *x, Word16 sizeOfFft, Word16 *scale, Word8 *scratchBuff
 }
 
 
-#ifdef USE_KISS_FFT
-/* experimental fft backend using kiss fft
- * download from https://sourceforge.net/projects/kissfft/
- * extract kiss_fft130.zip in directory which contains fft.c */
-#define FIXED_POINT 32
-#include "kiss_fft130/kiss_fft.c"
-
-typedef long long Word64;
-/* cache fft configs for reuse. kfft_fft_cfg kfft_scalefactors and kfft_idx must be changed in conjunction */
-static kiss_fft_cfg kfft_fft_cfg[22];
-
-static const int kfft_scalefactors[22] = {
-    SCALEFACTOR10,
-    SCALEFACTOR16,
-    SCALEFACTOR20,
-    SCALEFACTOR30,
-    SCALEFACTOR32,
-    SCALEFACTOR40,
-    SCALEFACTOR48,
-    SCALEFACTOR60,
-    SCALEFACTOR64,
-    SCALEFACTOR80,
-    SCALEFACTOR90,
-    SCALEFACTOR96,
-    SCALEFACTOR120,
-    SCALEFACTOR128,
-    SCALEFACTOR160,
-    SCALEFACTOR180,
-    SCALEFACTOR192,
-    SCALEFACTOR240,
-    SCALEFACTOR256,
-    SCALEFACTOR384,
-    -1,
-    -1,
-};
-
-
-static int kfft_idx(int len)
-{
-    switch (len)
-    {
-    case 10: return 0;
-    case 16: return 1;
-    case 20: return 2;
-    case 30: return 3;
-    case 32: return 4;
-    case 40: return 5;
-    case 48: return 6;
-    case 60: return 7;
-    case 64: return 8;
-    case 80: return 9;
-    case 90: return 10;
-    case 96: return 11;
-    case 120: return 12;
-    case 128: return 13;
-    case 160: return 14;
-    case 180: return 15;
-    case 192: return 16;
-    case 240: return 17;
-    case 256: return 18;
-    case 384: return 19;
-    case 512: return 20;
-    case 768: return 21;
-    default: ASSERT(0);
-    }
-    return 0;
-}
-
-/* free all kiss fft handles. */
-static void kfft_free(void)
-{
-    const int numcfg = sizeof(kfft_fft_cfg) / sizeof(*kfft_fft_cfg);
-    for (int idx = 0; idx < numcfg; idx++)
-    {
-        kiss_fft_free(kfft_fft_cfg[idx]);
-        kfft_fft_cfg[idx] = NULL;
-    }
-}
-
-
-static void kfft_fft(Word32 *restrict re, Word32 *restrict im, int len, int stride, int rshift,
-                     Word32 *restrict scratch)
-{
-    int idx = kfft_idx(len);
-    /* create config for length if it doesn't exist, not thread safe! */
-    if (!kfft_fft_cfg[idx])
-    {
-        static int first_run = 1;
-
-        kfft_fft_cfg[idx] = kiss_fft_alloc(len, 0, NULL, NULL);
-        if (first_run)
-        {
-            atexit(kfft_free);
-            first_run = 0;
-        }
-    }
-    /* interleave input if required, else do nothing */
-    kiss_fft_cpx *buf = NULL;
-    if (re + 1 == im && stride == 2)
-    {
-        buf = (kiss_fft_cpx *)re;
-    }
-    else
-    {
-        buf = (kiss_fft_cpx *)scratch;
-        for (int i = 0; i < len; i++)
-        {
-            buf[i].r = re[i * stride];
-            buf[i].i = im[i * stride];
-        }
-    }
-
-    kiss_fft(kfft_fft_cfg[idx], buf, buf);
-
-    /* undo normalisation for compability */
-    for (int i = 0; i < len; i++)
-    {
-        re[i * stride] = (Word32)(((Word64)buf[i].r * len) >> rshift);
-        im[i * stride] = (Word32)(((Word64)buf[i].i * len) >> rshift);
-    }
-}
-
-
-void BASOP_cfft(Word32 *re, Word32 *im, Word16 sizeOfFft, Word16 s, Word16 *scale, Word32 *x)
-{
-    int rshift = kfft_scalefactors[kfft_idx(sizeOfFft)];
-    ASSERT(rshift >= 0);
-    kfft_fft(re, im, sizeOfFft, s, rshift, x);
-    *scale += rshift;
-}
-
-
-
-void fft16(Word32 *re, Word32 *im, Word16 s)
-{
-    Word32 scratch[32];
-    kfft_fft(re, im, 16, s, 0, scratch);
-}
-
-
-#endif /* USE_KISS_FFT */

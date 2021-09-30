@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -31,7 +31,12 @@
  *    void
  */
 void processTdac_fx(Word16 *ola_mem, Word16 *ola_mem_exp, const Word16 *synth_inp, const Word16 synth_exp_inp,
-                    const Word16 *win, const Word16 la_zeroes, const Word16 frame_len, Word8 *scratchBuffer)
+#ifdef ENABLE_HR_MODE
+                    const Word32 *win,
+#else
+                    const Word16 *win,
+#endif
+                    const Word16 la_zeroes, const Word16 frame_len, Word8 *scratchBuffer)
 {
     Counter       i;
     Word16        s;
@@ -46,10 +51,11 @@ void processTdac_fx(Word16 *ola_mem, Word16 *ola_mem_exp, const Word16 *synth_in
     Word16 *      synth;
     Word16        synth_len;
     Word16        synth_exp;
-    const Word16 *win1;
-    const Word16 *win2;
-    const Word16 *win3;
-    const Word16 *win4;
+#ifdef ENABLE_HR_MODE
+    const Word32 *win1, *win2, *win3, *win4;
+#else
+    const Word16 *win1, *win2, *win3, *win4;
+#endif
     const Word16 *synth1;
     const Word16 *synth2;
     Word16 *      ola_mem1;
@@ -90,20 +96,30 @@ void processTdac_fx(Word16 *ola_mem, Word16 *ola_mem_exp, const Word16 *synth_in
     NZ  = sub(LD2, la_zeroes);
 
     /* inverse normalization of sqrt(2/N) inside window */
-    INV_NORM   = negate(shl_pos(frame_len, (15 - 9)));
-    INV_NORM_E = 2; move16();
-    if (norm_s(INV_NORM) > 0)
+#ifdef ENABLE_HR_MODE
+    IF (sub(frame_len, 960) == 0)
     {
-        INV_NORM   = shl_pos(INV_NORM, 1);
-        INV_NORM_E = 1; move16();
+        INV_NORM   = negate(shl_pos(frame_len, (15 - 10)));
+        INV_NORM_E = 3; move16();
     }
-    if (sub(frame_len, 120) <= 0)
+    ELSE
+#endif
     {
-        INV_NORM_E = add(INV_NORM_E, 2);
-    }
-    if (sub(frame_len, 20) <= 0)
-    {
-        INV_NORM_E = add(INV_NORM_E, 2);
+        INV_NORM   = negate(shl_pos(frame_len, (15 - 9)));
+        INV_NORM_E = 2; move16();
+        if (norm_s(INV_NORM) > 0)
+        {
+            INV_NORM   = shl_pos(INV_NORM, 1);
+            INV_NORM_E = 1; move16();
+        }
+        if (sub(frame_len, 120) <= 0)
+        {
+            INV_NORM_E = add(INV_NORM_E, 2);
+        }
+        if (sub(frame_len, 20) <= 0)
+        {
+            INV_NORM_E = add(INV_NORM_E, 2);
+        }
     }
 
     /* Scale input */
@@ -135,11 +151,11 @@ void processTdac_fx(Word16 *ola_mem, Word16 *ola_mem_exp, const Word16 *synth_in
     FOR (i = 0; i < NZ; i++)
     {
         /* analysis windowing + 2N -> N */
-        sz = L_mac_sat(L_mult(*synth1, *win1), *synth2, *win2);
+        sz = L_mac_sat(L_mult(*synth1, extractW16(*win1)), *synth2, extractW16(*win2));
 
         /* N -> 2N + synthesis windowing */
-        *ola_mem1 = round_fx(Mpy_32_16(sz, *win3)); move16();
-        *ola_mem2 = round_fx(Mpy_32_16(sz, *win4)); move16();
+        *ola_mem1 = round_fx(Mpy_32_16(sz, extractW16(*win3))); move16();
+        *ola_mem2 = round_fx(Mpy_32_16(sz, extractW16(*win4))); move16();
 
         /* determine headroom */
         s = norm_s(*ola_mem1);
@@ -165,10 +181,10 @@ void processTdac_fx(Word16 *ola_mem, Word16 *ola_mem_exp, const Word16 *synth_in
     FOR (; i < N; i++)
     {
         /* analysis windowing + 2N -> N */
-        sz = L_mult(*synth1, *win1);
+        sz = L_mult(*synth1, extractW16(*win1));
 
         /* N -> 2N + synthesis windowing */
-        *ola_mem1 = round_fx(Mpy_32_16(sz, *win3)); move16();
+        *ola_mem1 = round_fx(Mpy_32_16(sz, extractW16(*win3))); move16();
 
         /* determin headroom */
         s = norm_s(*ola_mem1);

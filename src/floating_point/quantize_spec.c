@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -24,9 +24,7 @@ LC3_INT sign(LC3_FLOAT x)
 }
 
 void processQuantizeSpec_fl(LC3_FLOAT x[], LC3_FLOAT gain, LC3_INT xq[], LC3_INT nt, LC3_INT totalBits, LC3_INT* nbits, LC3_INT* nbits2, LC3_INT fs,
-                            LC3_INT* lastnzout, LC3_INT* codingdata, LC3_INT* lsbMode, LC3_INT mode, LC3_INT target
-                            , LC3_INT hrmode
-)
+                            LC3_INT* lastnzout, LC3_INT* codingdata, LC3_INT* lsbMode, LC3_INT mode, LC3_INT target, LC3_INT hrmode)
 {
 
     LC3_INT rateFlag = 0, i = 0, lastnz2 = 0, m = 0, maxlev = 0, k = 0;
@@ -39,7 +37,7 @@ void processQuantizeSpec_fl(LC3_FLOAT x[], LC3_FLOAT gain, LC3_INT xq[], LC3_INT
 
     if (hrmode)
     {
-    	offset = 0.5;
+        offset = 0.5;
     }
 
 
@@ -62,7 +60,7 @@ void processQuantizeSpec_fl(LC3_FLOAT x[], LC3_FLOAT gain, LC3_INT xq[], LC3_INT
         mode = 1;
     }
 
-    /* Last non-uero 2-tuple */
+    /* Last non-zero 2-tuple */
 
     for (i = nt - 2; i >= 2; i = i - 2) {
         if (xq[i + 1] != 0 || xq[i] != 0) {
@@ -98,7 +96,7 @@ void processQuantizeSpec_fl(LC3_FLOAT x[], LC3_FLOAT gain, LC3_INT xq[], LC3_INT
         if (m == 0) {
             maxlev = -1;
         } else {
-            maxlev = floor(LC3_LOG2(MAX(m, 3))) - 1;
+            maxlev = 29 - (clz_func(MAX(m, 3)) - 1);
         }
 
         codingdata[1] = maxlev;

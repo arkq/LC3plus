@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -531,8 +531,8 @@ static inline void twiddle(LC3_FLOAT* x, const LC3_INT length, const LC3_INT n1,
     FFT_INTERNAL_TRIG_PREC sinVal = 0, cosVal = 1;
     FFT_INTERNAL_TRIG_PREC twReal = 0, twImag = 1;
 
-    cosValOrg = LC3_COS(-2 * M_PIl / length);
-    sinValOrg = LC3_SIN(-2 * M_PIl / length);
+    cosValOrg = LC3_COS(-2 * (LC3_FLOAT)M_PIl / length);
+    sinValOrg = LC3_SIN(-2 * (LC3_FLOAT)M_PIl / length);
 
     for (i = 1; i < n1; i++) {
         FFT_INTERNAL_TRIG_PREC tmp = 0.;

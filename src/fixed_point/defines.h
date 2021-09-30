@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -11,13 +11,35 @@
 #ifndef DEFINES_H
 #define DEFINES_H
 
+#ifndef DISABLE_HR_MODE
+#  define ENABLE_HR_MODE
+#endif
 
+#ifdef ENABLE_HR_MODE
+#  define MAX_BW_HR 960
+#endif
+
+#ifdef ENABLE_HR_MODE
+#  define extractW16(a) extract_h(a)
+#else
+#  define extractW16(a) (a)
+#endif
+
+#ifdef ENABLE_HR_MODE
+#  define MAX_BR 320000        /*      400 * 800 */
+#endif
 
 /* FUNCTION MACROS */
 /* NB, divisions in some of these MACROs, use mainly for initial setup, do not use in loops */
 #define CEILING(x, y) (((x) + (y)-1) / (y))
+
 #define FRAME2FS_IDX(x) (x / 100) /*   80 -> 0, 160 -> 1, 240 -> 2, 320 -> 3, 480 -> 4 */
-#define FS2FS_IDX(x) (x / 10000)  /*   8000 -> 0, 16000 -> 1, 24000 -> 2, 32000 -> 3, 48000 -> 4 */
+#ifdef ENABLE_HR_MODE
+#  define FS2FS_IDX(x) ((x) == 96000 ? 5 : (x) / 10000) /* 8000 -> 0, 16000 -> 1, 24000 -> 2, 32000 -> 3, 48000 -> 4, 96000 -> 5 */
+#else
+#  define FS2FS_IDX(x) (x / 10000)  /*   8000 -> 0, 16000 -> 1, 24000 -> 2, 32000 -> 3, 48000 -> 4 */
+#endif
+
 #define UNUSED(x) (void)(x)       /* silence unused parameter warning */
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -45,7 +67,12 @@
     (MAX_PITCH_FS(fs) + DYN_MAX_LEN(fs)) /* CLASSIFIER PCM memory requirement   */
 #define DYN_MAX_LEN_PCM_PLC_TDCAPPLYFILTER(fs)                                                                         \
     ((M + 1) + MAX_PITCH_FS(fs) + (DYN_MAX_LEN(fs) / 2)) /* TDC filtering PCM memory requirement */
-#define DYN_MAX_LEN_PCM_PLC(fs) MAX(DYN_MAX_LEN_PCM_PLC_CLASSIFIER(fs), DYN_MAX_LEN_PCM_PLC_TDCAPPLYFILTER(fs))
+
+#ifdef ENABLE_HR_MODE
+#  define DYN_MAX_LEN_PCM_PLC(fs) (MAX_PITCH_FS(fs) + DYN_MAX_LEN(fs))
+#else
+#  define DYN_MAX_LEN_PCM_PLC(fs) MAX(DYN_MAX_LEN_PCM_PLC_CLASSIFIER(fs), DYN_MAX_LEN_PCM_PLC_TDCAPPLYFILTER(fs))
+#endif
 
 #define FRAME_MS_BLOCK 25
 
@@ -72,9 +99,6 @@
 
 #endif /* NO_POST_REL_CHANGES Post-release changes */
 
-/* Error protection */
-#define EP_SCRATCH_SIZE 2048
-
 /* G192 bitstream writing/reading */
 #define G192_GOOD_FRAME 0x6B21
 #define G192_BAD_FRAME 0x6B20
@@ -92,9 +116,9 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
   gcc630 supported by MATLAB 2018b, via Mingw "app"
   */
 #ifdef __GNUC__
-#define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
+#  define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
 #else
-#define GCC_VERSION 0
+#  define GCC_VERSION 0
 #endif
 
 /* Define __forceinline as empty if ARM not activated to avoid any errors */
@@ -103,55 +127,90 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #define __forceinline
 
 /* SUBSETS */
-#if !(defined(SUBSET_NB) || defined(SUBSET_SQ) || defined(SUBSET_HQ) || defined(SUBSET_SWB) || defined(SUBSET_FB))
-#define SUBSET_NB
-#define SUBSET_SQ
-#define SUBSET_HQ
-#define SUBSET_SWB
-#define SUBSET_FB
+#if !(defined(SUBSET_NB) || defined(SUBSET_WB) || defined(SUBSET_SSWB) || defined(SUBSET_SWB) || defined(SUBSET_FB) || defined(SUBSET_UB))
+#  define SUBSET_NB
+#  define SUBSET_WB
+#  define SUBSET_SSWB
+#  define SUBSET_SWB
+#  define SUBSET_FB
+#  ifdef ENABLE_HR_MODE
+#    define SUBSET_UB
+#  endif
 #endif
 
 #define PACK_RESBITS
 
 /* FRAME/BUFFER */
-#ifdef SUBSET_FB
-#define MAX_LEN 480 /* = 10ms at 48kHz */
+#ifdef SUBSET_UB
+#  define MAX_LEN 960 /* = 10ms at 96kHz */
+#elif defined SUBSET_FB
+#  define MAX_LEN 480 /* = 10ms at 48kHz */
 #elif defined(SUBSET_SWB)
-#define MAX_LEN 320 /* = 10ms at 32kHz */
-#elif defined(SUBSET_HQ)
-#define MAX_LEN 240 /* = 10ms at 24kHz */
-#elif defined(SUBSET_SQ)
-#define MAX_LEN 160 /* = 10ms at 16kHz */
-
+#  define MAX_LEN 320 /* = 10ms at 32kHz */
+#elif defined(SUBSET_SSWB)
+#  define MAX_LEN 240 /* = 10ms at 24kHz */
+#elif defined(SUBSET_WB)
+#  define MAX_LEN 160 /* = 10ms at 16kHz */
 #elif defined(SUBSET_NB)
-#define MAX_LEN 80 /* = 10ms at 8kHz */
+#  define MAX_LEN 80 /* = 10ms at 8kHz */
 #endif
 
-#define MAX_RESBITS MAX_LEN
+#ifdef ENABLE_HR_MODE
+#  define ENABLE_FFT_RESCALE
+#  define ENABLE_FFT_30X16
+#  define ENABLE_DCTIV_RESCALE
+
+#  define EXT_RES_ITER_MAX 20
+#  define MAX_RESBITS 5000
+#  define HR_MODE_SCRATCH_SIZE 60
+#else /* ENABLE_HR_MODE */
+#  define MAX_RESBITS MAX_LEN
+#endif /* ENABLE_HR_MODE */
     
 /* BW Cutoff-Detection */
 #define MAX_BW_BANDS_NUMBER 5
 
-
-#define MAX_RESBITS_LEN (MAX_RESBITS)
-#define MAX_RESBITS_LEN_32BIT_ALIGN (((MAX_RESBITS_LEN + 3)/4)*4)
-
+#ifdef ENABLE_HR_MODE
+#  define RESBITS_PACK_SHIFT 3
+#  define RESBITS_PACK_N (1<<(RESBITS_PACK_SHIFT))
+#  define RESBITS_PACK_MASK (RESBITS_PACK_N - 1)
+#  define MAX_RESBITS_LEN ((MAX_RESBITS + RESBITS_PACK_MASK) >> RESBITS_PACK_SHIFT)
+#  define MAX_RESBITS_LEN_32BIT_ALIGN (((MAX_RESBITS_LEN + 3)/4)*4)
+#else /* ENABLE_HR_MODE */
+#  define MAX_RESBITS_LEN (MAX_RESBITS)
+#  define MAX_RESBITS_LEN_32BIT_ALIGN (((MAX_RESBITS_LEN + 3)/4)*4)
+#endif /* ENABLE_HR_MODE */
 
 #define MAX_CHANNELS 2
-#define MIN_NBYTES 20  /* 16kbps at 8/16/24/32/48kHz */
-#define MAX_NBYTES 435 /* 320kbps at 44.1kHz */
-#define MAX_NBYTES_RED 400 /* 320kbps at 48kHz */
-#define BYTESBUFSIZE (MAX_NBYTES * MAX_CHANNELS)
+#define MIN_NBYTES      20  /*  100dms:  16  kbps at !=44.1kHz,  14.7kbps at 44.1kHz
+                                 50dms:  32  kbps at !=44.1kHz,  29.4kbps at 44.1kHz
+                                 25dms:  64  kbps at !=44.1kHz,  58.8kbps at 44.1kHz */
+#define MAX_NBYTES_025 100  /* any dms: 320  kbps at !=44.1kHz, 294  kbps at 44.1kHz */
+#define MAX_NBYTES_050 200  /* any dms: 320  kbps at !=44.1kHz, 294  kbps at 44.1kHz */
+#define MAX_NBYTES_100 400  /* any dms: 320  kbps at !=44.1kHz, 294  kbps at 44.1kHz */
+#ifdef ENABLE_HR_MODE
+#    define MIN_BR_25MS_48KHZ_HR ((int)172800/3200/2)*3200
+#    define MIN_BR_25MS_96KHZ_HR ((int)198400/3200/2)*3200
+#    define MIN_BR_50MS_48KHZ_HR ((int)148800/1600/2)*1600
+#    define MIN_BR_50MS_96KHZ_HR ((int)174400/1600/2)*1600
+#    define MIN_BR_100MS_48KHZ_HR ((int)124800/800/2)*800
+#    define MIN_BR_100MS_96KHZ_HR ((int)149600/800/2)*800
+#  define MAX_NBYTES_RED_HR 625 /* From table 5.2 */
+#  define BYTESBUFSIZE (MAX_NBYTES_RED_HR * LC3PLUS_MAX_CHANNELS)
+#else
+#  define BYTESBUFSIZE (MAX_NBYTES_100 * LC3PLUS_MAX_CHANNELS)
+#endif
 #define MAX_BW_BIN 400
 #define FEC_SLOT_BYTES_MIN 40
-#define FEC_SLOT_BYTES_MAX 300
+#  define FEC_SLOT_BYTES_MAX 400
 #if MAX_BW_BIN > MAX_LEN
-#define MAX_BW MAX_LEN
+#  define MAX_BW MAX_LEN
 #else
-#define MAX_BW MAX_BW_BIN
+#  define MAX_BW MAX_BW_BIN
 #endif
 
-#define NUM_SAMP_FREQ 5
+#define NUM_OFFSETS 7
+#define NUM_SAMP_FREQ 6
 
 /* SCF */
 #define M 16 /* LPC_ORDER */
@@ -167,6 +226,9 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #define N_SETB (PVQ_MAX_VEC_SIZE - N_SETA)
 
 #define SNS_DAMPING 27853        /* 0.85 in Q15 */
+#ifdef ENABLE_HR_MODE
+#  define SNS_DAMPING_HRMODE 19661 /* 0.6 in Q15 */
+#endif
 
 /* PVQ VQ setup */
 #define VQMODES26                                                                                                      \
@@ -203,7 +265,11 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #define NOISEFILLSTART_2_5MS 6
 
 /* MDCT */
-#define TWIDDLE WORD322WORD16(0x5a82799a)
+#ifdef ENABLE_HR_MODE
+#  define TWIDDLE ((Word32)0x5a82799a)
+#else
+#  define TWIDDLE WORD322WORD16(0x5a82799a)
+#endif
 #define MDCT_MEM_LEN_MAX (MAX_LEN - ((180 * MAX_LEN) / 480))
 
 /* TNS */
@@ -249,16 +315,22 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #define MAX_PITCH_32K ((MAX_PITCH_12K8 * 32000) / (12800)) /* exact integer */
 #define MAX_PITCH_48K ((MAX_PITCH_12K8 * 48000) / (12800)) /* exact integer */
 
-#ifdef SUBSET_FB
-#define MAX_PITCH MAX_PITCH_48K
+#ifdef ENABLE_HR_MODE
+#  define MAX_PITCH_96K ((MAX_PITCH_12K8 * 96000) / (12800)) /* exact integer */
+#endif
+
+#ifdef ENABLE_HR_MODE
+#  define MAX_PITCH MAX_PITCH_96K
+#elif defined(SUBSET_FB)
+#  define MAX_PITCH MAX_PITCH_48K
 #elif defined(SUBSET_SWB)
-#define MAX_PITCH MAX_PITCH_32K
-#elif defined(SUBSET_HQ)
-#define MAX_PITCH MAX_PITCH_24K
-#elif defined(SUBSET_SQ)
-#define MAX_PITCH MAX_PITCH_16K
+#  define MAX_PITCH MAX_PITCH_32K
+#elif defined(SUBSET_SSWB)
+#  define MAX_PITCH MAX_PITCH_24K
+#elif defined(SUBSET_WB)
+#  define MAX_PITCH MAX_PITCH_16K
 #elif defined(SUBSET_NB)
-#define MAX_PITCH MAX_PITCH_8K
+#  define MAX_PITCH MAX_PITCH_8K
 #endif
 
 
@@ -289,36 +361,36 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 
 #if (PHECU_XFP_LA == 0)
 
-#define PHECU_LA_48K 0 /* 0 ms */
-#define PHECU_LA_32K 0 /* 0 ms */
-#define PHECU_LA_24K 0 /* 0 ms */
-#define PHECU_LA_16K 0 /* 0 ms */
-#define PHECU_LA_8K 0  /* 0 ms */
+#  define PHECU_LA_48K 0 /* 0 ms */
+#  define PHECU_LA_32K 0 /* 0 ms */
+#  define PHECU_LA_24K 0 /* 0 ms */
+#  define PHECU_LA_16K 0 /* 0 ms */
+#  define PHECU_LA_8K 0  /* 0 ms */
 
-#define MAX_PHECU_LA (0)
-
-#else
-#if (PHECU_XFP_LA == 4)
-
-#define PHECU_LA_48K (48 / 4) /* 0.25 ms */
-#define PHECU_LA_32K (32 / 4) /* 0.25 ms */
-#define PHECU_LA_24K (24 / 4) /* 0.25 ms */
-#define PHECU_LA_16K (16 / 4) /* 0.25 ms */
-#define PHECU_LA_8K (8 / 4)   /* 0.25 ms */
-
-#define MAX_PHECU_LA (MAX_LEN / 10 / 4)
+#  define MAX_PHECU_LA (0)
 
 #else
+#  if (PHECU_XFP_LA == 4)
 
-#define PHECU_LA_48K 48 /* 1 ms */
-#define PHECU_LA_32K 32 /* 1 ms */
-#define PHECU_LA_24K 24 /* 1 ms */
-#define PHECU_LA_16K 16 /* 1 ms */
-#define PHECU_LA_8K 8   /* 1 ms */
+#    define PHECU_LA_48K (48 / 4) /* 0.25 ms */
+#    define PHECU_LA_32K (32 / 4) /* 0.25 ms */
+#    define PHECU_LA_24K (24 / 4) /* 0.25 ms */
+#    define PHECU_LA_16K (16 / 4) /* 0.25 ms */
+#    define PHECU_LA_8K (8 / 4)   /* 0.25 ms */
 
-#define MAX_PHECU_LA (MAX_LEN / 10)
+#    define MAX_PHECU_LA (MAX_LEN / 10 / 4)
 
-#endif
+#  else
+
+#    define PHECU_LA_48K 48 /* 1 ms */
+#    define PHECU_LA_32K 32 /* 1 ms */
+#    define PHECU_LA_24K 24 /* 1 ms */
+#    define PHECU_LA_16K 16 /* 1 ms */
+#    define PHECU_LA_8K 8   /* 1 ms */
+
+#    define MAX_PHECU_LA (MAX_LEN / 10)
+
+#  endif
 #endif
 
 
@@ -391,38 +463,43 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #define L_FRAME8K (8000 * FRAME_TIME / 1000)
 
 #ifdef DISABLE_PLC
-#define MAX_LTRANA 0
-#define MAX_LPROT LPROT48K
-#define MAX_L_FRAME L_FRAME48K
-#define MAX_LPROT_RED LPROT48K_RED
+#  define MAX_LTRANA 0
+#  define MAX_LPROT LPROT48K
+#  define MAX_L_FRAME L_FRAME48K
+#  define MAX_LPROT_RED LPROT48K_RED
 #else
 
-#ifdef SUBSET_FB
-#define MAX_LPROT LPROT48K         /* Max length of protype frame for buffer allocation */
-#define MAX_LPROT_RED LPROT48K_RED /* stack alloc peak searched part */
-#define MAX_LTRANA LTRANA48K
-#define MAX_L_FRAME L_FRAME48K
-#elif defined(SUBSET_SWB)
-#define MAX_LPROT LPROT32K
-#define MAX_LPROT_RED LPROT32K_RED /* stack alloc peak searched part */
-#define MAX_LTRANA LTRANA32K
-#define MAX_L_FRAME L_FRAME32K
-#elif defined(SUBSET_HQ)
-#define MAX_LPROT LPROT24K
-#define MAX_LPROT_RED LPROT24K_RED /* stack alloc peak searched part */
-#define MAX_LTRANA LTRANA24K
-#define MAX_L_FRAME L_FRAME24K
-#elif defined(SUBSET_SQ)
-#define MAX_LPROT LPROT16K
-#define MAX_LPROT_RED LPROT16K_RED /* stack alloc peak searched part */
-#define MAX_LTRANA LTRANA16K
-#define MAX_L_FRAME L_FRAME16K
-#elif defined(SUBSET_NB)
-#define MAX_LPROT LPROT8K
-#define MAX_LPROT_RED LPROT8K_RED /* stack alloc peak searched part */
-#define MAX_LTRANA LTRANA8K
-#define MAX_L_FRAME L_FRAME8K
-#endif
+#  ifdef SUBSET_UB
+#    define MAX_LPROT LPROT48K         /* Max length of protype frame for buffer allocation */
+#    define MAX_LPROT_RED LPROT48K_RED /* stack alloc peak searched part */
+#    define MAX_LTRANA LTRANA48K
+#    define MAX_L_FRAME L_FRAME48K
+#  elif defined(SUBSET_FB)
+#    define MAX_LPROT LPROT48K         /* Max length of protype frame for buffer allocation */
+#    define MAX_LPROT_RED LPROT48K_RED /* stack alloc peak searched part */
+#    define MAX_LTRANA LTRANA48K
+#    define MAX_L_FRAME L_FRAME48K
+#  elif defined(SUBSET_SWB)
+#    define MAX_LPROT LPROT32K
+#    define MAX_LPROT_RED LPROT32K_RED /* stack alloc peak searched part */
+#    define MAX_LTRANA LTRANA32K
+#    define MAX_L_FRAME L_FRAME32K
+#  elif defined(SUBSET_SSWB)
+#    define MAX_LPROT LPROT24K
+#    define MAX_LPROT_RED LPROT24K_RED /* stack alloc peak searched part */
+#    define MAX_LTRANA LTRANA24K
+#    define MAX_L_FRAME L_FRAME24K
+#  elif defined(SUBSET_WB)
+#    define MAX_LPROT LPROT16K
+#    define MAX_LPROT_RED LPROT16K_RED /* stack alloc peak searched part */
+#    define MAX_LTRANA LTRANA16K
+#    define MAX_L_FRAME L_FRAME16K
+#  elif defined(SUBSET_NB)
+#    define MAX_LPROT LPROT8K
+#    define MAX_LPROT_RED LPROT8K_RED /* stack alloc peak searched part */
+#    define MAX_LTRANA LTRANA8K
+#    define MAX_L_FRAME L_FRAME8K
+#  endif
 
 #endif /* #ifdef DISABLE_PLC */
 
@@ -448,14 +525,27 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 
 /* Scratch buffer defines */
 #define scratchBuffer_ACTIVE
-#define SCRATCH_BUF_LEN_ENC (4 * MAX_LEN + 32 + 32 + 2 * MAX_LEN + 3 * MAX_LEN + MAX_RESBITS_LEN_32BIT_ALIGN)
-#define SCRATCH_BUF_LEN_ENC_CURRENT_SCRATCH (4 * MAX_LEN)
+#ifdef ENABLE_HR_MODE
+#  define SCRATCH_BUF_LEN_ENC (4 * MAX_LEN + 32 + 32 + 4 * MAX_LEN + 3 * MAX_LEN + MAX_RESBITS_LEN_32BIT_ALIGN)
+#  define SCRATCH_BUF_LEN_ENC_CURRENT_SCRATCH (4 * MAX_LEN + 8 * 60 + MAX_LEN)
+#else
+#  define SCRATCH_BUF_LEN_ENC (4 * MAX_LEN + 32 + 32 + 2 * MAX_LEN + 3 * MAX_LEN + MAX_RESBITS_LEN_32BIT_ALIGN)
+#  define SCRATCH_BUF_LEN_ENC_CURRENT_SCRATCH (4 * MAX_LEN)
+#endif
 
 #define SCRATCH_BUF_LEN_ENC_TOT (SCRATCH_BUF_LEN_ENC + SCRATCH_BUF_LEN_ENC_CURRENT_SCRATCH)
 
-#define SCRATCH_BUF_LEN_DEC (4 * MAX_LEN + 2 * MAX_LEN + 32 + 32 + 2 * MAX_LEN + 32 + 128 + 128)
+#ifdef ENABLE_HR_MODE
+#  define SCRATCH_BUF_LEN_DEC (4 * MAX_LEN + MAX_RESBITS_LEN_32BIT_ALIGN + 32 + 32 + 4 * MAX_LEN + 32 + 128 + 128)
+#else
+#  define SCRATCH_BUF_LEN_DEC (4 * MAX_LEN + 2 * MAX_LEN + 32 + 32 + 2 * MAX_LEN + 32 + 128 + 128)
+#endif
 #define SCRATCH_BUF_LEN_DEC_CURRENT_SCRATCH (2 * MAX_LGW + 8 * MAX_LPROT + 12 * MAX_L_FRAME)
-#define SCRATCH_BUF_LEN_DEC_TOT (SCRATCH_BUF_LEN_DEC + SCRATCH_BUF_LEN_DEC_CURRENT_SCRATCH)
+#ifdef ENABLE_HR_MODE
+#  define SCRATCH_BUF_LEN_DEC_TOT (SCRATCH_BUF_LEN_DEC + (4 * HR_MODE_SCRATCH_SIZE) + SCRATCH_BUF_LEN_DEC_CURRENT_SCRATCH)
+#else
+#  define SCRATCH_BUF_LEN_DEC_TOT (SCRATCH_BUF_LEN_DEC + SCRATCH_BUF_LEN_DEC_CURRENT_SCRATCH)
+#endif
 
 #define ADVACED_PLC_SIZE                                                                                               \
     (sizeof(AplcSetup) + (4 + 2) * MAX_PLOCS + 2 * MAX_LEN_PCM_PLC_TOT + 0 * MAX_LPROT + 2 * MDCT_MEM_LEN_MAX +        \
@@ -463,32 +553,32 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 /* ERI : Correct this sum after ROM/RAM , joint RAM optimizations */
 
 
-#define ENC_MAX_SIZE (sizeof(LC3_Enc) + MAX_CHANNELS * (sizeof(EncSetup) + 6 * MDCT_MEM_LEN_MAX))
+#define ENC_MAX_SIZE (sizeof(LC3PLUS_Enc) + MAX_CHANNELS * (sizeof(EncSetup) + 6 * MDCT_MEM_LEN_MAX))
 #define DEC_MAX_SIZE                                                                                                   \
-    (sizeof(LC3_Dec) + MAX_CHANNELS * (sizeof(DecSetup) + ADVACED_PLC_SIZE + 2 * LTPF_MEM_X_LEN + 2 * LTPF_MEM_Y_LEN + \
+    (sizeof(LC3PLUS_Dec) + MAX_CHANNELS * (sizeof(DecSetup) + ADVACED_PLC_SIZE + 2 * LTPF_MEM_X_LEN + 2 * LTPF_MEM_Y_LEN + \
                                        2 * MDCT_MEM_LEN_MAX + 2 * MAX_BW))
 
 #if (defined(_M_ARM) || defined(__CC_ARM) || defined(__TMS470__) || defined(__arm__) || defined(__aarch64__)) &&       \
     (defined(__TARGET_FEATURE_NEON) || defined(__ARM_NEON) || defined(__ARM_NEON__) || defined(__ARM_AARCH64_NEON__))
-#define ALIGNMENT_DEFAULT 16
+#  define ALIGNMENT_DEFAULT 16
 #elif defined(__bfin__)
-#define ALIGNMENT_DEFAULT 4
+#  define ALIGNMENT_DEFAULT 4
 #else
-#define ALIGNMENT_DEFAULT 8
+#  define ALIGNMENT_DEFAULT 8
 #endif
 
 /* RAM_ALIGN keyword causes memory alignment of global variables. */
 #if defined(__GNUC__)
-#define RAM_ALIGN __attribute__((aligned(ALIGNMENT_DEFAULT)))
+#  define RAM_ALIGN __attribute__((aligned(ALIGNMENT_DEFAULT)))
 #elif defined(__CC_ARM)
-#define RAM_ALIGN __align(ALIGNMENT_DEFAULT)
+#  define RAM_ALIGN __align(ALIGNMENT_DEFAULT)
 #elif defined(__ANALOG_EXTENSIONS__)
-#define RAM_ALIGN
-#pragma pack(ALIGNMENT_DEFAULT)
+#  define RAM_ALIGN
+#  pragma pack(ALIGNMENT_DEFAULT)
 #elif defined(_MSC_VER)
-#define RAM_ALIGN __declspec(align(ALIGNMENT_DEFAULT))
+#  define RAM_ALIGN __declspec(align(ALIGNMENT_DEFAULT))
 #else
-#define RAM_ALIGN
+#  define RAM_ALIGN
 #endif
 
 #define scratchAlign(ptr, offset) (void *)(((uintptr_t)(ptr) + (offset) + 0x3) & ~0x3)

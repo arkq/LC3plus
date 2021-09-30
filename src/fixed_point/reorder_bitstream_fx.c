@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -28,7 +28,7 @@ void processReorderBitstream_fx(UWord8 *bytes, Word16 n_pccw, Word16 n_pc, Word1
     Dyn_Mem_In("processReorderBitstream_fx", sizeof(struct _dynmem));
 #endif
 
-    bytes_tmp = (UWord8 *)scratchAlign(scratchBuffer, 0); /* Size = LC3_MAX_BYTES */
+    bytes_tmp = (UWord8 *)scratchAlign(scratchBuffer, 0); /* Size = LC3PLUS_MAX_BYTES */
 
     if (n_pccw == 0)
     {

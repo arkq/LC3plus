@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -10,7 +10,7 @@
 
 #include "functions.h"
 
-void attack_detector_fx(LC3_Enc *enc, EncSetup *setup, Word16 *input, Word16 input_scaling, void *scratch)
+void attack_detector_fx(LC3PLUS_Enc *enc, EncSetup *setup, Word16 *input, Word16 input_scaling, void *scratch)
 {
     Dyn_Mem_Deluxe_In(
         int    i, j, position;
@@ -40,6 +40,7 @@ void attack_detector_fx(LC3_Enc *enc, EncSetup *setup, Word16 *input, Word16 inp
 
         IF (rescale)
         {
+            rescale = s_min(s_max(rescale, -15), 15);
             setup->attdec_filter_mem[0] = shl(setup->attdec_filter_mem[0], rescale);        move16();
             setup->attdec_filter_mem[1] = shl(setup->attdec_filter_mem[1], rescale);        move16();
             setup->attdec_acc_energy    = L_shl(setup->attdec_acc_energy, shl(rescale, 1)); move16();
@@ -86,10 +87,10 @@ void attack_detector_fx(LC3_Enc *enc, EncSetup *setup, Word16 *input, Word16 inp
 
         FOR (j = 0; j < enc->attdec_nblocks; j++)
         {
-			FOR (i = 0; i < 40; i++)
-			{
-				block_energy[j] = L_mac(block_energy[j], input_16k[i + j*40], input_16k[i + j*40]);     move16();
-			}
+            FOR (i = 0; i < 40; i++)
+            {
+                block_energy[j] = L_mac(block_energy[j], input_16k[i + j*40], input_16k[i + j*40]);     move16();
+            }
         }
 
         setup->attdec_detected = setup->attdec_position >= enc->attdec_hangover_thresh;

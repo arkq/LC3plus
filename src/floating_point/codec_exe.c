@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -36,6 +36,12 @@ typedef struct {
     int   plcMeth;
     int   epmode;
     char *epmode_file;
+    char *channel_coder_vars_file;
+    int32_t   epmr;
+    char* epmr_file;
+    int32_t   lfe;
+    int32_t   startFrame;
+    int32_t   stopFrame;
 } Arguments;
 
 /* local helper functions */
@@ -57,6 +63,9 @@ static void    scale_16_to_24(const int16_t* in, int32_t* out, int n);
 static void    interleave(int32_t** in, int32_t* out, int n, int channels);
 static void    deinterleave(int32_t* in, int32_t** out, int n, int channels);
 
+static int16_t loopy_read16_empr(FILE *f);
+static FILE *fopen_with_ext(const char *file, const char *ext, const char *mode);
+
 /* needed by cleanup function */
 static WAVEFILEIN*  input_wav;
 static WAVEFILEOUT* output_wav;
@@ -67,6 +76,11 @@ static FILE*        error_detection_file;
 static FILE*        bitrate_switching_file;
 static FILE *       epmode_switching_file;
 static FILE* bandwidth_switching_file;
+
+static FILE       * epmr_switching_file;
+static FILE       * channel_decoder_debug_file_bfi;
+static FILE       * channel_decoder_debug_file_epmr;
+static FILE       * channel_decoder_debug_file_error_report;
 
 #include "license.h" /* provides LICENSE string */
 
@@ -90,6 +104,8 @@ static const char* const USAGE_MESSAGE =
     "                          NUM must be an integer for max. bandwdith in Hz; max 20000 Hz\n"
     "  -q                      Disable frame counter printout\n"
     "  -v                      Verbose switching commands\n"
+    "  -y                      StartFrame: frame number where encoding/decoding shall start\n"
+    "  -z                      StopFrame: frame number where encoding/decoding shall stop\n"
     "\nFormat options:\n"
     "  -formatG192             Activate G192 bitstream format. A filename.cfg will be used to\n"
     "                          store/load decoder info.\n"
@@ -112,30 +128,32 @@ static const char* const USAGE_MESSAGE =
     "\nHigh resolution mode options:\n"
     "  -hrmode                 Enable high resolution mode.\n"
 #endif
+    "\nLow-frequency effects options:\n"
+    "  -lfe                    Enable LFE mode.\n"
     "";
 
 static const char* const MISSING_ARGUMENT_MESSAGE = "Not enough parameters! Use -h to show help.";
 
 static const char* ERROR_MESSAGE[] = {
-    "",                                                                     /* LC3_OK                  */
-    "Function call failed!",                                                /* LC3_ERROR               */
-    "Frame failed to decode and was concealed!",                            /* LC3_DECODE_ERROR        */
-    "Pointer argument is null!",                                            /* LC3_NULL_ERROR          */
-    "Invalid sampling rate!",                                               /* LC3_SAMPLERATE_ERROR    */
-    "Invalid number of channels!",                                          /* LC3_CHANNELS_ERROR      */
-    "Invalid bitrate!",                                                     /* LC3_BITRATE_ERROR       */
-    "Invalid number of bytes!",                                             /* LC3_NUMBYTES_ERROR      */
-    "Invalid ep mode!",                                                     /* LC3_EPMODE_ERROR        */
-    "Invalid frame ms value!",                                              /* LC3_FRAMEMS_ERROR       */
-    "Unaligned pointer!",                                                   /* LC3_ALIGN_ERROR         */
-    "96 kHz sampling rate cannot be used without -hrmode option!",          /* LC3_HRMODE_ERROR        */
-    "Bitrate has not been set!",                                            /* LC3_BITRATE_UNSET_ERROR */
-    "Function can't be called after bitrate was set!",                      /* LC3_BITRATE_SET_ERROR   */
-    "High resolution mode and bandwidth switching are exclusive!",          /* LC3_HRMODE_BW_ERROR     */
-    "Invalid PLC method!",                                                  /* LC3_PLCMODE_ERROR       */
-    "Invalid EPMR value!",                                                  /* LC3_EPMR_ERROR          */
-    "Generic Warning",                                                      /* LC3_WARNING             */
-    "Invalid bandwidth frequency!"                                          /* LC3_BW_WARNING          */
+    "",                                                                     /* LC3PLUS_OK                  */
+    "Function call failed!",                                                /* LC3PLUS_ERROR               */
+    "Frame failed to decode and was concealed!",                            /* LC3PLUS_DECODE_ERROR        */
+    "Pointer argument is null!",                                            /* LC3PLUS_NULL_ERROR          */
+    "Invalid sampling rate!",                                               /* LC3PLUS_SAMPLERATE_ERROR    */
+    "Invalid number of channels!",                                          /* LC3PLUS_CHANNELS_ERROR      */
+    "Invalid bitrate!",                                                     /* LC3PLUS_BITRATE_ERROR       */
+    "Invalid number of bytes!",                                             /* LC3PLUS_NUMBYTES_ERROR      */
+    "Invalid ep mode!",                                                     /* LC3PLUS_EPMODE_ERROR        */
+    "Invalid frame ms value!",                                              /* LC3PLUS_FRAMEMS_ERROR       */
+    "Unaligned pointer!",                                                   /* LC3PLUS_ALIGN_ERROR         */
+    "96 kHz sampling rate cannot be used without -hrmode option!",          /* LC3PLUS_HRMODE_ERROR        */
+    "Bitrate has not been set!",                                            /* LC3PLUS_BITRATE_UNSET_ERROR */
+    "Function can't be called after bitrate was set!",                      /* LC3PLUS_BITRATE_SET_ERROR   */
+    "High resolution mode and bandwidth switching are exclusive!",          /* LC3PLUS_HRMODE_BW_ERROR     */
+    "Invalid PLC method!",                                                  /* LC3PLUS_PLCMODE_ERROR       */
+    "Invalid EPMR value!",                                                  /* LC3PLUS_EPMR_ERROR          */
+    "Generic Warning",                                                      /* LC3PLUS_WARNING             */
+    "Invalid bandwidth frequency!"                                          /* LC3PLUS_BW_WARNING          */
 };
 
 int main(int ac, char** av)
@@ -147,17 +165,18 @@ int main(int ac, char** av)
     int          real_bitrate = 0, frame = 1, delay = 0;
     int          encoder_size = 0, decoder_size = 0;
     int          bfi_ext = 0;
-    LC3_Enc*     encoder                                        = NULL;
-    LC3_Dec*     decoder                                        = NULL;
-    LC3_Error    err                                            = LC3_OK;
-    int32_t      sample_buf[LC3_MAX_CHANNELS * LC3_MAX_SAMPLES] = {0};
-    int32_t      buf_24[LC3_MAX_CHANNELS * LC3_MAX_SAMPLES]     = {0};
-    int16_t      buf_16[LC3_MAX_CHANNELS * LC3_MAX_SAMPLES]     = {0};
-    uint8_t      bytes[LC3_MAX_CHANNELS * LC3_MAX_BYTES]        = {0};
+    LC3PLUS_Enc*     encoder                                        = NULL;
+    LC3PLUS_Dec*     decoder                                        = NULL;
+    LC3PLUS_Error    err                                            = LC3PLUS_OK;
+    int32_t      sample_buf[LC3PLUS_MAX_CHANNELS * LC3PLUS_MAX_SAMPLES] = {0};
+    int32_t      buf_24[LC3PLUS_MAX_CHANNELS * LC3PLUS_MAX_SAMPLES]     = {0};
+    int16_t      buf_16[LC3PLUS_MAX_CHANNELS * LC3PLUS_MAX_SAMPLES]     = {0};
+    uint8_t      bytes[LC3PLUS_MAX_CHANNELS * LC3PLUS_MAX_BYTES]        = {0};
     int          dc2_extra_frame                                = 0;
+    int cur_epmode = 0, cur_epmr = 0;
 
     /* Parse Command-line */
-    printf(LICENSE, LC3_VERSION >> 16, (LC3_VERSION >> 8) & 255, LC3_VERSION & 255);
+    printf(LICENSE, LC3PLUS_VERSION >> 16, (LC3PLUS_VERSION >> 8) & 255, LC3PLUS_VERSION & 255);
     parseCmdl(ac, av, &arg);
 
     /* exit handler to clean up resources */
@@ -172,31 +191,43 @@ int main(int ac, char** av)
         /* Open Input Wav File */
         input_wav = OpenWav(arg.inputFilename, &sampleRate, &nChannels, &nSamplesFile, &bipsIn);
         exit_if(!input_wav, "Error opening wav file!");
+        exit_if(bipsIn != 16 && bipsIn != 24, "Only 16 or 24bits per sample are supported!");
 
         /* Setup Encoder */
-        encoder_size = lc3_enc_get_size(sampleRate, nChannels);
+        encoder_size = lc3plus_enc_get_size(sampleRate, nChannels);
 
         encoder = malloc(encoder_size);
 
-        err = lc3_enc_init(encoder, sampleRate, nChannels);
+        err = lc3plus_enc_init(encoder, sampleRate, nChannels);
 
         exit_if(err, ERROR_MESSAGE[err]);
 
-        err = lc3_enc_set_frame_ms(encoder, arg.frame_ms);
+        err = lc3plus_enc_set_frame_ms(encoder, arg.frame_ms);
         exit_if(err, ERROR_MESSAGE[err]);
         
 
+            cur_epmode = (LC3PLUS_EpMode)arg.epmode;
+            err        = lc3plus_enc_set_ep_mode(encoder, (LC3PLUS_EpMode)arg.epmode);
+            exit_if(err, ERROR_MESSAGE[err]);
+            
+            cur_epmr = (LC3PLUS_EpModeRequest)arg.epmr;
+            err      = lc3plus_enc_set_ep_mode_request(encoder, (LC3PLUS_EpModeRequest)arg.epmr);
+            exit_if(err, ERROR_MESSAGE[err]);
+            
 #ifdef ENABLE_HR_MODE_FL_FLAG
-        err = lc3_enc_set_hrmode(encoder, arg.hrmode);
+        err = lc3plus_enc_set_hrmode(encoder, arg.hrmode);
         exit_if(err, ERROR_MESSAGE[err]);
 #endif
 
-        err = lc3_enc_set_bitrate(encoder, arg.bitrate);
+        err = lc3plus_enc_set_lfe(encoder, arg.lfe);
         exit_if(err, ERROR_MESSAGE[err]);
 
-        delay        = arg.dc ? lc3_enc_get_delay(encoder) / arg.dc : 0;
-        nSamples     = lc3_enc_get_input_samples(encoder);
-        real_bitrate = lc3_enc_get_real_bitrate(encoder);
+        err = lc3plus_enc_set_bitrate(encoder, arg.bitrate);
+        exit_if(err, ERROR_MESSAGE[err]);
+
+        delay        = arg.dc ? lc3plus_enc_get_delay(encoder) / arg.dc : 0;
+        nSamples     = lc3plus_enc_get_input_samples(encoder);
+        real_bitrate = lc3plus_enc_get_real_bitrate(encoder);
 
         if (arg.bandwidth && atoi(arg.bandwidth) == 0) {
             bandwidth_switching_file = fopen(arg.bandwidth, "rb");
@@ -214,21 +245,23 @@ int main(int ac, char** av)
 
     if (!arg.encoder_only) {
         /* Setup Decoder */
-        decoder_size = lc3_dec_get_size(sampleRate, nChannels);
+        decoder_size = lc3plus_dec_get_size(sampleRate, nChannels);
         decoder      = malloc(decoder_size);
-        err          = lc3_dec_init(decoder, sampleRate, nChannels, (LC3_PlcMode)arg.plcMeth);
+        err          = lc3plus_dec_init(decoder, sampleRate, nChannels, (LC3PLUS_PlcMode)arg.plcMeth);
         exit_if(err, ERROR_MESSAGE[err]);
 #ifdef ENABLE_HR_MODE_FL_FLAG
-        err = lc3_dec_set_hrmode(decoder, arg.hrmode);
+        err = lc3plus_dec_set_hrmode(decoder, arg.hrmode);
         exit_if(err, ERROR_MESSAGE[err]);
 #endif
 
-        err = lc3_dec_set_frame_ms(decoder, arg.frame_ms);
+        err = lc3plus_dec_set_frame_ms(decoder, arg.frame_ms);
         exit_if(err, ERROR_MESSAGE[err]);
         
+	err = lc3plus_dec_set_ep_enabled(decoder, arg.epmode != 0);
+	exit_if(err, ERROR_MESSAGE[err]);
         
-        delay    = arg.dc ? lc3_dec_get_delay(decoder) / arg.dc : 0;
-        nSamples = lc3_dec_get_output_samples(decoder);
+        delay    = arg.dc ? lc3plus_dec_get_delay(decoder) / arg.dc : 0;
+        nSamples = lc3plus_dec_get_output_samples(decoder);
 
         /* Open Output Wav File */
         output_wav = CreateWav(arg.outputFilename, sampleRate, nChannels, arg.bipsOut);
@@ -262,6 +295,24 @@ int main(int ac, char** av)
         exit_if(epmode_switching_file == NULL, "Error opening epmode switching file!");
     }
 
+    if (arg.epmr_file)
+    {
+        epmr_switching_file = fopen(arg.epmr_file, "rb");
+        exit_if(epmr_switching_file == NULL, "Error opening epmr switching file!");
+    }
+    
+    if (arg.channel_coder_vars_file)
+    {
+        channel_decoder_debug_file_bfi          = fopen_with_ext(arg.channel_coder_vars_file, ".bfi", "wb");
+        channel_decoder_debug_file_epmr         = fopen_with_ext(arg.channel_coder_vars_file, ".epmr", "wb");
+        channel_decoder_debug_file_error_report = fopen_with_ext(arg.channel_coder_vars_file, ".error_report", "wb");
+        exit_if(!channel_decoder_debug_file_bfi  ||
+                !channel_decoder_debug_file_epmr ||
+                !channel_decoder_debug_file_error_report,
+                "Error creating channel decoder debug files!");
+    }
+
+
     /* Print out info */
     printf("Encoder size:                  %i\n", encoder_size);
     printf("Decoder size:                  %i\n", decoder_size);
@@ -287,7 +338,7 @@ int main(int ac, char** av)
     while (1) {
         if (!arg.decoder_only) {
             /* Encoder */
-            int32_t* input24[LC3_MAX_CHANNELS];
+            int32_t* input24[LC3PLUS_MAX_CHANNELS];
             for (i = 0; i < nChannels; i++) {
                 input24[i] = buf_24 + i * nSamples;
             }
@@ -298,7 +349,7 @@ int main(int ac, char** av)
                 if (arg.verbose && encoder->bitrate != new_bitrate * nChannels) {
                     printf("Switching rate from %d to %d\n", encoder->bitrate, new_bitrate * nChannels);
                 }
-                err = lc3_enc_set_bitrate(encoder, new_bitrate * nChannels);
+                err = lc3plus_enc_set_bitrate(encoder, new_bitrate * nChannels);
                 exit_if(err, ERROR_MESSAGE[err]);
             }
             /* read epmode switching file and set error protection */
@@ -307,10 +358,26 @@ int main(int ac, char** av)
                 /* gen_rate_profile tool can only write values starting from 100 */
                 int16_t epmode = (int16_t)(loopy_read64(epmode_switching_file) / 100);
                 assert(epmode > 0 && epmode < 5); /* epmode 0 not allowed when switching */
-                if (arg.verbose && encoder->epmode != epmode)
+                if (arg.verbose && cur_epmode != (LC3PLUS_EpMode) epmode)
                 {
-                    printf("Switching epmode from %d to %d\n", encoder->epmode, epmode);
+                    printf("Switching epmode from %d to %d\n", cur_epmode, epmode);
+                    cur_epmode = (LC3PLUS_EpMode) epmode;
                 }
+                err = lc3plus_enc_set_ep_mode(encoder, (LC3PLUS_EpMode)epmode);
+                exit_if(err, ERROR_MESSAGE[err]);
+            }
+            /* read epmr switching file and set error protection */
+            if (epmr_switching_file)
+            {
+                /* gen_rate_profile tool can only write values starting from 100 */
+                int16_t epmr = (int16_t)(loopy_read16_empr(epmr_switching_file));
+                assert(epmr >= 0 && epmr < 4); /* epmode 0 not allowed when switching */
+                if (arg.verbose && cur_epmr != (LC3PLUS_EpModeRequest) epmr)
+                {
+                    printf("Switching epmode from %d to %d\n", cur_epmr, epmr);
+                    cur_epmr = (LC3PLUS_EpModeRequest) epmr;
+                }
+                err = lc3plus_enc_set_ep_mode_request(encoder, (LC3PLUS_EpModeRequest)epmr);
                 exit_if(err, ERROR_MESSAGE[err]);
             }
             /* read bandwidth switching file and set bandwidth */
@@ -318,8 +385,8 @@ int main(int ac, char** av)
                 int32_t bw =
                     bandwidth_switching_file ? (int32_t)loopy_read64(bandwidth_switching_file) : atoi(arg.bandwidth);
                 int32_t bw_old = encoder->bandwidth;
-                err            = lc3_enc_set_bandwidth(encoder, bw);
-                if (arg.verbose && bw_old != bw && err == LC3_OK) {
+                err            = lc3plus_enc_set_bandwidth(encoder, bw);
+                if (arg.verbose && bw_old != bw && err == LC3PLUS_OK) {
                     printf("Switching bandwidth from %i to %i\n", bw_old, bw);
                 }
                 exit_if(err, ERROR_MESSAGE[err]);
@@ -329,6 +396,9 @@ int main(int ac, char** av)
             ReadWavInt(input_wav, sample_buf, nSamples * nChannels, &nSamplesRead);
             /* zero out rest of last frame */
             memset(sample_buf + nSamplesRead, 0, (nSamples * nChannels - nSamplesRead) * sizeof(sample_buf[0]));
+
+            if (frame < arg.startFrame)
+                goto while_end;
 
 
             if (arg.dc != 2) 
@@ -342,7 +412,7 @@ int main(int ac, char** av)
             {
                 if (nSamplesRead != (nSamples * nChannels)) {
                     int32_t padded_samples = ((nSamples * nChannels) - nSamplesRead) / nChannels;
-                    int32_t delay_samples  = lc3_enc_get_delay(encoder) / 2;
+                    int32_t delay_samples  = lc3plus_enc_get_delay(encoder) / 2;
 
                     if (padded_samples >= delay_samples) 
                     {
@@ -367,18 +437,16 @@ int main(int ac, char** av)
             /* encode */
 
             if (bipsIn == 24) {
-                err = lc3_enc24(encoder, input24, bytes, &nBytes);
-            } else if (bipsIn == 32) {
-                err = lc3_enc32(encoder, input24, bytes, &nBytes);
+                err = lc3plus_enc24(encoder, input24, bytes, &nBytes);
             } else {
-                int16_t* input16[LC3_MAX_CHANNELS];
+                int16_t* input16[LC3PLUS_MAX_CHANNELS];
 
                 for (i = 0; i < nChannels; i++) {
                     input16[i] = buf_16 + i * nSamples;
                 }
 
                 scale_24_to_16(buf_24, buf_16, nSamples * nChannels);
-                err = lc3_enc16(encoder, input16, bytes, &nBytes);
+                err = lc3plus_enc16(encoder, input16, bytes, &nBytes);
             }
 
             exit_if(err, ERROR_MESSAGE[err]);
@@ -398,7 +466,7 @@ int main(int ac, char** av)
                 nBytes = 0; /* tell decoder packet is lost and needs to be concealed */
             }
 
-            int32_t* output24[LC3_MAX_CHANNELS];
+            int32_t* output24[LC3PLUS_MAX_CHANNELS];
 
             for (i = 0; i < nChannels; i++) {
                 output24[i] = buf_24 + i * nSamples;
@@ -406,25 +474,33 @@ int main(int ac, char** av)
 
             /* Run Decoder */
             if (arg.bipsOut == 24) {
-                err = lc3_dec24(decoder, bytes, nBytes, output24, bfi_ext);
-            } else if (arg.bipsOut == 32) {
-                err = lc3_dec32(decoder, bytes, nBytes, output24, bfi_ext);
+                err = lc3plus_dec24(decoder, bytes, nBytes, output24, bfi_ext);
             } else {
-                int16_t* output16[LC3_MAX_CHANNELS];
+                int16_t* output16[LC3PLUS_MAX_CHANNELS];
 
                 for (i = 0; i < nChannels; i++) {
                     output16[i] = buf_16 + i * nSamples;
                 }
 
-                err = lc3_dec16(decoder, bytes, nBytes, output16, bfi_ext);
+                err = lc3plus_dec16(decoder, bytes, nBytes, output16, bfi_ext);
                 scale_16_to_24(buf_16, buf_24, nSamples * nChannels);
             }
-            exit_if(err && err != LC3_DECODE_ERROR, ERROR_MESSAGE[err]);
+            exit_if(err && err != LC3PLUS_DECODE_ERROR, ERROR_MESSAGE[err]);
 
             /* write error detection to file */
             if (error_detection_file != NULL) {
-                int16_t tmp = (err == LC3_DECODE_ERROR);
+                int16_t tmp = (err == LC3PLUS_DECODE_ERROR);
                 fwrite(&tmp, 2, 1, error_detection_file);
+            }
+            /* write bfi, empr and error report to files */
+            if (arg.channel_coder_vars_file)
+            {
+                int16_t tmp = (err == LC3PLUS_DECODE_ERROR) ? 1 : LC3PLUS_OK;
+                fwrite(&tmp, 2, 1, channel_decoder_debug_file_bfi);
+                lc3plus_dec_get_ep_mode_request(decoder, (LC3PLUS_EpModeRequest *)&tmp);
+                fwrite(&tmp, 2, 1, channel_decoder_debug_file_epmr);
+                lc3plus_dec_get_error_report(decoder, (int32_t *)&tmp);
+                fwrite(&tmp, 2, 1, channel_decoder_debug_file_error_report);
             }
 
             /* interleave samples for writing */
@@ -438,10 +514,22 @@ int main(int ac, char** av)
             write_bitstream_frame(output_bitstream, bytes, nBytes, arg.formatG192);
         }
 
-        if (!arg.hide_counter) {
-            printf("\rProcessing frame %i", frame++);
-            fflush(stdout);
+while_end:
+        if (!arg.hide_counter)
+        {
+            if ((frame >= arg.startFrame && frame <= arg.stopFrame && arg.stopFrame != 0) || (arg.stopFrame == 0 && arg.startFrame == 0))
+            {
+                printf("\rProcessing frame %i", frame);
+                fflush(stdout);
+            }
         }
+        frame++;
+
+        if (frame > arg.stopFrame && arg.stopFrame != 0)
+        {
+            break;
+        }
+
     }
 
     if (!arg.encoder_only && nSamplesFile > 0 && nSamplesFile < nSamples) {
@@ -454,10 +542,21 @@ int main(int ac, char** av)
         printf("%i samples clipped!\n", output_wav->clipCount);
     }
 
-    lc3_enc_free_memory(encoder);
-    lc3_dec_free_memory(decoder);
+    lc3plus_enc_free_memory(encoder);
+    lc3plus_dec_free_memory(decoder);
 
     return 0;
+}
+
+/* open file with extra extension */
+static FILE *fopen_with_ext(const char *file, const char *ext, const char *mode)
+{
+    FILE *f = NULL;
+    char *tmp = malloc(strlen(file) + strlen(ext) + 1);
+    sprintf(tmp, "%s%s", file, ext);
+    f = fopen(tmp, mode);
+    free(tmp);
+    return f;
 }
 
 /* close file ignoring NULL pointer */
@@ -491,8 +590,11 @@ static void parseCmdl(int ac, char** av, Arguments* arg)
 #ifdef ENABLE_HR_MODE_FL_FLAG
     arg->hrmode = 0;
 #endif
-    
-    arg->plcMeth = LC3_PLC_STANDARD;
+
+    arg->lfe = 0;
+    arg->plcMeth = LC3PLUS_PLC_ADVANCED;
+    arg->epmode_file = NULL;
+    arg->epmr_file   = NULL;
 
     exit_if(ac <= 1, USAGE_MESSAGE);
 
@@ -507,6 +609,18 @@ static void parseCmdl(int ac, char** av, Arguments* arg)
         }
         if (!strcmp(av[pos], "-v")) {
             arg->verbose = 1;
+        }
+        if (!strcmp(av[pos], "-y") && pos + 1 < ac)
+        {
+            arg->startFrame = atoi(av[++pos]);
+            printf("Start Frame: %d!\n", arg->startFrame);
+            continue;
+        }
+        if (!strcmp(av[pos], "-z") && pos + 1 < ac)
+        {
+            arg->stopFrame = atoi(av[++pos]);
+            printf("Stop Frame: %d!\n", arg->stopFrame);
+            continue;
         }
         if (!strcmp(av[pos], "-E")) {
             arg->encoder_only = 1;
@@ -537,8 +651,8 @@ static void parseCmdl(int ac, char** av, Arguments* arg)
         /* Bits per sample */
         if (!strcmp(av[pos], "-bps") && pos + 1 < ac) {
             arg->bipsOut = atoi(av[++pos]);
-            exit_if(arg->bipsOut != 16 && arg->bipsOut != 24 && arg->bipsOut != 32,
-                    "Only 16, 24 or 32 bits per sample are supported!");
+            exit_if(arg->bipsOut != 16 && arg->bipsOut != 24,
+                    "Only 16 or 24bits per sample are supported!");
         }
         /* delay compensation */
         if (!strcmp(av[pos], "-dc") && pos + 1 < ac) {
@@ -569,11 +683,23 @@ static void parseCmdl(int ac, char** av, Arguments* arg)
                 printf("Error protection %sabled (%i). ", arg->epmode ? "en" : "dis", arg->epmode);
             }
         }
+        
+        /* error pattern */
+        if (!strcmp(av[pos], "-ep_dbg") && pos + 1 < ac)
+        {
+            arg->channel_coder_vars_file = av[++pos];
+            puts("Saving channel decoder debug information to files!");
+        }
+        
 #ifdef ENABLE_HR_MODE_FL_FLAG
         if (!strcmp(av[pos], "-hrmode")) {
             arg->hrmode = 1;
         }
 #endif
+        if (!strcmp(av[pos], "-lfe")) {
+            arg->lfe = 1;
+            puts("Enabling LFE mode!");
+        }
         /* Bitrate switching file */
         if (!strcmp(av[pos], "-swf") && pos + 1 < ac) {
             arg->bitrate_file = av[++pos];
@@ -600,6 +726,11 @@ static void parseCmdl(int ac, char** av, Arguments* arg)
         arg->bitrate = atoi(av[pos]);
         if (arg->bitrate == 0) {
             arg->bitrate      = 64000; /* dummy value */
+#ifdef ENABLE_HR_MODE_FL_FLAG            
+            if (arg->hrmode){
+                arg->bitrate  = 150000 * (10/arg->frame_ms);
+            }
+#endif
             arg->bitrate_file = av[pos];
             puts("Using bitrate switching file!");
         }
@@ -612,7 +743,7 @@ static void exit_if(int condition, const char* message)
 {
     if (condition) {
         puts(message);
-        if (condition < LC3_WARNING) {
+        if (condition < LC3PLUS_WARNING) {
             exit(1);
         }
     }
@@ -852,6 +983,21 @@ static int16_t loopy_read16(FILE* f)
     assert(tmp == 1 || tmp == 0);
 #endif
 
+    return tmp;
+}
+
+static int16_t loopy_read16_empr(FILE *f)
+{
+    int16_t tmp = 0;
+    int32_t tmp_return_val;
+
+    if (fread(&tmp, sizeof(tmp), 1, f) != 1)
+    {
+        fseek(f, 0, SEEK_SET);
+        tmp_return_val = fread(&tmp, sizeof(tmp), 1, f);
+    }
+
+    (void)tmp_return_val;
     return tmp;
 }
 

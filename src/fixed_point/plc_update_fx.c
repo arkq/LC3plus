@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -16,7 +16,11 @@
 
 void processPLCupdate_fx(AplcSetup *plcAd, Word16 x_fx[], Word16 q_fx_exp, Word16 concealMethod, Word16 frame_length,
                          Word16 fs_idx, Word16 *nbLostFramesInRow, Word16 *prev_prev_bfi, Word16 *prev_bfi, Word16 bfi, Word16 scf_q[],
-                         Word16 *ns_cum_alpha)
+                         Word16 *ns_cum_alpha
+#ifdef ENABLE_HR_MODE
+                         , Word16 hrmode
+#endif
+                         )
 {
     processPLCUpdateAfterIMDCT_fx(x_fx, q_fx_exp, concealMethod, frame_length, fs_idx, nbLostFramesInRow, prev_prev_bfi, prev_bfi, bfi,
                                   scf_q, ns_cum_alpha, plcAd); /* NB *prev_bfi updated here */
@@ -24,8 +28,15 @@ void processPLCupdate_fx(AplcSetup *plcAd, Word16 x_fx[], Word16 q_fx_exp, Word1
     IF ( plcAd != 0 )
     { 
         /*  reuse/inplace the most recent 16 ms of x_old_tot without additional rescaling,  keep exponent aligned with tdc pitch buffer to  save WMOPS */
-        ASSERT( (&plcAd->x_old_tot_fx[plcAd->max_len_pcm_plc - LprotSzPtr[fs_idx] ])  == plcAd->PhECU_xfp_fx );   
-        plcAd->PhECU_xfp_exp_fx  = plcAd->q_fx_old_exp;    move16(); /* exponent used by concealmethod 2 in prevBfi frames and also right after  non bfi frames */
+
+        
+#ifdef ENABLE_HR_MODE
+        if (hrmode == 0)
+#endif
+        {
+            ASSERT( (&plcAd->x_old_tot_fx[plcAd->max_len_pcm_plc - LprotSzPtr[fs_idx] ])  == plcAd->PhECU_xfp_fx );
+            plcAd->PhECU_xfp_exp_fx  = plcAd->q_fx_old_exp;    move16(); /* exponent used by concealmethod 2 in prevBfi frames and also right after  non bfi frames */
+        }
     }
 }
 

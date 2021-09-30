@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -23,6 +23,7 @@ typedef struct {
     LC3_INT  ltpf_param[3];
     LC3_INT  ltpf_param_mem[3];
     LC3_INT  ltpf_mem_pitch;
+    LC3_INT  ltpf_mem_active;
     LC3_INT  ltpf_mem_pitch_fr;
     LC3_INT  ltpf_mem_beta_idx;
     LC3_INT  ltpf_conf_beta_idx;
@@ -54,10 +55,12 @@ typedef struct {
     PlcSetup    PlcSetup;
     PlcNsSetup  PlcNsSetup;
     
+    pcState statePC;
+    PlcAdvSetup* PlcAdvSetup;
 } DecSetup;
 
 /* Constants and sampling rate derived values go in this struct */
-struct LC3_Dec {
+struct LC3PLUS_Dec {
     DecSetup*  channel_setup[MAX_CHANNELS];
     const LC3_INT* W_fx;
     const LC3_INT* bands_offset;
@@ -86,7 +89,6 @@ struct LC3_Dec {
     LC3_INT ltpf_mem_x_len;
     LC3_INT ltpf_mem_y_len;
     LC3_INT BW_cutoff_bits;
-    LC3_INT plcMeth;
     LC3_INT tilt;
     
     LC3_INT hrmode;
@@ -95,6 +97,16 @@ struct LC3_Dec {
     const LC3_INT* bands_offsetPLC;
     LC3_INT n_bandsPLC;
     
+    LC3_INT32          rframe;
+    int                plcMeth;          /* PLC method for all channels */
+    LC3_INT16 n_pccw;
+    LC3_INT16 be_bp_left;
+    LC3_INT16 be_bp_right;
+    LC3_INT16 n_pc;
+    LC3_INT16 m_fec;
+    int    epmr;
+    LC3_INT16        combined_channel_coding;
+    int        last_error;
 };
 
 #endif

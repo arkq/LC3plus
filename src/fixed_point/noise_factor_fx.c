@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -12,9 +12,16 @@
 
 
 void processNoiseFactor_fx(Word16 *fac_ns_idx, Word16 x_e, Word32 x[],
+#    ifdef ENABLE_HR_MODE
+                           Word32 xq[],
+#    else
                            Word16 xq[],
+#    endif
                            Word16 gg, Word16 gg_e, Word16 BW_cutoff_idx, Word16 frame_dms, Word16 target_bytes,
                            Word8 *scratchBuffer
+#    ifdef ENABLE_HR_MODE
+                           ,Word16 hrmode
+#    endif
 )
 {
     Dyn_Mem_Deluxe_In(Counter k; Word16 nzeros, s1, s2, s3, c, idx, fac_unq, *ind;
@@ -28,6 +35,15 @@ void processNoiseFactor_fx(Word16 *fac_ns_idx, Word16 x_e, Word32 x[],
     noisefillstart = 0;
     c              = 0;
     move16();
+    
+#ifdef ENABLE_HR_MODE
+    if (hrmode)
+    {
+        N = BW_cutoff_bin_all_HR[BW_cutoff_idx];
+        move16();    
+    }
+    else
+#endif
     {
         N = BW_cutoff_bin_all[BW_cutoff_idx];
         move16();
@@ -124,13 +140,22 @@ void processNoiseFactor_fx(Word16 *fac_ns_idx, Word16 x_e, Word32 x[],
             assert(0 <= mean_ind && mean_ind <= ind[c - 1]);
 
             /* calculate noise filling gain for low frequencies */
-            Lsum = 0;
-            move32();
-            FOR (k = 0; ind[k] <= mean_ind; k++)
+            s2 = 0; move16();
+            if (sub(mean_ind, ind[0]) > 0)
             {
-                Lsum = L_add(Lsum, L_abs(x[ind[k]]));
+                /* calculate scale to ensure that Lsum does not overflow */
+                s2 = s_max(sub(sub(14, norm_s(c)), getScaleFactor32(&x[ind[0]], sub(mean_ind, ind[0]))), 0);
+            }      
+            Lsum = L_shr_pos_pos(L_abs(x[ind[0]]), s2);
+
+            FOR (k = 1; k < c && ind[k] <= mean_ind; k++)
+            {
+                /* scale before adding to Lsum */
+                Lsum = L_add(Lsum, L_shr_pos_pos(L_abs(x[ind[k]]), s2));
             }
             fac_unq1 = BASOP_Util_Divide3216_Scale(Lsum, k, &s1);
+            /* add scale applied during summing */
+            s1 = add(s1, s2);
             fac_unq1 = BASOP_Util_Divide1616_Scale(fac_unq1, gg, &s2);
             s3       = sub(15, add(x_e, add(s1, sub(s2, gg_e))));
             s2       = norm_s(fac_unq1);
@@ -142,7 +167,8 @@ void processNoiseFactor_fx(Word16 *fac_ns_idx, Word16 x_e, Word32 x[],
             }
             ELSE
             {
-                fac_unq1 = shr_r(fac_unq1, s_min(s3, 15));
+                s3 = s_min(s_max(s3, -15), 15);
+                fac_unq1 = shr_r(fac_unq1, s3);
             }
 
             /* calculate noise filling gain for high frequencies */
@@ -165,7 +191,8 @@ void processNoiseFactor_fx(Word16 *fac_ns_idx, Word16 x_e, Word32 x[],
             }
             ELSE
             {
-                fac_unq2 = shr_r(fac_unq2, s_min(s3, 15));
+                s3 = s_min(s_max(s3, -15), 15);
+                fac_unq2 = shr_r(fac_unq2, s3);
             }
 
             /* calculate noise filling gain as minimum over high and low frequencies */
@@ -173,12 +200,17 @@ void processNoiseFactor_fx(Word16 *fac_ns_idx, Word16 x_e, Word32 x[],
         }
         ELSE
         {
+            /* calculate scale to ensure that Lsum does not overflow */
+            s2 = s_max(sub(sub(14, norm_s(c)), getScaleFactor32(&x[ind[0]], sub(N,ind[0]))), 0);
             Lsum = L_abs(x[ind[0]]);
             FOR (k = 1; k < c; k++)
             {
-                Lsum = L_add(Lsum, L_abs(x[ind[k]]));
+                /* scale before adding to Lsum */
+                Lsum = L_add(Lsum, L_shr_pos_pos(L_abs(x[ind[k]]), s2));
             }
             fac_unq = BASOP_Util_Divide3216_Scale(Lsum, c, &s1);
+            /* add scale applied during summing */
+            s1 = add(s1, s2);
             fac_unq = BASOP_Util_Divide1616_Scale(fac_unq, gg, &s2);
             s3      = sub(15, add(x_e, add(s1, sub(s2, gg_e))));
             s2      = norm_s(fac_unq);
@@ -190,7 +222,7 @@ void processNoiseFactor_fx(Word16 *fac_ns_idx, Word16 x_e, Word32 x[],
             }
             ELSE
             {
-                fac_unq = shr_r(fac_unq, s_min(s3, 15));
+                fac_unq = shr_r(fac_unq, s_max(s_min(s3, 15), -15));
             }
         }
     }

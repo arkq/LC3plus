@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -97,11 +97,21 @@ void processDecoderEntropy_fx(UWord8 *bytes, Word16 *bp_side, Word16 *mask_side,
     }
 
     /* LTPF on/off */
+#ifdef ENABLE_HR_MODE
+    ltpf_idx[0] = read_bit(ptr, bp_side, mask_side);  move16();
+#else
     ltpf_idx[0] = read_indice(ptr, bp_side, mask_side, 1);  move16();
+#endif
 
     /* Decode SNS VQ parameters - 1st stage (10 bits) */
+#ifdef ENABLE_HR_MODE
+    L = read_indice(ptr, bp_side, mask_side, 5 + 5);
+    L_scf_idx[0] = L_deposit_l(s_and(L, 0x1F)); /* stage1 LF  5  bits */
+    L_scf_idx[1] = L_deposit_l(shr_pos(L, 5)); /* stage1 HF  5 bits  */
+#else
     L_scf_idx[0] = L_deposit_l(read_indice(ptr, bp_side, mask_side, 5)); /* stage1 LF  5  bits */
     L_scf_idx[1] = L_deposit_l(read_indice(ptr, bp_side, mask_side, 5)); /* stage1 HF  5 bits  */
+#endif
 
     /* Decode SNS VQ parameters - 2nd stage side-info (3-4 bits) */
     submodeMSB   = read_bit(ptr, bp_side, mask_side); /* submodeMSB 1 bit */
@@ -178,8 +188,15 @@ void processDecoderEntropy_fx(UWord8 *bytes, Word16 *bp_side, Word16 *mask_side,
     /* LTPF data */
     IF (ltpf_idx[0] != 0)
     {
+#ifdef ENABLE_HR_MODE
+        L = read_indice(ptr, bp_side, mask_side, 1+9);          move16();
+        ltpf_idx[1] = s_and(L, 1);                              move16();
+        ltpf_idx[2] = shr_pos(L, 1);                            move16();
+#else
         ltpf_idx[1] = read_indice(ptr, bp_side, mask_side, 1);  move16();
         ltpf_idx[2] = read_indice(ptr, bp_side, mask_side, 9);  move16();
+
+#endif
     }
     ELSE
     {
@@ -208,6 +225,10 @@ int paddingDec_fx(UWord8 *bytes, Word16 nbbits, Word16 L_spec, Word16 BW_cutoff_
 
     Word16 lastnz;
     Word16 nbits = sub(14, norm_s(negate(L_spec)));
+    if (sub(nbbits, nbits) < 0)
+    {
+        return 1;
+    }
     *np_zero     = 0;
 
     *total_padding = 0;
@@ -216,7 +237,7 @@ int paddingDec_fx(UWord8 *bytes, Word16 nbbits, Word16 L_spec, Word16 BW_cutoff_
     mask_side = shl(1, sub(8, sub(nbbits, shl_pos(bp_side, 3))));
 
     test();
-    IF (sub(bp_side, 19) < 0 || sub(bp_side, LC3_MAX_BYTES ) >= 0) {
+    IF (sub(bp_side, 19) < 0 || sub(bp_side, LC3PLUS_MAX_BYTES ) >= 0) {
         return 1;
     }
 

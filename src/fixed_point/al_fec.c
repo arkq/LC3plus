@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -727,13 +727,13 @@ int fec_decoder(UWord8 *iobuf, Word16 slot_bytes, int *data_bytes, Word16 *epmr,
     IF (*bfi == 1)
     {
         Dyn_Mem_Deluxe_Out();
-        return -1;
+        return ERROR_REPORT_BEC_MASK;
     }
 
     if (slot_bytes < FEC_SLOT_BYTES_MIN || slot_bytes > FEC_SLOT_BYTES_MAX)
     {
         *bfi = 1;
-        return -1;
+        return ERROR_REPORT_BEC_MASK;
     }
 
     my_scratch = (UWord8 *)scratch; move32();
@@ -833,6 +833,7 @@ int fec_decoder(UWord8 *iobuf, Word16 slot_bytes, int *data_bytes, Word16 *epmr,
     IF (sub(*bfi, 1) == 0)
     {
         *data_bytes = 0; move32();
+        error_report &= ERROR_REPORT_BEC_MASK;
         Dyn_Mem_Deluxe_Out();
         return error_report;
     }
@@ -1415,6 +1416,7 @@ FEC_STATIC int rs16_detect_and_correct(UWord8 *iobuf, int n_symb, int n_codeword
                 }
                 IF (add(n_pccw0, sub(cw_counter, n_codewords)) < 0)
                 {
+                    *error_report = ERROR_REPORT_BEC_MASK; move16();
                     mode = -1; move16();
                     *bfi = 1;  move32();
                     

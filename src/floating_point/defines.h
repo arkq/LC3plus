@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -14,47 +14,23 @@
 #include "stdint.h"
 
 /* Precision Defines */
-/* LC3_DOUBLE_PRECISION can be used for doubles */
-
-#ifndef LC3_DOUBLE_PRECISION
-#define LC3_SINGLE_PRECISION
-#endif
-
-
-
-#ifdef LC3_SINGLE_PRECISION
-#define LC3_FABS(x) (fabsf(x))
+#define LC3_FABS(x)   (fabsf(x))
 #define LC3_POW(x, y) (powf(x, y))
-#define LC3_LOG10(x) (log10f(x))
-#define LC3_LOG2(x) (log2f(x))
-#define LC3_COS(x) (cosf(x))
-#define LC3_SIN(x) (sinf(x))
-#define LC3_SQRT(x) (sqrtf(x))
-#define LC3_EXP(x) (expf(x))
-typedef float LC3_FLOAT;
-#endif
+#define LC3_LOG10(x)  (log10f(x))
+#define LC3_LOG2(x)   (log2f(x))
+#define LC3_COS(x)    (cosf(x))
+#define LC3_SIN(x)    (sinf(x))
+#define LC3_SQRT(x)   (sqrtf(x))
+#define LC3_EXP(x)    (expf(x))
 
-#ifdef LC3_DOUBLE_PRECISION
-typedef double LC3_FLOAT;
-#define LC3_FABS(x) (fabs(x))
-#define LC3_POW(x, y) (pow(x, y))
-#define LC3_LOG10(x) (log10(x))
-#define LC3_LOG2(x) (log2(x))
-#define LC3_COS(x) (cos(x))
-#define LC3_SIN(x) (sin(x))
-#define LC3_SQRT(x) (sqrt(x))
-#define LC3_EXP(x) (exp(x))
-#define kiss_fft_scalar double
-#endif
-
-typedef int32_t LC3_INT;
-typedef int16_t LC3_INT16;
+typedef float    LC3_FLOAT;
+typedef int32_t  LC3_INT;
+typedef int16_t  LC3_INT16;
 typedef uint16_t LC3_UINT16;
-typedef short LC3_SHORT;
-typedef uint8_t LC3_UINT8;
-typedef int8_t LC3_INT8;
+typedef short    LC3_SHORT;
+typedef uint8_t  LC3_UINT8;
+typedef int8_t   LC3_INT8;
 typedef uint32_t LC3_UINT32;
-
 
 /* Release defines */
 #define ENABLE_2_5MS_MODE
@@ -77,7 +53,72 @@ typedef uint32_t LC3_UINT32;
 #ifndef NO_POST_REL_CHANGES
 /* Post-release non-bitexact changes */
 
+
+
+
 #endif /* NO_POST_REL_CHANGES */
+
+
+
+typedef int32_t  LC3_INT32;
+
+#  if defined(__xtensa__)
+#    define ALIGNMENT_BALLOC 4
+#    define ALIGNMENT_BALLOC_RED 3
+#  else
+#    define ALIGNMENT_BALLOC 8
+#    define ALIGNMENT_BALLOC_RED 7
+#  endif
+
+#  define PLC2_FADEOUT_IN_MS        30
+#  define PHECU_FRES 62.5
+#  define PHECU_C_JACOB 1.1429
+#  define MAX_LGW 9 /*  LGW48K + 1 !! */
+#  define QUOT_LPR_LTR 4
+#  define MAX_PLC_LPROT ((512 * 48) / 32)
+#  define MAX_PLC_NPLOCS ((MAX_PLC_LPROT / 4) + 1)
+#  define MAX_PLC_LMSPEC ((MAX_PLC_LPROT / 2) + 1)
+#  define MAX_PLC_LMEM (400) /*  "only"  up to 20kHz (400 MDCT bins at 10 ms) at 48 kHz supported by PhEcu    */
+
+#  define POS_ONE_Q15 (32767.0 / 32768.0)
+#  define PHECU_LTOT_MIN_MAN 1   /* lowest possible mantissa energy value */
+#  define PHECU_LTOT_MIN_EXP -61 /* L_tot =  PHECU_LTOT_MIN_MAN*2^(PHECU_LTOT_MIN_EXP-31) */
+#  define PHECU_LTOT_MIN
+#  define PHECU_GRP_SHAPE_INIT 0 /* BASOP Q15 */
+#  define PHECU_ENV_STAB_LOCAL POS_ONE_Q15
+#  define PHECU_DELTA_CORR 5
+#  define PHECU_PFIND_SENS 0.93
+#  define PHECU_LA 0
+
+#  define LC3_ROUND(x) (roundf(x))
+#  define LC3_FLOOR(x) (floorf(x))
+
+#  define LC3_CONST_POW_2_16 65536
+#  define LC3_CONST_POW_2_M16 1.525878906250000e-05
+#  define LC3_CONST_POW_2_100 1.267650600228229e+30
+
+#  define MAX_LEN_PCM_PLC (MAX_PITCH + MAX_LEN)
+#  define MAX_PITCH  CEILING((MAX_PITCH_12K8 * MAX_LEN * 100), 12800)
+#  define TDC_L_FIR_HP 11
+#  define PLC3_HPBLENDTHROTTLE 30                  /* higher numbers increase throttled blending from hp filtered to unfiltered uv excitation (0 is no throttle) */
+
+#  define PLC_FADEOUT_IN_MS 60                     /* fade-out to zero in ms for TD-PLC and NS, minimum value is 20 */
+#  define PLC4_TRANSIT_START_IN_MS 20              /* begin of transition time for noise substitution for voiced signals */
+#  define PLC4_TRANSIT_END_IN_MS PLC_FADEOUT_IN_MS /* end   of transition time for noise substitution */
+#  define PLC34_ATTEN_FAC_100   0.5000           /* attenuation factor for NS and TDC @ 10  ms*/
+#  define PLC34_ATTEN_FAC_050   0.7071           /* attenuation factor for NS and TDC @ 5.0 ms*/
+#  define PLC34_ATTEN_FAC_025   0.8409           /* attenuation factor for NS and TDC @ 2.5 ms*/
+
+#  define FEC_SLOT_BYTES_MIN 40
+#    define FEC_SLOT_BYTES_MAX 400
+
+
+#  define LC3_CONST_POW_2_M15 3.051757812500000e-05
+#  define LC3_CONST_POW_2_23 8388608
+#  define LC3_CONST_POW_2_23_NEG -8388608
+#  define LC3_CONST_POW_2_23_RED 8388607
+
+#  define LC3_CONST_POW_2_100 1.267650600228229e+30
 
 /* G192 bitstream writing/reading */
 #define G192_REDUNDANCY_FRAME 0x6B22
@@ -87,7 +128,7 @@ typedef uint32_t LC3_UINT32;
 #define G192_ONE 0x0081
 #define READ_G192FER /* Allow C executable to also read G192 formatted FER files */
 
-
+#  define LC3_EPS (1e-7f)
 
 #define M_PI 3.14159265358979323846
 
@@ -107,6 +148,7 @@ typedef uint32_t LC3_UINT32;
 /* For dynamic memory calculations */
 #define CODEC_FS(fs) ((fs) == 44100 ? 48000 : (fs))
 #define DYN_MAX_LEN(fs) MAX(CODEC_FS(fs) / 100, 160)
+#  define DYN_MAX_LEN_EXT(fs) MAX(CODEC_FS(fs) / 100, 160) /* extension to length 160 for NB(fs=8000)    */
 #define DYN_MAX_MDCT_LEN(fs) (DYN_MAX_LEN(fs) - (180 * DYN_MAX_LEN(fs) / 480))
 
 /* OPTIONS */
@@ -119,16 +161,33 @@ typedef uint32_t LC3_UINT32;
 #define MAX_RESBITS_LEN ((MAX_RESBITS + 7)/8)
 
 #define MAX_CHANNELS 2
-#define MIN_NBYTES 20       /* 16kbps at 8/16/24/32/48kHz */
-#define MAX_NBYTES 400      /* 320kbps at 48kHz */
+#define MIN_NBYTES      20  /*  100dms:  16  kbps at !=44.1kHz,  14.7kbps at 44.1kHz
+                                 50dms:  32  kbps at !=44.1kHz,  29.4kbps at 44.1kHz
+                                 25dms:  64  kbps at !=44.1kHz,  58.8kbps at 44.1kHz */
+#define MAX_NBYTES_025 100  /* any dms: 320  kbps at !=44.1kHz, 294  kbps at 44.1kHz */
+#define MAX_NBYTES_050 200  /* any dms: 320  kbps at !=44.1kHz, 294  kbps at 44.1kHz */
+#define MAX_NBYTES_100 400  /* any dms: 320  kbps at !=44.1kHz, 294  kbps at 44.1kHz */
+
+#ifdef ENABLE_HR_MODE_FL
+#    define MIN_BR_25MS_48KHZ_HR ((int)172800/3200/2)*3200
+#    define MIN_BR_25MS_96KHZ_HR ((int)198400/3200/2)*3200
+#    define MIN_BR_50MS_48KHZ_HR ((int)148800/1600/2)*1600
+#    define MIN_BR_50MS_96KHZ_HR ((int)174400/1600/2)*1600
+#    define MIN_BR_100MS_48KHZ_HR ((int)124800/800/2)*800
+#    define MIN_BR_100MS_96KHZ_HR ((int)149600/800/2)*800
+#endif /* ENABLE_HR_MODE */
 #define MAX_NBYTES2 625
 #define BYTESBUFSIZE (MAX_NBYTES2 * MAX_CHANNELS)
 #define MAX_BW_BIN 400
 #if MAX_BW_BIN > MAX_LEN
-#define MAX_BW MAX_LEN
+#  define MAX_BW MAX_LEN
 #else
-#define MAX_BW MAX_BW_BIN
+#  define MAX_BW MAX_BW_BIN
 #endif
+
+#  ifdef ENABLE_HR_MODE_FL
+#    define MAX_BW_HR 960
+#  endif
 
 /* SCF */
 #define M 16

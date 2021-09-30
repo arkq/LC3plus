@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -397,7 +397,7 @@ LC3_INT LC3_cfft_plan(Cfft* handle, LC3_INT length, LC3_INT sign)
         LC3_INT i     = 0;
         handle->table = (LC3_FLOAT*)malloc((length / 2 + 1) * sizeof(LC3_FLOAT));
         for (i = 0; i < length / 2 + 1; i++) {
-            handle->table[i] = (LC3_FLOAT)LC3_SIN(M_PIl * i / length);
+            handle->table[i] = (LC3_FLOAT)LC3_SIN((LC3_FLOAT)M_PIl * i / length);
         }
     }
     return 1;

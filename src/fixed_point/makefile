@@ -1,11 +1,11 @@
 # Options
-AFL         = 0
-CLANG       = 0
-GCOV        = 0
-NO_POST_REL = 0
-OPTIM       = 0
-SUBSET      = ALL
-WMOPS       = 1
+AFL                      = 0
+GCOV                     = 0
+NO_POST_REL_CHANGES_TEST = 0
+OPTIM                    = 0
+SUBSET                   = ALL
+WMOPS                    = 1
+HR                       = 1
 
 # Paths
 VPATH  = . basic_op
@@ -39,6 +39,10 @@ CFLAGS   += -g3
 LDFLAGS  += -g3
 endif
 
+ifeq "$(HR)" "0"
+CFLAGS   += -DDISABLE_HR_MODE
+endif
+
 LDFLAGS += -lm
 
 DEPFLAGS = -MT $@ -MMD -MP -MF $(BUILD)/$*.Td
@@ -53,7 +57,7 @@ CFLAGS   += -O$(OPTIM)
 
 CFLAGS   += $(foreach DIR,$(SRC_DIRS),-I$(DIR))
 
-ifeq "$(NO_POST_REL)" "1"
+ifeq "$(NO_POST_REL_CHANGES_TEST)" "1"
 CFLAGS   += -DNO_POST_REL_CHANGES
 endif
 
@@ -92,14 +96,14 @@ help:
 	@echo '    ccConvert'
 	@echo 'Syntax: make [OPTION=VALUE ...]'
 	@echo 'Build options:'
-	@echo '    NO_POST_REL $(NO_POST_REL) [0,1]'
-	@echo '    OPTIM       $(OPTIM) [0-3]'
-	@echo '    SUBSET      $(SUBSET) [NB,SQ,HQ,SWB,FB,ALL]'
-	@echo '    WMOPS       $(WMOPS) [0,1]'
+	@echo '    NO_POST_REL_CHANGES_TEST $(NO_POST_REL_CHANGES_TEST) [0,1]'
+	@echo '    OPTIM                    $(OPTIM) [0-3]'
+	@echo '    SUBSET                   $(SUBSET) [NB,WB,SSWB,SWB,FB,UB,ALL]'
+	@echo '    WMOPS                    $(WMOPS) [0,1]'
 	@echo 'Debug options:'
-	@echo '    AFL         $(AFL) [0,1]'
-	@echo '    CLANG       $(CLANG) [0-3]'
-	@echo '    GCOV        $(GCOV) [0,1]'
+	@echo '    AFL                      $(AFL) [0,1]'
+	@echo '    CLANG                    $(CLANG) [0-3]'
+	@echo '    GCOV                     $(GCOV) [0,1]'
 
 $(NAME_LC3): $(OBJS)
 	@echo 'Linking' $@

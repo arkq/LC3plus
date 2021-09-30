@@ -5,7 +5,7 @@
 # ======================================
 #
 # /******************************************************************************
-# *                        ETSI TS 103 634 V1.2.1                               *
+# *                        ETSI TS 103 634 V1.3.1                               *
 # *              Low Complexity Communication Codec Plus (LC3plus)              *
 # *                                                                             *
 # * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -14,9 +14,12 @@
 # ******************************************************************************/
 
 ##################################################
-my $EXE_TST = './../src/fixed_point/LC3plus'; # Path to test LC3plus executable
-my $md5_bin = './md5_bin.txt';
-my $md5_dec = './md5_dec.txt';
+my $EXE_TST_FX = './../src/fixed_point/LC3plus_HR';    # Path to test fixed point LC3plus executable
+my $EXE_TST_FL = './../src/floating_point/LC3plus'; # Path to test floating point LC3plus executable
+my $md5_bin_fx = './md5_bin_fx.txt';
+my $md5_dec_fx = './md5_dec_fx.txt';
+my $md5_bin_fl = './md5_bin_fl.txt';
+my $md5_dec_fl = './md5_dec_fl.txt';
 my $MY_MD5  = 'md5sum'; # System dependent MD5 call
 my $epf = '-epf ./plc_fer.dat';
 ##################################################
@@ -35,6 +38,9 @@ my $output_folder_decoded_tst = $tmp_folder."/decoded_tst";
 my $report = "lc3plus_testvectors_report_".$timestamp.".txt";
 my $fh;
 my $quiet = '>/dev/null 2>&1';
+my $EXE_TST;
+my $md5_bin;
+my $md5_dec;
 
 my $testvectors_fail = 0;
 
@@ -54,8 +60,8 @@ my @EP_MODES = (0, 4);
 getOS();
 
 # Get command line arguments
-my ($create, $test, $clean, $log) = (0, 0, 0, 0);
-getArgs(\$create, \$clean, \$log, \$quiet, \@ARGV);
+my ($fixed, $float, $create, $test, $clean, $log) = (0, 0, 0, 0, 0, 0);
+getArgs(\$EXE_TST, \$md5_bin, \$md5_dec, \$fixed, \$float, \$create, \$clean, \$log, \$quiet, \@ARGV);
 
 $test = 1; # Run complete test by default
 if ($create)
@@ -63,7 +69,7 @@ if ($create)
     $test = 0; # Don't run test if only create option selected
 }
 
-# Check if both executables are here
+# Check if executable and MD5's are here
 checkExe($EXE_TST, $md5_bin, $md5_dec);
 
 # Check if MD5 command exists
@@ -104,11 +110,11 @@ if ($create || $test)
             foreach my $ep (@EP_MODES)
             {
                 my $output_stream = $output_folder_stream_tst."/".$base."_".$br."_EP".$ep.".lc3plus";
-                system("$EXE_TST $epf -epmode $ep -E $input $output_stream $br $quiet");
+                system("$EXE_TST -E -epmode $ep $input $output_stream $br $quiet");
 
                 if ($log)
                 {
-                    print $fh "$EXE_TST $epf -epmode $ep -E $input $output_stream $br $quiet\n";
+                    print $fh "$EXE_TST -E -epmode $ep $input $output_stream $br $quiet\n";
                 }
 
                 my $output_decoded = $output_folder_decoded_tst."/".$base."_".$br."_EP".$ep.".wav";
@@ -158,6 +164,11 @@ if ($log)
     print("Please see logfile for more information: $report\n");
 }
 
+if ($testvectors_fail)
+{
+    exit(1);
+}
+
 
 
 # Functions
@@ -177,7 +188,7 @@ sub checkMD5
     {
         print("Error: cannot find md5 command: $cmd\n");
         print("Please adjust md5 command in script!\n");
-        exit(0);
+        exit(1);
     }
 }
 
@@ -266,8 +277,8 @@ sub createDirs
 
 sub getArgs 
 {
-    my ($create, $clean, $log, $quiet, $args) = @_;
-    
+    my ($EXE_TST, $md5_bin, $md5_dec, $fixed, $float, $create, $clean, $log, $quiet, $args) = @_;
+
     my @arg = @{$args};
     my $size = @arg;
     my $help = 0;
@@ -277,6 +288,12 @@ sub getArgs
         if ($argument eq '-create')
         {
             ${$create} = 1;
+        } elsif ($argument eq '-fixed')
+        {
+            ${$fixed} = 1;
+        } elsif ($argument eq '-float')
+        {
+            ${$float} = 1;
         } elsif ($argument eq '-clean')
         {
             ${$clean} = 1;
@@ -294,11 +311,31 @@ sub getArgs
             printUsage();
         }
     }
-    
+
     if ($help)
     {
         printUsage();
     }
+
+    if ((${$float} && ${$fixed}) || (!${$float} && !${$fixed}))
+    {
+        print("Please select either fixed OR float!\n");
+        printUsage();
+    }
+
+    if (${$fixed})
+    {
+        ${$EXE_TST} = $EXE_TST_FX;
+        ${$md5_bin} = $md5_bin_fx;
+        ${$md5_dec} = $md5_dec_fx;
+    }
+
+    if (${$float})
+    {
+        ${$EXE_TST} = $EXE_TST_FL;
+        ${$md5_bin} = $md5_bin_fl;
+        ${$md5_dec} = $md5_dec_fl;
+    }    
 }
 
 sub checkExe
@@ -307,7 +344,7 @@ sub checkExe
     
     if (! -e $exe_tst)
     {
-        print("Cannot find test executable! Please place LC3plus in src/fixed_point/ or adjust the variable EXE_TST in this script.\n");
+        print("Cannot find test executable $EXE_TST.\n");
         printUsage();
     }
     
@@ -340,7 +377,9 @@ sub printUsage
 {
     print("\nLC3plus ETSI Testvectors script $VERSION\n");
     print("Default: Create files and compare MD5 hash with reference values.\n");
-    print("Usage: lc3plus_testvectors.pl [-create] [-clean] [-log] [-verbose]\n");
+    print("Usage: lc3plus_testvectors.pl [-float] [-fixed] [-create] [-clean] [-log] [-verbose]\n");
+    print("[-float] : Use floating point testvectors together with binary located here: $EXE_TST_FL.\n");
+    print("[-fixed] : Use fixed point testvectors together with binary located here: $EXE_TST_FX.\n");
     print("[-create] : Only create bitstreams and decoded files for testvectors check using test executable.\n");
     print("[-clean] : Delete all temporary files after usage.\n");
     print("[-log] : Log all commands.\n");

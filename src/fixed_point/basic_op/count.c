@@ -583,12 +583,12 @@ void WMOPS_output_avg (Word16 dtx_mode, Word32 *tot_wm, Word16 *num_frames) {
 void generic_WMOPS_output (Word16 dtx_mode, char *test_file_name)
 {
 #if WMOPS
-   int		saved_value;
+   int        saved_value;
    int i;
-   Word32	tot, tot_wm, tot_wc, *ptr;
+   Word32    tot, tot_wm, tot_wc, *ptr;
    const Word32 *ptr2;
    Word40   grand_total;
-   FILE	*WMOPS_file;
+   FILE    *WMOPS_file;
 
    saved_value = currCounter;
 

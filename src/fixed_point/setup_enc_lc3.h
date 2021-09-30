@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -16,7 +16,11 @@
 /* Channel state and bitrate-derived values go in this struct */
 typedef struct
 {
+#ifdef ENABLE_HR_MODE
+    Word32 *stEnc_mdct_mem; /* MDCT_MEM_LEN_MAX */
+#else
     Word16 *stEnc_mdct_mem; /* MDCT_MEM_LEN_MAX */
+#endif
     Word32 *mdct_mem32;     /* MDCT_MEM_LEN_MAX */
     Word32  targetBitsOff;
     Word16  targetBytes;
@@ -45,8 +49,17 @@ typedef struct
     Word16  attdec_position;
     Word32  attdec_acc_energy;
     Word16  attdec_scaling;
+#ifdef ENABLE_HR_MODE
+    Word16 regBits;
+    Word32 resamp_mem32[120] ALIGN_BUFFER_STRUCT;
+#else
     Word32 resamp_mem32[60] ALIGN_BUFFER_STRUCT;
+#endif
+#ifdef ENABLE_HR_MODE
+    Word16 r12k8_mem_in[120] ALIGN_BUFFER_STRUCT;
+#else
     Word16 r12k8_mem_in[60] ALIGN_BUFFER_STRUCT;
+#endif
     Word32 r12k8_mem_50[2] ALIGN_BUFFER_STRUCT;
     Word16 r12k8_mem_out[24] ALIGN_BUFFER_STRUCT;
     Word16 olpa_mem_s12k8[3] ALIGN_BUFFER_STRUCT;
@@ -57,10 +70,14 @@ typedef struct
 } EncSetup;
 
 /* Constants and sampling rate derived values go in this struct */
-struct LC3_Enc
+struct LC3PLUS_Enc
 {
     EncSetup *channel_setup[MAX_CHANNELS];
+#ifdef ENABLE_HR_MODE
+    const Word32 *W_fx;
+#else
     const Word16 *W_fx;
+#endif
     const Word16 *bands_offset;
 
     Word32 fs;           /* encoder sampling rate 44.1 -> 48 */
@@ -86,15 +103,21 @@ struct LC3_Enc
     Word16 BW_cutoff_bits;
     Word16 r12k8_mem_in_len;
     Word16 r12k8_mem_out_len;
+    Word16 near_nyquist_index;
+    Word16 near_nyquist_flag;
+    Word16 lfe;
 
     Word16 epmr;
     Word16 combined_channel_coding;
     Word32 bandwidth;
+    Word32 bandwidth_preset;
+    Word32 bw_ctrl_active;
     Word16 bw_ctrl_cutoff_bin;
     Word16 bw_index;
     Word16 attdec_nblocks;
     Word16 attdec_damping;
     Word16 attdec_hangover_thresh;
+    Word16 hrmode;
 };
 
 #endif

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -37,17 +37,17 @@ void P_Sta_Mem_Exit_noprint(void);
 
 #ifdef DONT_COUNT_MEM
 
-#define Dyn_Mem_Init()	
-#define Dyn_Mem_Exit()	
-#define Dyn_Mem_Exit_noprint()	
-#define Dyn_Mem_In(a,b)	
-#define Dyn_Mem_Add(b)	
-#define Dyn_Mem_Out()	
+#define Dyn_Mem_Init()    
+#define Dyn_Mem_Exit()    
+#define Dyn_Mem_Exit_noprint()    
+#define Dyn_Mem_In(a,b)    
+#define Dyn_Mem_Add(b)    
+#define Dyn_Mem_Out()    
 
-#define DYN_MEM_IN		Dyn_Mem_In
-#define DYN_MEM_ADD		Dyn_Mem_Add
-#define DYN_MEM_OUT		Dyn_Mem_Out	
-	
+#define DYN_MEM_IN        Dyn_Mem_In
+#define DYN_MEM_ADD        Dyn_Mem_Add
+#define DYN_MEM_OUT        Dyn_Mem_Out    
+    
 #define Sta_Mem_Init()
 #define Sta_Mem_Exit()
 #define Sta_Mem_Exit_noprint()
@@ -55,16 +55,16 @@ void P_Sta_Mem_Exit_noprint(void);
 
 #else /* DONT_COUNT_MEM */
 
-#define Dyn_Mem_Init	P_Dyn_Mem_Init
-#define Dyn_Mem_Exit	P_Dyn_Mem_Exit 
-#define Dyn_Mem_Exit_noprint	P_Dyn_Mem_Exit_noprint
-#define Dyn_Mem_In		P_Dyn_Mem_In
-#define Dyn_Mem_Add		P_Dyn_Mem_Add
-#define Dyn_Mem_Out		P_Dyn_Mem_Out
+#define Dyn_Mem_Init    P_Dyn_Mem_Init
+#define Dyn_Mem_Exit    P_Dyn_Mem_Exit 
+#define Dyn_Mem_Exit_noprint    P_Dyn_Mem_Exit_noprint
+#define Dyn_Mem_In        P_Dyn_Mem_In
+#define Dyn_Mem_Add        P_Dyn_Mem_Add
+#define Dyn_Mem_Out        P_Dyn_Mem_Out
 
-#define DYN_MEM_IN		P_Dyn_Mem_In
-#define DYN_MEM_ADD		P_Dyn_Mem_Add
-#define DYN_MEM_OUT		P_Dyn_Mem_Out
+#define DYN_MEM_IN        P_Dyn_Mem_In
+#define DYN_MEM_ADD        P_Dyn_Mem_Add
+#define DYN_MEM_OUT        P_Dyn_Mem_Out
 
 #define Sta_Mem_Init  P_Sta_Mem_Init
 #define Sta_Mem_Exit  P_Sta_Mem_Exit

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -41,10 +41,9 @@ void dct2_apply(Dct2* dct, const LC3_FLOAT* input, LC3_FLOAT* output)
     fft_apply(&dct->fft, tmp1, tmp2);
 
     for (i = 0; i < len; i++) {
-        Complex c = cmul(cexpi(-M_PI * i / (2 * len)), cmplx(2 / LC3_SQRT(2 * len), 0));
-        output[i] = cmul(tmp2[i], c).r;
+        output[i] = cmul(tmp2[i], dct2_16[i]).r;
     }
-    output[0] /= LC3_SQRT(2);
+    output[0] /= (LC3_FLOAT)1.414213562373095; /* SQRT(2) */
 }
 
 
@@ -56,8 +55,8 @@ void dct4_init(Dct4* dct, int length)
     dct->twid1  = calloc(sizeof(*dct->twid1), length / 2);
     dct->twid2  = calloc(sizeof(*dct->twid2), length / 2);
     for (i = 0; i < length / 2; i++) {
-        dct->twid1[i] = cexpi(-M_PI * (i + 0.25) / length);
-        dct->twid2[i] = cexpi(-M_PI * i / length);
+        dct->twid1[i] = cexpi(-(LC3_FLOAT)M_PI * (i + (LC3_FLOAT)0.25) / length);
+        dct->twid2[i] = cexpi(-(LC3_FLOAT)M_PI * i / length);
     }
     fft_init(&dct->fft, length / 2);
 }
@@ -79,7 +78,7 @@ void dct4_apply(Dct4* dct, const LC3_FLOAT* input, LC3_FLOAT* output)
     int         i    = 0;
     Complex*    tmp1 = (Complex*)output;
     const int   len  = dct->length;
-    const LC3_FLOAT norm = 1.0 / LC3_SQRT(len / 2);
+    const LC3_FLOAT norm = (LC3_FLOAT)1.0 / LC3_SQRT((LC3_FLOAT)(len >> 1));
 
     for (i = 0; i < len / 2; i++) {
         tmp1[i] = cmul(cmplx(input[i * 2], input[len - i * 2 - 1]), dct->twid1[i]);

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -479,7 +479,7 @@ void processTimeDomainConcealment_Apply_fx(const Word16 pitch_int, const Word16 
      * Deemphasis                                               *
      *----------------------------------------------------------*/
 
-    mem_deemph = shl(pcmbufHist_fx[max_len_pcm_plc - 1], *Q_syn);
+    mem_deemph = shl_sat(pcmbufHist_fx[max_len_pcm_plc - 1], *Q_syn);
     TDC_deemph_fx(synth_tmp_fx, synth_fx, preemphFac_fx, len, mem_deemph);
 
     /*----------------------------------------------------------*
@@ -724,8 +724,8 @@ static Word32 TDC_calcGainp(Word16 x[], Word16 y[], Word16 lg)
     L_tmp2 = L_deposit_l(0);
     FOR (i = 0; i < lg; i += 2)
     {
-        L_tmp1 = L_mac0(L_tmp1, x[i], y[i]);
-        L_tmp2 = L_mac0(L_tmp2, x[i + 1], y[i + 1]);
+        L_tmp1 = L_mac0_sat(L_tmp1, x[i], y[i]);
+        L_tmp2 = L_mac0_sat(L_tmp2, x[i + 1], y[i + 1]);
     }
     tcorr  = L_add(L_shr_pos(L_tmp1, 1), L_shr_pos(L_tmp2, 1));
     Q_corr = norm_l(tcorr);
@@ -736,8 +736,8 @@ static Word32 TDC_calcGainp(Word16 x[], Word16 y[], Word16 lg)
     L_tmp2 = L_deposit_l(0);
     FOR (i = 0; i < lg; i += 2)
     {
-        L_tmp1 = L_mac0(L_tmp1, y[i], y[i]);
-        L_tmp2 = L_mac0(L_tmp2, y[i + 1], y[i + 1]);
+        L_tmp1 = L_mac0_sat(L_tmp1, y[i], y[i]);
+        L_tmp2 = L_mac0_sat(L_tmp2, y[i + 1], y[i + 1]);
     }
     tener  = L_add(L_shr_pos(L_tmp1, 1), L_shr_pos(L_tmp2, 1));
     Q_ener = norm_l(tener);
@@ -825,7 +825,7 @@ static void TDC_LPC_synthesis_fx(const Word16 sh, const Word16 a[], const Word16
     }
 
     q        = add(norm_s(a[0]), 1);
-    a0       = shr(a[0], sh);
+    a0       = shr_sat(a[0], sh);
 
     FOR (i = 0; i < lg; i++)
     {

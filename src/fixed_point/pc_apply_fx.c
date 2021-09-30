@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -14,11 +14,19 @@
 #include "functions.h"
 
 
+#ifdef ENABLE_HR_MODE
+static Word16 getScaleFactor32_withNegativeScaling(Word32 *data32, Word16 dataLen);
+#else
 static Word16 getScaleFactor16_withNegativeScaling(Word16 *data16, Word16 dataLen);
+#endif
 
 
 void processPCapply_fx(Word16 yLen, Word16 q_old_res_fx[], Word16 *q_old_res_fx_exp,
+#ifdef ENABLE_HR_MODE
+                       Word32 q_res_fx[],
+#else
                        Word16 q_res_fx[],
+#endif
                        Word16 q_old_d_fx[], Word16 spec_inv_idx, Word16 *fac, Word16 *fac_e, Word32 q_d_fx[],
                        Word16 *q_fx_exp, Word16 gg_idx, Word16 gg_idx_off, Word16 prev_gg, Word16 prev_gg_e,
                        Word16 *pc_nbLostFramesInRow)
@@ -97,12 +105,22 @@ void processPCapply_fx(Word16 yLen, Word16 q_old_res_fx[], Word16 *q_old_res_fx_
     ener_curr = 0;
     move32();
 
+#ifdef ENABLE_HR_MODE
+      s2 = getScaleFactor32(q_res_fx, spec_inv_idx);
+      FOR (i = 0; i < spec_inv_idx; i++)
+      {
+          tmp16     = extract_h(L_shl_sat(q_res_fx[i], sub(s2, 4)));
+          ener_curr = L_mac0(ener_curr, tmp16, tmp16); /* exp = - (2s2 - 8) */
+      }
+      s2 = s2 - 16;
+#else
     s2        = getScaleFactor16(q_res_fx, spec_inv_idx);
     FOR (i = 0; i < spec_inv_idx; i++)
     {
         tmp16     = shl_sat(q_res_fx[i], sub(s2, 4));
         ener_curr = L_mac0(ener_curr, tmp16, tmp16); /* exp = - (2s2 - 8) */
     }
+#endif
     
 
     s  = shl(sub(s, *q_old_res_fx_exp), 1);
@@ -124,7 +142,12 @@ void processPCapply_fx(Word16 yLen, Word16 q_old_res_fx[], Word16 *q_old_res_fx_
         tmp16_2 = extract_h(L_shl_sat(ener_prev, s3));
         
         *fac_e = 0;  move16();
-        tmp16_2 = Inv16(tmp16_2, fac_e);
+        if ( tmp16_2 == 0) {
+            tmp16_2 = 32767;  move16();
+            *fac_e = 15;  move16();
+        } else {
+            tmp16_2 = Inv16(tmp16_2, fac_e);
+        }
         
         *fac = mult(tmp16, tmp16_2);
         
@@ -176,10 +199,15 @@ void processPCapply_fx(Word16 yLen, Word16 q_old_res_fx[], Word16 *q_old_res_fx_
         }
     }
 
-    /* scaling to 15Q16 */
+#ifdef ENABLE_HR_MODE
+    s  = getScaleFactor32_withNegativeScaling(&q_res_fx[0], spec_inv_idx)  - 16; /* exp = 0 */
+    s2 = getScaleFactor32_withNegativeScaling(&q_res_fx[spec_inv_idx],
+                                              sub(yLen, spec_inv_idx)) - 16; /* exp = q_old_res_fx_exp */
+#else
     s  = getScaleFactor16_withNegativeScaling(&q_res_fx[0], spec_inv_idx); /* exp = 0 */
     s2 = getScaleFactor16_withNegativeScaling(&q_res_fx[spec_inv_idx],
                                               sub(yLen, spec_inv_idx)); /* exp = q_old_res_fx_exp */
+#endif
                                               
     s3 = add(s, *q_old_res_fx_exp);
     IF (sub(s3, s2) > 0)
@@ -190,15 +218,33 @@ void processPCapply_fx(Word16 yLen, Word16 q_old_res_fx[], Word16 *q_old_res_fx_
     }
     *q_fx_exp = sub(15, s);
     move16();
+    
+#ifdef ENABLE_HR_MODE
+    s = add(s, 16);
+    s3 = add(s3, 16);
+#endif
+
+    s = s_max(s, -31);
+    s = s_min(s, 31);
+    s3 = s_max(s3, -31);
+    s3 = s_min(s3, 31);
 
     FOR (i = 0; i < spec_inv_idx; i++)
     {
-        q_d_fx[i] = L_shl_pos(L_deposit_h(q_res_fx[i]), s);
+#ifdef ENABLE_HR_MODE
+        q_d_fx[i] = L_shl(q_res_fx[i], s);
+#else
+        q_d_fx[i] = L_shl(L_deposit_h(q_res_fx[i]), s);
+#endif
         move32();
     }
     FOR (; i < yLen; i++)
     {
-        q_d_fx[i] = L_shl_pos(L_deposit_h(q_res_fx[i]), s3);
+#ifdef ENABLE_HR_MODE
+        q_d_fx[i] = L_shl(q_res_fx[i], s3);
+#else
+        q_d_fx[i] = L_shl(L_deposit_h(q_res_fx[i]), s3);
+#endif
         move32();
     }
 
@@ -208,6 +254,7 @@ void processPCapply_fx(Word16 yLen, Word16 q_old_res_fx[], Word16 *q_old_res_fx_
 #endif
 }
 
+#ifndef ENABLE_HR_MODE
 static Word16 getScaleFactor16_withNegativeScaling(Word16 *data16, Word16 dataLen)
 {
     Counter i;
@@ -239,5 +286,33 @@ static Word16 getScaleFactor16_withNegativeScaling(Word16 *data16, Word16 dataLe
     return shift;
 }
 
+#else
+static Word16 getScaleFactor32_withNegativeScaling(Word32 *data32, Word16 dataLen)
+{
+    Counter i;
+    Dyn_Mem_Deluxe_In(Word32 tmp, shift; Word32 x_min, x_max;);
 
+    x_max = L_add(0, 0);
+    x_min = L_add(0, 0);
 
+    FOR (i = 0; i < dataLen; i++)
+    {
+        if (data32[i] >= 0)
+            x_max = L_max(x_max, data32[i]);
+        if (data32[i] < 0)
+            x_min = L_min(x_min, data32[i]);
+    }
+
+    tmp   = L_max(x_max, L_negate(x_min));
+    shift = norm_l(tmp);
+    if (tmp == 0)
+    {
+        shift = 31;
+        move16();
+    }
+
+    Dyn_Mem_Deluxe_Out();
+
+    return shift;
+}
+#endif

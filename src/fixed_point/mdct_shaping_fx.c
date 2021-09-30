@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -12,7 +12,13 @@
 
 
 
-void processMdctShaping_fx(Word32 x[], Word16 scf[], Word16 scf_exp[], const Word16 bands_offset[], Word16 fdns_npts)
+void processMdctShaping_fx(Word32 x[],
+#ifdef ENABLE_HR_MODE
+                           Word32 scf[], 
+#else
+                           Word16 scf[],
+#endif
+                           Word16 scf_exp[], const Word16 bands_offset[], Word16 fdns_npts)
 {
     Counter i, j;
 
@@ -25,7 +31,11 @@ void processMdctShaping_fx(Word32 x[], Word16 scf[], Word16 scf_exp[], const Wor
     {
         FOR (; j < bands_offset[i + 1]; j++)
         {
+#ifdef ENABLE_HR_MODE
+            x[j] = L_shl(Mpy_32_32(x[j], scf[i]), scf_exp[i]); move32();
+#else
             x[j] = L_shl(Mpy_32_16(x[j], scf[i]), scf_exp[i]); move32();
+#endif
         }
     }
 

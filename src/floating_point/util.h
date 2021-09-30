@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -105,6 +105,20 @@ static inline Complex cmul(Complex a, Complex b) {
   return cmplx(a.r * b.r - a.i * b.i, a.i * b.r + a.r * b.i);
 }
 
+/* mac operator */
+static inline LC3_FLOAT mac_loop(const LC3_FLOAT *array1, const LC3_FLOAT *array2, LC3_INT len)
+{
+    LC3_INT i;
+    LC3_FLOAT sum = 0.0;
+
+    for (i = 0; i < len; i++)
+    {
+        sum += (*array1++) * (*array2++);
+    }
+
+    return sum;
+}
+
 /* complex eᶦˣ */
 static inline Complex cexpi(LC3_FLOAT x) { return cmplx(LC3_COS(x), LC3_SIN(x)); }
 
@@ -125,5 +139,84 @@ static inline bool str_ends_with(const char *str, const char *suffix) {
   char *tmp = str ? strrchr(str, suffix[0]) : NULL;
   return tmp && !strcasecmp(tmp, suffix);
 }
+
+/* complex a - b */
+static inline Complex csub(Complex a, Complex b) {
+  return cmplx(a.r - b.r, a.i - b.i);
+}
+
+static inline void move_cmplx(Complex *dst, const Complex  *src, LC3_INT32 len) {
+  if (len > 0) {
+    memmove(dst, src, len * sizeof(Complex));
+    assert(src[len - 1].r == dst[len - 1].r && src[len - 1].i == dst[len - 1].i); /*check that Cmplx is stored contiguously*/
+    assert(src[0].r == dst[0].r && src[0].i == dst[0].i); /*check that Cmplx is stored contiguously*/
+  }
+}
+
+static inline void zero_cmplx(Complex *x, LC3_INT32 len) {
+   if(len > 0) {
+     memset(x, 0, len * sizeof(Complex));
+     assert(x[0].r == 0 && x[0].i == 0 &&  x[len-1].r == 0 && x[len-1].i == 0);
+   }  
+}
+
+static inline Complex realtoc(LC3_FLOAT r) { return cmplx(r, 0); }
+
+/* set float vector to constant */
+static inline void set_vec(const LC3_FLOAT c, LC3_FLOAT *x, LC3_INT32 len) {
+    LC3_INT32 i = 0;
+    for (i = 0; i < len; i++) {
+        x[i] = c;
+    }
+}
+
+/* set float vector to constant */
+static inline void set_vec_int(const LC3_INT32 c, LC3_INT32 *x, LC3_INT32 len) {
+    LC3_INT32 i = 0;
+    for (i = 0; i < len; i++) {
+        x[i] = c;
+    }
+}
+
+static inline LC3_INT32 clz_func(LC3_INT32 inp)
+{
+#if defined(__clang__) || defined(__GNUC__)
+    if (inp == 0)
+    {
+        return 0;
+    }
+    return __builtin_clz(inp);
+
+#elif defined(_WIN32) || defined(_WIN64)
+    LC3_INT32 leading_zero = 0;
+   
+    if (_BitScanReverse(&leading_zero, inp))
+    {
+        return 31 - leading_zero;
+    }
+    else
+        return 0;
+    
+#else
+    LC3_INT32 i = 0;
+    int64_t x = inp;
+    
+    if (inp == 0)
+    {
+        return 0;
+    }
+    
+    inp = (inp < 0) ? ~inp : inp;
+
+    while (x < (int64_t)0x80000000L)
+    {
+        inp <<= 1;
+        i += 1;
+    }
+
+    return i;
+#endif
+}
+
 
 #endif

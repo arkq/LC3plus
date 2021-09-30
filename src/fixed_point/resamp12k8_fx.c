@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -14,7 +14,9 @@
 
 void process_resamp12k8_fx(Word16 x[], Word16 x_len, Word16 mem_in[], Word16 mem_in_len, Word32 mem_50[],
                            Word16 mem_out[], Word16 mem_out_len, Word16 y[], Word16 *y_len, Word16 fs_idx,
-                           Word16 frame_dms, Word8 *scratchBuffer)
+                           Word16 frame_dms, Word8 *scratchBuffer
+                            , Word16 bps
+                           )
 {
     Dyn_Mem_Deluxe_In(
         Word16 *      buf;
@@ -94,11 +96,19 @@ void process_resamp12k8_fx(Word16 x[], Word16 x_len, Word16 mem_in[], Word16 mem
 
     FOR (n = 0; n < len_12k8; n++)
     {
-        filt_output = L_mac0(mem_50_0, highpass50_filt_num[0], y[n]);
+        filt_output = L_mac0_sat(mem_50_0, highpass50_filt_num[0], y[n]);
         L_tmp       = L_mac0(Mpy_32_16(filt_output, highpass50_filt_den[0]), highpass50_filt_num[1], y[n]);
-        mem_50_0    = L_add(mem_50_1, L_shl_pos(L_tmp, 1));
+
+        IF (sub(bps, 24) == 0)
+        {
+            mem_50_0    = L_shl_sat(L_add_sat(L_shr_pos(mem_50_1,1), L_tmp), 1);
+        } ELSE
+        {
+            mem_50_0 = L_add_sat(mem_50_1, L_shl_sat(L_tmp, 1));
+        }
+        
         mem_50_1    = L_mac0(Mpy_32_16(filt_output, highpass50_filt_den[1]), highpass50_filt_num[2], y[n]);
-        y[n]        = round_fx(filt_output); move16();
+        y[n]        = round_fx_sat(filt_output); move16();
     }
     mem_50[0] = mem_50_0; move32();
     mem_50[1] = mem_50_1; move32();

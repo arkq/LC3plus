@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -30,7 +30,7 @@ static int read_bitstream_frame_G192(FILE *bitstream_file, int size, int16_t *by
 static void write_bitstream_frame_G192(FILE *bitstream_file, int16_t *bits, int size);
 static void printUsage();
 static void flip(int16_t *bits, int length, int flips);
-static double my_rand();
+static int my_rand(int range);
 
 /* Usage: flipG192 bs_in bs_out flips frames seed
  * with bs_in     : G192 input bitstream
@@ -46,7 +46,7 @@ int main(int ac, char **av)
     char  *inputFilename;
     char  *outputFilename;
     int16_t  bits[2000 * 8];
-    int ret = 0, flips = 0, seedLoc = 0, frames = 0, randFrame = 0, frame_counter = 1;
+    int ret = 0, flips = 0, seedLoc = 0, frames = 0, frame_counter = 1;
     int totalFr = 0, totalFl = 0, totalFrames = 0, verbose = 0;
 
     if (ac != 7)
@@ -75,6 +75,13 @@ int main(int ac, char **av)
     assert(input_bitstream && "Could not open input file!");
     assert(output_bitstream && "Could not open output file!");
     
+    srand(rng_state);
+    
+    int start_flip_frame = my_rand(100);
+    int burst_len = 20;
+    int pause_len = 40;
+    int current_burst = 0, current_pause = -1;
+    
     while (1)
     {
         ret = read_bitstream_frame_G192(input_bitstream, sizeof(bits), bits);
@@ -85,19 +92,28 @@ int main(int ac, char **av)
         
         totalFrames++;
         
-        randFrame = (int) round(my_rand() * 10000);
-        randFrame = frames >= randFrame;
-        
-        if (flips && randFrame)
+        if ((totalFrames > start_flip_frame))
         {
-            totalFr++;
-            if (verbose)
+            if ((current_burst < burst_len) && (current_pause == -1))
             {
-                printf("Braking frame %d ...\n", frame_counter);
+                totalFr++;
+                if (verbose)
+                {
+                    printf("Braking frame %d ...\n", frame_counter);
+                }
+                
+                flip(bits, ret, flips);
+                totalFl += flips;
+                current_burst++;
+            } else {
+                current_burst = 0;
+                current_pause++;
             }
             
-            flip(bits, ret, flips);
-            totalFl += flips;
+            if (current_pause > pause_len)
+            {
+                current_pause = -1;
+            }
         }
         
         write_bitstream_frame_G192(output_bitstream, bits, ret);
@@ -118,7 +134,7 @@ static void flip(int16_t *bits, int length, int flips)
 
     /* Create array containing bit positions that we need to flip */
     while(i < flips){
-        int toFlip = (int) round(my_rand() * length);
+        int toFlip = my_rand(length);
 
         for (j = 0; j < i; j++)
         {
@@ -208,13 +224,8 @@ static void printUsage()
     exit(0);
 }
 
-static double my_rand()
+static int my_rand(int range)
 {
-	uint64_t z = (rng_state += 0x9e3779b97f4a7c15);
-	z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
-	z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
-	z = z ^ (z >> 31);
-    
-    return (z >> 11) * (1.0 / ((uint64_t) 1 << 53));
+	return (rand() % range);
 }
 

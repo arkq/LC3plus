@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -50,8 +50,8 @@ void processPreEmphasis_fx(Word32 *d2_fx, Word16 *d2_fx_exp, Word16 fs_idx, Word
             pre_emph_e = lpc_lin_pre_emphasis_e_5ms[fs_idx];
             BREAK;
     }
-	
-	ASSERT(n_bands==20 || n_bands==40 || n_bands==60 || n_bands ==80);
+    
+    ASSERT(n_bands==20 || n_bands==40 || n_bands==60 || n_bands ==80);
 
     /* start processing */
     smax = -31; move16();

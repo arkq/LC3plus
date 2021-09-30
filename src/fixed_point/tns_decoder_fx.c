@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -18,6 +18,9 @@ static Word32 IIRLattice(Word16 order, const Word16 *parCoeff, Word32 *state, Wo
 
 void processTnsDecoder_fx(Word16 rc_idx[], Word32 x[], Word16 xLen, Word16 order[], Word16 *x_e, Word16 BW_stopband_idx,
                           Word16 frame_dms, Word8 *scratchBuffer
+#ifdef ENABLE_HR_MODE
+                          , Word16 hrmode
+#endif
 )
 {
     Dyn_Mem_Deluxe_In(
@@ -31,6 +34,14 @@ void processTnsDecoder_fx(Word16 rc_idx[], Word32 x[], Word16 xLen, Word16 order
     rc    = (Word16 *)scratchAlign(state, sizeof(*state) * MAXLAG); /* Size = MAXLAG */
 
     numfilters  = 1;
+    
+#ifdef ENABLE_HR_MODE
+    if (hrmode == 1)
+    {
+        BW_stopband = BW_cutoff_bin_all_HR[BW_stopband_idx];        move16();
+    }
+    else
+#endif
     {
         BW_stopband = BW_cutoff_bin_all[BW_stopband_idx]; move16();
     }
@@ -120,7 +131,7 @@ static Word32 IIRLattice(Word16 order, const Word16 *parCoeff, Word32 *state, Wo
     );
 
     /* first stage: no need to calculate state[order-1] */
-    x = L_sub(x, Mpy_32_16(state[order - 1], parCoeff[order - 1]));
+    x = L_sub_sat(x, Mpy_32_16(state[order - 1], parCoeff[order - 1]));
 
     FOR (i = order - 2; i >= 0; i--)
     {

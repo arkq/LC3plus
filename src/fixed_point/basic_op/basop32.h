@@ -110,6 +110,8 @@ void BASOP_CHECK(int Overflow, int Overflow2);
 #define MAX_16 (Word16)0x7fff
 #define MIN_16 (Word16)0x8000
 
+#define L_shr_r_pos(x, shift) (L_shr_r(x, shift))
+
 /* A list of functions that need saturation can be find below marked with an _sat */
 
 Word32 L_shl_sat (Word32 L_var1, Word16 var2);

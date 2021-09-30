@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -31,21 +31,10 @@
 #define FFT_COMPLEX 1
 #define FFT_REAL 2
 
-typedef struct T_IIS_FFT {
-    IIS_FFT_DIR sign;
-    LC3_INT     len;
-    LC3_FLOAT*  buffer;
-    LC3_FLOAT*  sine_table;
-    Iisfft      iisfft;
-    Cfft        cfft;
-} IIS_FFT;
 
 static IIS_FFT_ERROR create(HANDLE_IIS_FFT* handle, LC3_INT type, LC3_INT len, IIS_FFT_DIR sign)
 {
     IIS_FFT_ERROR  err = IIS_FFT_MEMORY_ERROR;
-    HANDLE_IIS_FFT h   = NULL;
-
-    assert(type == FFT_COMPLEX);
 
     /* for real transforms the actual performed fft is half length */
     LC3_INT trlen = (type == FFT_COMPLEX) ? len : len / 2;
@@ -55,41 +44,48 @@ static IIS_FFT_ERROR create(HANDLE_IIS_FFT* handle, LC3_INT type, LC3_INT len, I
         return IIS_FFT_INTERNAL_ERROR;
 
 
-    h = (HANDLE_IIS_FFT)calloc(1, sizeof(IIS_FFT));
-    if (!h)
+    if (!(*handle))
+      (*handle) = (HANDLE_IIS_FFT)calloc(1, sizeof(IIS_FFT));
+    if (!(*handle))
         return IIS_FFT_MEMORY_ERROR;
 
-    h->len  = len;
-    h->sign = sign;
+    (*handle)->len  = len;
+    (*handle)->sign = sign;
 
-    /* temp buffer is not needed for cfft, which is only used for length of n^2 and >= 256 */
-    if (!(trlen >= 256 && CFFT_PLAN_SUPPORT(trlen) && type == FFT_COMPLEX)) {
-        h->buffer = (LC3_FLOAT*)malloc(sizeof(LC3_FLOAT) * trlen * 2);
-        if (!h->buffer)
-            goto handle_error1;
+    /* create sine lookup table for real ffts */
+    if (type == FFT_REAL)
+    {
+        LC3_create_sine_table(len, (*handle)->sine_table);
+        if (!(*handle)->sine_table)
+        {
+           goto handle_error1;
+        }
     }
 
+    /*  set default cfft_plan to 0(length). (and default iisfft_plan to zero length)  */
+    (*handle)->cfft.len = 0;  /* 0 length means that cfft should not be  called */
+    (*handle)->iisfft.length = 0; /*saftey setting for  iisfft length struct */
 
     /* use cfft for legth of power two larger than 256. for length below iisfft is faster */
     if (trlen >= 256 && CFFT_PLAN_SUPPORT(trlen)) {
         LC3_INT s = (type == FFT_REAL) ? IIS_FFT_FWD : sign;
-        err       = LC3_cfft_plan(&h->cfft, trlen, s) ? IIS_FFT_NO_ERROR : IIS_FFT_INTERNAL_ERROR;
+        err       = LC3_cfft_plan(&(*handle)->cfft, trlen, s) ? IIS_FFT_NO_ERROR : IIS_FFT_INTERNAL_ERROR;
     } else {
         LC3_INT s = (type == FFT_REAL) ? IIS_FFT_FWD : sign;
-        err       = LC3_iisfft_plan(&h->iisfft, trlen, s);
+        err       = LC3_iisfft_plan(&(*handle)->iisfft, trlen, s);
     }
-    if (err != IIS_FFT_NO_ERROR)
-        goto handle_error2;
 
-    *handle = h;
     return IIS_FFT_NO_ERROR;
 
-handle_error2:
-    free(h->buffer);
 handle_error1:
-    free(h);
+    free((*handle));
 
     return err;
+}
+
+IIS_FFT_ERROR LC3_IIS_RFFT_Create(HANDLE_IIS_FFT* handle, LC3_INT32 len, IIS_FFT_DIR sign)
+{
+    return create(handle, FFT_REAL, len, sign);
 }
 
 static IIS_FFT_ERROR destroy(HANDLE_IIS_FFT* handle)
@@ -97,10 +93,6 @@ static IIS_FFT_ERROR destroy(HANDLE_IIS_FFT* handle)
     if (handle && *handle) {
         LC3_iisfft_free(&(*handle)->iisfft);
         LC3_cfft_free(&(*handle)->cfft);
-        if ((*handle)->sine_table)
-            free((*handle)->sine_table);
-        if ((*handle)->buffer)
-            free((*handle)->buffer);
         free(*handle);
         *handle = NULL;
     }
@@ -117,6 +109,16 @@ IIS_FFT_ERROR LC3_IIS_xFFT_Destroy(HANDLE_IIS_FFT* handle) { return destroy(hand
 
 IIS_FFT_ERROR LC3_IIS_CFFT_Destroy(HANDLE_IIS_FFT* handle) { return destroy(handle); }
 
+static IIS_FFT_ERROR real_destroy(HANDLE_IIS_FFT* handle)
+{
+    if (handle && *handle) {
+        LC3_iisfft_free(&(*handle)->iisfft);
+        *handle = NULL;
+    }
+    return IIS_FFT_NO_ERROR;
+}
+
+IIS_FFT_ERROR LC3_IIS_RFFT_Destroy(HANDLE_IIS_FFT* handle) { return real_destroy(handle); }
 
 IIS_FFT_ERROR LC3_IIS_FFT_Apply_CFFT(HANDLE_IIS_FFT handle, const Complex* input, Complex* output)
 {
@@ -135,3 +137,29 @@ IIS_FFT_ERROR LC3_IIS_FFT_Apply_CFFT(HANDLE_IIS_FFT handle, const Complex* input
     return IIS_FFT_NO_ERROR;
 }
 
+
+IIS_FFT_ERROR LC3_IIS_FFT_Apply_RFFT(HANDLE_IIS_FFT handle, const LC3_FLOAT* in, LC3_FLOAT* out)
+{
+   if (!handle) {
+      return IIS_FFT_INTERNAL_ERROR;
+   }
+
+   memmove(out, in, sizeof(LC3_FLOAT) * handle->len);
+
+   if (handle->sign == IIS_FFT_BWD) {
+      LC3_rfft_pre(handle->sine_table, out, handle->len);
+   }
+
+   if (handle->cfft.len > 0) {
+      LC3_cfft_apply(&handle->cfft, out, out + 1, 2);
+   }
+   else {
+      LC3_iisfft_apply(&handle->iisfft, out);
+   }
+
+   if (handle->sign == IIS_FFT_FWD) {
+      LC3_rfft_post(handle->sine_table, out, handle->len);
+   }
+
+   return IIS_FFT_NO_ERROR;
+}

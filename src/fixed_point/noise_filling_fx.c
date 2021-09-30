@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -16,6 +16,9 @@
 
 void processNoiseFilling_fx(Word32 xq[], Word16 nfseed, Word16 xq_e, Word16 fac_ns_idx, Word16 BW_cutoff_idx,
                             Word16 frame_dms, Word16 fac_ns_pc, Word16 spec_inv_idx, Word8 *scratchBuffer
+#ifdef ENABLE_HR_MODE
+                            , Word16 hrmode
+#endif
 )
 {
     Dyn_Mem_Deluxe_In(
@@ -29,6 +32,14 @@ void processNoiseFilling_fx(Word32 xq[], Word16 nfseed, Word16 xq_e, Word16 fac_
 
     c = 0;                                move16();
     
+#ifdef ENABLE_HR_MODE
+    if (hrmode == 1)
+    {
+        N = BW_cutoff_bin_all_HR[BW_cutoff_idx];
+        move16();
+    }
+    else
+#endif
     {
         N = BW_cutoff_bin_all[BW_cutoff_idx];
         move16();
@@ -94,9 +105,9 @@ void processNoiseFilling_fx(Word32 xq[], Word16 nfseed, Word16 xq_e, Word16 fac_
     IF (c > 0)
     {
         fac_ns       = shl_pos(sub(8, fac_ns_idx), 11);
-        L_tmp        = L_shr(L_deposit_l(fac_ns), sub(xq_e, 16));
+        L_tmp        = L_shr_sat(L_deposit_l(fac_ns), sub(xq_e, 16));
         L_tmp_neg    = L_negate(L_tmp);
-        L_tmp_pc     = L_shr(L_deposit_l(fac_ns_pc), sub(xq_e, 16));
+        L_tmp_pc     = L_shr_sat(L_deposit_l(fac_ns_pc), sub(xq_e, 16));
         L_tmp_neg_pc = L_negate(L_tmp_pc);
 
         FOR (k = 0; k < c; k++)

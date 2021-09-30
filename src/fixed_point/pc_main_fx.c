@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -16,7 +16,11 @@
 
 void processPCmain_fx(Word16 rframe, Word16 *bfi, Word16 yLen, Word16 frame_dms, Word16 q_old_res_fx[],
                       Word16 *q_old_res_fx_exp, 
+#ifdef ENABLE_HR_MODE
+                      Word32 q_res_fx[],
+#else
                       Word16 q_res_fx[],
+#endif
                       Word16 q_old_d_fx[], Word16 spec_inv_idx,
                       Word16 pitch_present, Word16 stab_fac, Word32 q_d_fx[], Word16 *q_fx_exp,
                       Word16 gg_idx, Word16 gg_idx_off, Word16 *prev_gg, Word16 *prev_gg_e, Word16 *BW_cutoff_idx_nf,

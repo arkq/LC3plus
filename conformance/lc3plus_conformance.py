@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
 # /******************************************************************************
-# *                        ETSI TS 103 634 V1.2.1                               *
+# *                        ETSI TS 103 634 V1.3.1                               *
 # *              Low Complexity Communication Codec Plus (LC3plus)              *
 # *                                                                             *
 # * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -9,14 +9,8 @@
 # * estoppel or otherwise.                                                      *
 # ******************************************************************************/
 #
-# Version 1.0.4
-#
-# Changelog:
-# 1.0.4 Better command logging
-# 1.0.3 Added flag to use system sox
-# 1.0.2 Reduced disk space requirement
-# 1.0.1 Removed channel coder flag comparison for non-decoder tests
-# 1.0.0 Initial release
+# Version 1.2.2
+
 
 import argparse
 import collections
@@ -40,18 +34,26 @@ import sys
 import uuid
 import wave
 import zipfile
+import locale
 try:
     import numpy
 except ImportError:
     sys.exit('Numpy missing! Try running "pip3 install numpy".')
+import time
+
+
+# INTERNALS
+DEBUG_SETTING = 0
 
 # convenience
 Executor = concurrent.futures.ThreadPoolExecutor
-TestEnv  = collections.namedtuple('TestEnv', 'profile test config test_dir, workers')
+TestEnv  = collections.namedtuple('TestEnv', 'profile test config test_dir workers opid opid_log')
 WavInfo  = collections.namedtuple('WavInfo', 'ch rate frames')
 
 # constants
-SAMPLERATES = [8000, 16000, 24000, 32000, 44100, 48000]
+MAX_DELAY = 322
+MAX_SAMPLES_PER_FRAME = 480
+SAMPLERATES = [8000, 16000, 24000, 32000, 44100, 48000, 96000]
 FRAME_SIZES = [2.5, 5.0, 10.0]
 SQAM_URL    = 'https://tech.ebu.ch/docs/testmaterial/SQAM_FLAC.zip'
 SQAM_SHA256 = '7d6fcd0fc42354637291792534b61bf129612f221f8efef97b62e8942a8686aa'
@@ -59,8 +61,15 @@ SOX_URL     = 'https://sourceforge.net/projects/sox/files/sox/14.4.2/sox-14.4.2-
 SOX_SHA256  = '8072cc147cf1a3b3713b8b97d6844bb9389e211ab9e1101e432193fad6ae6662'
 SOX_EXE     = pathlib.Path('SoX/sox-14.4.2/sox.exe')
 INF         = float('inf')
-REFERENCE_ENCODER = './LC3plus.exe -q -E -formatG192 -frame_ms {frame_size} {options} "{input}" "{output}" {bitrate}'
-REFERENCE_DECODER = './LC3plus.exe -q -D -formatG192  {options} "{input}" "{output}"'
+REFERENCE_EXE = './LC3plus.exe'
+REFERENCE_ENCODER = ' -E -q -formatG192 -frame_ms {frame_size} {options} "{input}" "{output}" {bitrate}'
+REFERENCE_DECODER = ' -D -q -formatG192  {options} "{input}" "{output}"'
+
+PC_BER_FILES = {
+  2.5  : "etc/pc_ber_2.5ms.dat",
+  5.0  : "etc/pc_ber_5ms.dat",
+  10.0 : "etc/pc_ber_10ms.dat"
+}
 
 # test items
 ITEM_DIR = pathlib.Path('test_items')
@@ -78,6 +87,7 @@ ITEMS = {  # start, frag, SQAM name
 ITEMS_PLC = ['ABBA', 'Castanets', 'Female_Speech_German', 'Harpsichord' , 'Male_Speech_English']
 ITEM_LOW_PASS   = 'White_Noise_LP20'
 ITEM_BAND_LIMIT = 'Female_Speech_German'
+ITEM_LFE        = 'Sine_Sweep'
 
 # sampling rate, band widths, bytes / frame
 BAND_LIMITS = {
@@ -107,6 +117,7 @@ TESTS = [
     'ep_mode_switching',
     'ep_combined',
     'ep_combined_nc',
+    'lfe',
 ]
 TEST_MODES = ['encode', 'encdec', 'decode']
 DEFAULTS_GLOBAL = {
@@ -116,8 +127,13 @@ DEFAULTS_GLOBAL = {
     'option_plc_mode'  : '',
     'peaq_bin'         : '',
     'peaq_odg_regex'   : '',
+    'reference_exe'    : REFERENCE_EXE,
     'reference_decoder': REFERENCE_DECODER,
     'reference_encoder': REFERENCE_ENCODER,
+    'config_bitrate_unit' : 'bps',
+    'config_bitrate_format' : 'list',
+    'delay'                 : '0',
+    'hrmode'                : '0',
 }
 DEFAULTS_TEST = {'configs': []}
 for test in TESTS:
@@ -125,18 +141,42 @@ for test in TESTS:
 for test, mode in itertools.product(TESTS, TEST_MODES):
     DEFAULTS_TEST['{}_{}_eng_threshold'.format(test, mode)] = 70
     DEFAULTS_TEST['{}_{}_mld_threshold'.format(test, mode)] = 4
-    DEFAULTS_TEST['{}_{}_odg_threshold'.format(test, mode)] = 0.06
+    DEFAULTS_TEST['{}_{}_odg_threshold'.format(test, mode)] = [0.06, 0.08, 0.12]
     DEFAULTS_TEST['{}_{}_rms_threshold'.format(test, mode)] = 14
+    DEFAULTS_TEST['{}_{}_mad_threshold'.format(test, mode)] = 0.00148
     DEFAULTS_TEST['{}_{}_metric'.format(test, mode)]        = 'rms'
 METRIC_DEFAULTS = {
-    'low_pass_encode_metric'          : 'eng',
-    'low_pass_encdec_metric'          : 'eng',
-    'plc_decode_metric'               : 'mld',
-    'pc_decode_metric'                : 'mld',
-    'ep_non_correctable_decode_metric': 'mld',
-    'ep_non_correctable_encdec_metric': 'mld',
-    'ep_combined_nc_decode_metric'    : 'mld',
-    'ep_combined_nc_encdec_metric'    : 'mld',
+    'low_pass_encode_metric'           : 'eng',
+    'low_pass_encdec_metric'           : 'eng',
+    'plc_decode_metric'                : 'mld',
+    'pc_decode_metric'                 : 'mld',
+    'ep_non_correctable_decode_metric' : 'mld',
+    'ep_non_correctable_encdec_metric' : 'mld',
+    'ep_non_correctable_encode_metric' : 'mld',
+    'ep_combined_nc_decode_metric'     : 'mld',
+    'ep_combined_nc_encdec_metric'     : 'mld',
+    'ep_combined_nc_encode_metric'     : 'mld',
+    'ep_combined_decode_metric'        : 'odg',
+    'ep_combined_encode_metric'        : 'rms',
+    'ep_combined_encdec_metric'        : 'mld',
+    'ep_combined_encode_metric'        : 'mld',
+    'ep_correctable_encode_metric'     : 'odg',
+    'ep_correctable_decode_metric'     : 'rms',
+    'ep_mode_switching_encode_metric'  : 'odg',
+    'ep_mode_switching_decode_metric'  : 'rms',
+    'lfe_encode_metric'                : 'mld',
+    'sqam_encode_metric'               : 'odg',
+    'sqam_encdec_metric'               : 'odg',
+    'band_limiting_encode_metric'      : 'odg',
+    'band_limiting_encdec_metric'      : 'odg',
+    'bitrate_switching_encode_metric'  : 'odg',
+    'bitrate_switching_encdec_metric'  : 'odg',
+    'bandwidth_switching_encode_metric': 'odg',
+    'bandwidth_switching_encdec_metric': 'odg',
+    'ep_correctable_encode_metric'     : 'odg',
+    'ep_correctable_encdec_metric'     : 'odg',
+    'ep_mode_switching_encode_metric'  : 'odg',
+    'ep_mode_switching_encdec_metric'  : 'odg',
 }
 DEFAULTS_TEST.update(METRIC_DEFAULTS)
 
@@ -154,6 +194,7 @@ LABEL = {
     'ep_mode_switching'  : 'Error protection mode switching',
     'ep_combined'        : 'Combined Channel Coder for Correctable Frames',
     'ep_combined_nc'     : 'Combined Channel Coder for Non-Correctable Frames',
+    'lfe'                : 'Low Frequency Effects',
 }
 HEADER_ALL = ['Mode', 'Item', 'Frame Size', 'Samplerate', 'Bitrate']
 HEADER_EP  = ['EP Mode']
@@ -161,7 +202,7 @@ HEADER_EPD = ['BFI', 'EPMR', 'ER']
 HEADER_BL  = ['Bandwidth']
 HEADER_METRIC = {
     'rms': ['Max. Abs. Diff', 'RMS [dB]', 'RMS Reached [bits]'],
-    'odg': ['ODG<sub>ref</sub>', 'Δ<sub>ODG</sub>'],
+    'odg': ['ODG<sub>ref</sub>', '&#916<sub>ODG</sub>'],
     'mld': ['MLD'],
     'eng': ['E<sub>diff</sub> [dB]'],
     None : []
@@ -174,7 +215,8 @@ STYLE = ('body {font-family:sans-serif; color:#f8f8f2; background-color:#272822;
          'lign:left; margin-left:30px} h3 {text-align:left; margin:4px} table {border-spacing:0px; width:100%} th {pad'
          'ding:4px; border-top:1px solid #8f908a} td {padding:4px} tr:nth-child(even) {background-color:rgba(255,255,2'
          '55,0.1)} td.pass {background-color:rgba(0,192,255,0.4)} td.fail {background-color:rgba(255,0,0,0.4)} td.warn'
-         '{background-color:rgba(214,137,16,0.4)}')
+         '{background-color:rgba(214,137,16,0.4)} a:link {color: white;text-decoration: none;} a:visited {color: '
+         'white} a:hover {color: white;font-weight:bold;} a:active {color: rgb(155, 155, 155)}')
 
 
 # convenience wrapper for os.makedirs
@@ -191,7 +233,7 @@ def removedir(path):
 # Run command and return output. cmd can be string or list. Commands with .exe suffix are automatically
 # called with wine unless wine=False. Set unicode=False to get binary output. Set hard_fail=False to
 # to ignore nonzero return codes.
-def call(cmd, wine=True, unicode=True, hard_fail=True, log_output=True):
+def call(cmd, wine=True, unicode=True, hard_fail=True, log_output=True, opid='', opid_log={}):
     if isinstance(cmd, str):
         cmd = [x for x in shlex.split(cmd) if x]
     if sys.platform != 'cygwin' and wine and cmd[0].lower().endswith('.exe'):
@@ -199,9 +241,13 @@ def call(cmd, wine=True, unicode=True, hard_fail=True, log_output=True):
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=unicode)
     out = p.communicate()[0] or (b'', '')[unicode]
     quoted_cmd = ' '.join(map(shlex.quote, cmd))
-    logging.debug(quoted_cmd)
+    logging.debug( '[{}] '.format(opid) + quoted_cmd)
+    if opid:
+        if opid_log.__contains__(opid) == False:
+            opid_log[opid] = ''
+        opid_log[opid] += quoted_cmd + '\n\n' + out + '\n\n'
     if unicode and log_output:
-        logging.debug(out)
+        logging.debug(out) 
     if hard_fail and p.returncode != 0:
         raise OSError(quoted_cmd + ' failed!')
     return out
@@ -249,10 +295,11 @@ def check_system(args, globvars):
     if globvars['peaq_bin'] and not exe_exists(globvars['peaq_bin'], wine=True):
         sys.exit('Failed to find PEAQ executable. Please adjust config file')
     if not exe_exists(globvars['encoder'], wine=True):
-        sys.exit('Failed to find LC3 encoder executable. Please adjust config file.')
+        sys.exit('Failed to find LC3plus encoder executable ('+globvars['encoder']+'). Please adjust config file.')
     if not exe_exists(globvars['decoder'], wine=True):
-        sys.exit('Failed to find LC3 decoder executable. Please adjust config file.')
-
+        sys.exit('Failed to find LC3plus decoder executable ('+globvars['decoder']+'). Please adjust config file.')
+    if not exe_exists(globvars['reference_exe'], wine=True):
+        sys.exit('Failed to find LC3plus reference executable ('+globvars['reference_exe']+'). Please adjust config file.')
 
 # search s for expr and return first match or exit
 def regex_search(expr, s):
@@ -261,56 +308,9 @@ def regex_search(expr, s):
     return re.search(expr, s).group(1)
 
 
-# calculates the max xcorr of the two vectors within the length of the longer one
-def align_vec(x1, x2):
-    # trims longer vector at position of max xcorr and returns both
-    assert len(x1) >= len(x2)
-    res = []
-    d = len(x1) - len(x2)
-    # normalize to max of int16
-    a = numpy.float32(x1) / 32767
-    b = numpy.float32(x2) / 32767
-    # a is longer than b
-    for i in range(d + 1):
-        xx = numpy.dot(a[i:len(b) + i], b)
-        res.append(xx)
-    lag = numpy.array(res).argmax()
-    # trim longer vector
-    x1 = x1[lag:lag + len(x2)]
-    return x1, x2
-
-
 # convert byte objects to signed int16
 def byte_to_float(b, frames, channels):
     return struct.unpack("%ih" % (frames * channels), b)
-
-
-# trim longer file to length of shorter file at max xcorr position and overwrite longer one
-def align_files(file_1, file_2):
-    logging.debug('align_files: %s %s', file_1, file_2)
-    file_1, file_2 = str(file_1), str(file_2)
-    # read in audio files and to max of int16
-    if wav_info(file_1).frames < wav_info(file_2).frames:
-        file_1, file_2 = file_2, file_1
-    with wave.open(file_1, 'rb') as wf1, wave.open(file_2, 'rb') as wf2:
-        b1 = wf1.readframes(wf1.getnframes())
-        b2 = wf2.readframes(wf2.getnframes())
-        x1 = byte_to_float(b1, wf1.getnframes(), wf1.getnchannels())
-        x2 = byte_to_float(b2, wf2.getnframes(), wf2.getnchannels())
-        par1 = wf1.getparams()
-        par2 = wf2.getparams()
-    # measure cross correlation -> delay between files and return trimmed vectors
-    y1, y2 = align_vec(x1, x2)
-    # overwrite files
-    with wave.open(file_1, 'wb') as wf1, wave.open(file_2, 'wb') as wf2:
-        wf1.setparams(par1)
-        wf2.setparams(par2)
-        wf1.setnframes(len(y1))
-        wf2.setnframes(len(y2))
-        b1 = struct.pack("%ih" % len(y1), *y1)
-        b2 = struct.pack("%ih" % len(y2), *y2)
-        wf1.writeframes(b1)
-        wf2.writeframes(b2)
 
 
 def build_tools():
@@ -324,10 +324,15 @@ def wav_info(path):
 
 
 # call sox with args in repeatable mode, lazy skips execution if output already exists
-def sox(*args, lazy=False):
+def sox(*args, lazy=False, opid='',opid_log={}):
     wavs = [x for x in map(str, args) if x.endswith('.wav')]
     if not (lazy and is_file(wavs[-1])): # last .wav is assumed to be output
-        call('{} -R {}'.format(SOX_EXE, ' '.join(map(str, args))))
+        call('{} -R {}'.format(SOX_EXE, ' '.join(map(str, args))), opid=opid, opid_log=opid_log)
+
+
+# convert file to given bits per sample (bps) 
+def convert_bps(input, output, bps, lazy=False):
+    sox(input, '-b', bps, output, lazy=lazy)
 
 
 def trim(input, output, start, end, lazy=False):
@@ -340,34 +345,44 @@ def trim(input, output, start, end, lazy=False):
 
 
 # resample wav using sox
-def resample(input, output, rate, lazy=False):
-    sox(input, output, 'rate -vs', rate, lazy=lazy)
+def resample(input, output, rate, lazy=False, opid='',opid_log={}):
+    sox(input, output, 'rate -vs', rate, lazy=lazy, opid=opid, opid_log=opid_log)
 
 
 # apply lowpass filter using sox
-def low_pass(input, output, fc, lazy=False):
-    sox(input, output, 'sinc -{}'.format(fc), lazy=lazy)
+def low_pass(input, output, fc, lazy=False, opid='', opid_log={}):
+    sox(input, output, 'sinc -{}'.format(fc), lazy=lazy, opid=opid, opid_log=opid_log)
 
+# generate rate switching file with unique name, returns path
+# byteswise step down and upwards starting in the middle
+def generate_switching_file2(env, fs, *values):
+    path   = env.test_dir / uuid_file('swf_', '.dat')
+    fps = 2000 / fs
+    minBR  = min(values) / fps / 8
+    maxBR  = max(values) / fps / 8
+    up   = numpy.linspace(minBR, maxBR, num=int(fps)).round()
+    down = numpy.linspace(maxBR, minBR, num=int(fps)).round()
+    p=numpy.repeat(numpy.concatenate((down,up)),20)
+    p=numpy.delete(p,[x for x in range(0, int(fps/2))])
+    p=p*8*fps
+    p=p.astype('int32') 
+    p.tofile(str(path))
+    return path
 
 # generate switching file with unique name, returns path
 def generate_switching_file(env, *values):
     path   = env.test_dir / uuid_file('swf_', '.dat')
     layers = ','.join(map(str, sorted(values)))
-    cmd    = 'tools/gen-rate-profile.exe -layers {} {}'
-    call(cmd.format(layers, path), log_output=False)
+    cmd    = 'tools/gen-rate-profile.exe -layers {} {} 10 0 15000 123456789'
+    call(cmd.format(layers, path), log_output=False, opid=env.opid, opid_log=env.opid_log)
     return path
 
 
 # compares binary equality of files
-def compare_bin(file1, file2):
+def compare_bin(file1, file2, opid='', opid_log={}):
     logging.debug('compare_bin: %s %s', file1, file2)
+    opid_log[opid] += 'compare_bin: {} {}\n\n'.format(file1, file2)
     return filecmp.cmp(str(file1), str(file2))
-
-
-# copy file from src to dst
-def copy_file(src, dst):
-    logging.debug('copy_file: %s %s', src, dst)
-    shutil.copy(str(src), str(dst))
 
 
 # generate unique file name with extension
@@ -392,7 +407,7 @@ def is_file(path):
 
 # calculate bitrate from bytes per frame
 def get_bitrate(bytes_per_frame, frame_size):
-    return int(bytes_per_frame * 8000 / frame_size)
+    return int(min(bytes_per_frame * 8000 / frame_size, 320000))
 
 
 # apply func to list of argumets,
@@ -438,6 +453,18 @@ def prepare_items(workers):
         outfile = item_dir / (ITEM_LOW_PASS + '_48000_1ch.wav')
         synth   = 'synth 4 white fir etc/hp_fir_coef.txt'
         ex.submit(sox, '-n -r 48000 -c 1 -b 16', outfile, synth, lazy=True)
+    with Executor(workers) as ex:
+        # LFE item with 4 seconds of sinesweep from 10-250Hz
+        for sr in SAMPLERATES:
+            outfile = item_dir / '{}_{}_1ch.wav'.format(ITEM_LFE, str(sr))
+            synth   = 'synth 4 sine 10:250 gain -0.5'
+            ex.submit(sox, '-n -r',sr ,'-c 1 -b 16 -e signed', outfile, synth, lazy=True)
+            if sr >= 44100:
+                outfile2 = item_dir / '{}_{}_1ch_lp20.wav'.format(ITEM_LFE, sr)
+                while not os.path.exists(outfile):
+                    time.sleep(0.01)
+                ex.submit(low_pass, outfile, outfile2, 20000, lazy=True)
+
     # create 1ch items
     with Executor(workers) as ex:
         for path in os.listdir(str(item_dir)):
@@ -445,6 +472,13 @@ def prepare_items(workers):
                 infile  = item_dir / path
                 outfile = item_dir / path.replace('_2ch', '_1ch')
                 ex.submit(sox, infile, outfile, 'remix -', lazy=True)
+    # create 24bit items
+    with Executor(workers) as ex:
+        for path in os.listdir(str(item_dir)):
+            if 'ch.wav' in path:
+                infile = item_dir / path
+                outfile = item_dir / path.replace('ch.wav','ch_24b.wav')
+                ex.submit(convert_bps, infile, outfile, '24', lazy=True)
 
 
 def parse_config(path):
@@ -454,20 +488,38 @@ def parse_config(path):
     def split_list(line):
         return [x.strip() for x in strip_comment(line).split(',')]
 
-    def parse_conf_line(line):
+    def parse_conf_line(line, test_config):
         mode, fs, sr, br = split_list(line)
         fs, sr = float(fs), int(sr)
-        if ':' in br:
+        if '[' in br:
+            br = br[1:-1]
+            br = list(br.split(':'))
+            br = [int(i) for i in br]
+        elif ':' in br:
             br_start, br_step, br_stop = map(int, br.split(':'))
             br = list(range(br_start, br_stop + 1, br_step))
         else:
             br = [int(br)]
+
+        # convert formats
+        ## iteration to list
+        if (test_config['config_bitrate_format'] == 'iteration'):
+            br = list(range(br[0],br[2],br[1]))
+        ## convert bytes per frame to bps
+        if (test_config['config_bitrate_unit'] == 'bytes'):
+            if sr == 44100:
+                fs2 = fs*48000/44100
+            else:
+                fs2 = fs
+            br = [math.ceil(x*8*1000/fs) for x in br] 
+
         if fs not in FRAME_SIZES:
             sys.exit('Unsupported frame size: {}!'.format(line))
         if sr not in SAMPLERATES:
             sys.exit('Unsupported sampling rate: {}!'.format(line))
-        if min(br) < 16000 or max(br) > 320000:
-            sys.exit('Invalid bitrate: {}!'.format(line))
+#        if min(br) < 16000 or max(br) > 672000:
+#            sys.exit('Invalid bitrate: {}!'.format(line))
+
         return mode, fs, sr, br
 
     def parse_bool(val):
@@ -498,19 +550,32 @@ def parse_config(path):
         # parse test sections
         for profile in globels['enabled_tests']:
             configs[profile] = {**globels, **DEFAULTS_TEST}
+            test_config = {
+                'config_bitrate_unit' : DEFAULTS_GLOBAL['config_bitrate_unit'],
+                'config_bitrate_format' : DEFAULTS_GLOBAL['config_bitrate_format'],
+            }
             for key in parser[profile]:
                 try:
                     val = strip_comment(parser[profile][key])
                     if key in test_keys:
                         configs[profile][key] = parse_bool(val)
+                    elif key in test_config:
+                        test_config[key] = val
                     elif key == 'configs':
                         lines = parser[profile][key].splitlines()
-                        configs[profile][key] = [parse_conf_line(l) for l in lines]
+                        configs[profile][key] = []
+                        for l in lines:
+                            if parse_conf_line(l, test_config) not in configs[profile][key]:
+                                configs[profile][key].append(parse_conf_line(l, test_config))
                     elif key.endswith('_threshold') and key in DEFAULTS_TEST:
-                        configs[profile][key] = float(val)
+                        if args.bit_exact:
+                            continue
+                        configs[profile][key] = eval(val)
                     elif key.endswith('_metric') and key in DEFAULTS_TEST:
                         if val not in ('rms', 'odg', 'mld', 'eng'):
                             raise ValueError
+                        configs[profile][key] = val
+                    elif key == 'bitflip_seed':
                         configs[profile][key] = val
                     else:
                         sys.exit('Unknown key "{}" in config'.format(key))
@@ -525,29 +590,24 @@ def parse_config(path):
 
 
 # splits up files into channels, yields channel files
-def split_channels(env, *files):
-    channels = wav_info(files[0]).ch
-    if channels == 1:
-        yield files
+def split_channels(env, *wav_files):
+    channels = call('{} --i -c {}'.format(SOX_EXE, wav_files[0]))
+    if channels == '1':
+        yield wav_files
     else:
-        for ch in range(1, channels + 1):
-            tmp_files = []
-            for f in files:
-                tmp = env.test_dir / uuid_file('split_', '.wav')
-                sox(f, tmp, 'remix', ch)
-                tmp_files.append(tmp)
-            yield tmp_files
+        for ch in range(1, int(channels) + 1):
+            channel_files = []
+            for wav_f in wav_files:
+                split_file = wav_f.with_suffix('.ch{}.wav'.format(ch))
+                sox(wav_f, split_file, 'remix', ch, opid=env.opid, opid_log=env.opid_log)
+                channel_files.append(split_file)
+            yield channel_files
 
 
-def run_rms(env, file1, file2, threshold):
+def run_rms(env, ref, tst, threshold):
     rms, diff, bits = -INF, 0, 24
-    for split1, split2 in split_channels(env, file1, file2):
-        tmp1 = env.test_dir / uuid_file('rms_', '.wav')
-        tmp2 = env.test_dir / uuid_file('rms_', '.wav')
-        copy_file(split1, tmp1)
-        copy_file(split2, tmp2)
-        align_files(tmp1, tmp2)
-        out = call('tools/rms {} {} {}'.format(tmp1, tmp2, threshold))
+    for ref_chan_x, tst_chan_x in split_channels(env, ref, tst):
+        out = call('tools/rms {} {} {}'.format(ref_chan_x, tst_chan_x, threshold), opid=env.opid, opid_log=env.opid_log)
         diff_samp = int(regex_search(r'different samples\s+: (\d+)', out))
         if diff_samp != 0:
             rms  = max(rms, float(regex_search(r'Overall RMS value\s+: (\S+) dB ---', out)))
@@ -558,59 +618,73 @@ def run_rms(env, file1, file2, threshold):
 
 def run_peaq(env, reference, test):
     odg = 5
-    for split1, split2 in split_channels(env, reference, test):
-        ref = env.test_dir / uuid_file('odg_', '.wav')
-        tst = env.test_dir / uuid_file('odg_', '.wav')
-        resample(split1, ref, 48000)
-        resample(split2, tst, 48000)
-        align_files(ref, tst)
-        out = call(env.config['peaq_bin'].format(reference=ref, test=tst))
+    for ref_chan_x, tst_chan_x in split_channels(env, reference, test):
+        ref48 = ref_chan_x.with_suffix('.48k.wav')
+        tst48 = tst_chan_x.with_suffix('.48k.wav')
+        resample(ref_chan_x, ref48, 48000, opid=env.opid, opid_log=env.opid_log)
+        resample(tst_chan_x, tst48, 48000, opid=env.opid, opid_log=env.opid_log)
+        out = call(env.config['peaq_bin'].format(reference=ref48, test=tst48), opid=env.opid, opid_log=env.opid_log)
         odg = min(odg, float(regex_search(env.config['peaq_odg_regex'], out)))
     return odg
 
 
 def run_mld(env, reference, test):
     mld = 0
-    for split1, split2 in split_channels(env, reference, test):
-        ref = env.test_dir / uuid_file('mld_', '.wav')
-        tst = env.test_dir / uuid_file('mld_', '.wav')
-        resample(split1, ref, 48000)
-        resample(split2, tst, 48000)
-        align_files(ref, tst)
-        out = call('tools/mld -d {} {}'.format(ref, tst))
+    for ref_chan_x, tst_chan_x in split_channels(env, reference, test):
+        tst48 = ref_chan_x.with_suffix('.48k.wav')
+        ref48 = tst_chan_x.with_suffix('.48k.wav')
+        resample(ref_chan_x, ref48, 48000, opid=env.opid, opid_log=env.opid_log)
+        resample(tst_chan_x, tst48, 48000, opid=env.opid, opid_log=env.opid_log)
+        out = call('tools/mld -d {} {}'.format(ref48, tst48), opid=env.opid, opid_log=env.opid_log)
         mld = max(mld, float(regex_search(r'maximum loudness difference:\s*(\S+)', out)))
     return mld
 
 
-# calculate energy difference of two wavs
-def energy_diff(env, file1, file2):
-    logging.debug('energy_diff: %s %s', file1, file2)
-    tmp1 = str(env.test_dir / uuid_file('eng_', '.wav'))
-    tmp2 = str(env.test_dir / uuid_file('eng_', '.wav'))
-    copy_file(file1, tmp1)
-    copy_file(file2, tmp2)
-    align_files(tmp1, tmp2)
-    with wave.open(tmp1, 'rb') as ref_wf, wave.open(tmp2, 'rb') as tst_wf:
-        bytes_ref = ref_wf.readframes(ref_wf.getnframes())
+# calculate energy of wav
+def energy(env, test):
+    logging.debug('[{}] '.format(env.opid, opid_log=env.opid_log) + 'energy: %s', str(test))
+    with wave.open(str(test), 'rb') as tst_wf:
         bytes_tst = tst_wf.readframes(tst_wf.getnframes())
-        ref = byte_to_float(bytes_ref, ref_wf.getnframes(), ref_wf.getnchannels())
         tst = byte_to_float(bytes_tst, tst_wf.getnframes(), tst_wf.getnchannels())
-        eng_diff = sum(numpy.square(numpy.subtract(ref, tst)))
-        eng_diff = math.log10(eng_diff) if eng_diff != 0 else -INF
-        return eng_diff
+        eng = sum(numpy.square(tst))
+        eng = 10 * math.log10(eng) if eng != 0 else -INF
+        return eng
+
+
+def get_delta_threshold(sr, odg_ref, delta_odg_thresh):
+    if sr == 8000:
+        return 0.15
+    if type(delta_odg_thresh).__name__ != 'list':
+        return delta_odg_thresh
+    elif odg_ref > -1.0:
+        return delta_odg_thresh[0]
+    elif odg_ref > -2.3: 
+        return delta_odg_thresh[1]
+    else:
+        return delta_odg_thresh[2]
 
 
 # compare output wavs by metric rms, odg, mld, eng
-def compare_wav(env, mode, infile, file_ref, file_tst):
+def compare_wav(env, mode, sr, infile, file_ref, file_tst):
     mkey   = '{}_{}_metric'.format(env.test, mode)
     metric = env.config[mkey]
     tkey   = '{}_{}_{}_threshold'.format(env.test, mode, metric)
     thresh = env.config[tkey]
 
+    ref_al = file_ref.with_suffix('.aligned.wav')
+    tst_al = file_tst.with_suffix('.aligned.wav')
+    infile_copy = infile.with_suffix('.copy_for_{}t.wav'.format(file_ref.stem))
+    call('cp {} {}'.format(infile, infile_copy), opid=env.opid, opid_log=env.opid_log)
+    
+    infile_len = int(call('{} --i -s {}'.format(SOX_EXE, infile_copy)))
+    call('tools/align {} {} {} {}'.format(file_ref, ref_al, infile_len, env.config['delay']), opid=env.opid, opid_log=env.opid_log)
+    call('tools/align {} {} {} {}'.format(file_tst, tst_al, infile_len, env.config['delay']), opid=env.opid, opid_log=env.opid_log)
+
     if metric == 'rms':
-        rms, diff, bits = run_rms(env, file_ref, file_tst, thresh)
+        rms, diff, bits = run_rms(env, ref_al, tst_al, thresh)
         rms_thr  = 20 * math.log10(2 ** (-thresh + 1) / 12 ** 0.5)
-        diff_thr = 1 / 2 ** (thresh - 3)
+        tkey     = '{}_{}_mad_threshold'.format(env.test, mode)
+        diff_thr = env.config[tkey]
         ok_rms   = rms <= rms_thr
         ok_diff  = diff <= diff_thr
         ok_bits  = bits >= thresh
@@ -619,18 +693,19 @@ def compare_wav(env, mode, infile, file_ref, file_tst):
                     (rms, ('fail', 'pass')[ok_rms], rms_thr),
                     (bits, ('warn', 'none')[ok_bits], thresh)]
     if metric == 'odg':
-        odg_ref  = run_peaq(env, infile, file_ref)
-        odg_tst  = run_peaq(env, infile, file_tst)
+        odg_ref  = run_peaq(env, infile_copy, ref_al)
+        odg_tst  = run_peaq(env, infile_copy, tst_al)
         odg_diff = abs(odg_ref - odg_tst)
+        thresh = get_delta_threshold(sr, odg_ref, thresh)
         ok       = odg_diff <= thresh
         values   = [(odg_ref, '', None),
                     (odg_diff, ('fail', 'pass')[ok], thresh)]
     if metric == 'mld':
-        mld    = run_mld(env, file_ref, file_tst)
+        mld    = run_mld(env, ref_al, tst_al)
         ok     = mld <= thresh
         values = [(mld, ('fail', 'pass')[ok], thresh)]
     if metric == 'eng':
-        d_eng  = energy_diff(env, file_ref, file_tst)
+        d_eng  = energy(env, file_tst)
         ok     = d_eng <= thresh
         values = [(d_eng, ('fail', 'pass')[ok], thresh)]
 
@@ -641,8 +716,9 @@ def compare_wav(env, mode, infile, file_ref, file_tst):
 def compare_errors(env, file_ref, file_tst):
     ok_all, values = True, []
     for ext in ['.bfi', '.epmr', '.error_report']:
-        ok = compare_bin(str(file_ref) + ext, str(file_tst) + ext)
+        ok = compare_bin(str(file_ref) + ext, str(file_tst) + ext, opid=env.opid, opid_log=env.opid_log)
         values += [(('bad', 'ok')[ok], ('fail', 'pass')[ok], None)]
+        ok_all = ok_all and ok
     return ok_all, values
 
 
@@ -654,38 +730,48 @@ def check_io_files(input, output):
         raise FileExistsError(output)
 
 
-def encode_reference(env, input, output, frame_size, bitrate, bandwidth=None, ep_mode=0):
+def encode_reference(env, input, output, frame_size, bitrate, bandwidth=None, ep_mode=0, lfe=0):
     check_io_files(input, output)
-    cmd = env.config['reference_encoder']
+    cmd = env.config['reference_exe'] + env.config['reference_encoder']
     opt = []
+    if lfe:
+        opt += ['-lfe']
+    if env.config['hrmode'] == '1':
+        opt += ['-hrmode']
     if bandwidth:
         opt += ['-bandwidth', bandwidth]
     if ep_mode:
         opt += ['-epmode', ep_mode]
     options = ' '.join(map(str, opt))
-    call(cmd.format(input=input, output=output, frame_size=frame_size, bitrate=bitrate, options=options))
+    call(cmd.format(input=input, output=output, frame_size=frame_size, bitrate=bitrate, options=options), opid=env.opid, opid_log=env.opid_log)
 
 
-def encode_test(env, input, output, frame_size, bitrate, bandwidth=None, ep_mode=0):
+def encode_test(env, input, output, frame_size, bitrate, bandwidth=None, ep_mode=0,lfe=0):
     check_io_files(input, output)
     cmd = env.config['encoder']
     opt = []
+    if lfe:
+        opt += ['-lfe']
+    if env.config['hrmode'] == '1':
+        opt += ['-hrmode']
     if bandwidth:
         opt += [env.config['option_bandwidth'].format(arg=bandwidth)]
     if ep_mode:
         opt += [env.config['option_ep_mode'].format(arg=ep_mode)]
     options = ' '.join(opt)
-    call(cmd.format(input=input, output=output, frame_size=frame_size, bitrate=bitrate, options=options))
+    call(cmd.format(input=input, output=output, frame_size=frame_size, bitrate=bitrate, options=options), opid=env.opid, opid_log=env.opid_log)
 
 
 def decode_reference(env, input, output, error_file=None):
     check_io_files(input, output)
-    cmd = env.config['reference_decoder']
+    cmd = env.config['reference_exe'] + env.config['reference_decoder']
     opt = []
     if error_file:
         opt += ['-ep_dbg', error_file]
+    if env.config['hrmode'] == '1': 
+        opt += ['-bps 24'] 
     options = ' '.join(map(str, opt))
-    call(cmd.format(input=input, output=output, options=options))
+    call(cmd.format(input=input, output=output, options=options), opid=env.opid, opid_log=env.opid_log)
 
 
 def decode_test(env, input, output, error_file=None):
@@ -694,8 +780,10 @@ def decode_test(env, input, output, error_file=None):
     opt = []
     if error_file:
         opt += [env.config['option_ep_debug'].format(arg=error_file)]
+    if env.config['hrmode'] == '1': 
+        opt += ['-bps 24'] 
     options = ' '.join(map(str, opt))
-    call(cmd.format(input=input, output=output, options=options))
+    call(cmd.format(input=input, output=output, options=options), opid=env.opid, opid_log=env.opid_log)
 
 
 def apply_error_pattern(env, input, output, mode, pattern):
@@ -703,22 +791,35 @@ def apply_error_pattern(env, input, output, mode, pattern):
     check_io_files(input, output)
     if mode == 'fer':
         cmd = 'tools/eid-xor.exe -vbr -bs g192 -ep byte -fer {} {} {}'
-        call(cmd.format(input, pattern, output))
+        call(cmd.format(input, pattern, output), opid=env.opid, opid_log=env.opid_log)
     if mode == 'ber':
         cmd = 'tools/eid-xor.exe -vbr -bs g192 -ep byte -ber {} {} {}'
-        call(cmd.format(input, pattern, output))
+        call(cmd.format(input, pattern, output), opid=env.opid, opid_log=env.opid_log)
     if mode == 'flip':
-        cmd = 'tools/flipG192 {} {} {} {} 1911 0'
+        if 'bitflip_seed' in env.config.keys():
+            seed = env.config['bitflip_seed']
+        else: 
+            seed = '1911'
+        cmd = 'tools/flipG192 {} {} {} {} ' + seed + ' 0'
         flips, frames = pattern
-        call(cmd.format(input, output, flips, frames))
+        call(cmd.format(input, output, flips, frames), opid=env.opid, opid_log=env.opid_log)
     # copy the config file of g192 bitstreams
     if is_file(str(input) + '.cfg'):
-        copy_file(str(input) + '.cfg', str(output) + '.cfg')
+        call('cp {} {}'.format(str(input) + '.cfg', str(output) + '.cfg'), opid=env.opid, opid_log=env.opid_log)
+
+# rename switcing files
+def swf_bitrate_to_label (tmp):
+    return '{}-to-{}'.format(tmp[0], tmp[-1])
 
 
 # create file names for test
 def make_files(env, files, *args):
-    protoyp = '_'.join(map(lstr, args)) + '_'
+    tmp = args
+    if type (tmp[4]).__name__ == 'list':
+        tmp = list(tmp)
+        tmp[4] = swf_bitrate_to_label(tmp[4])
+        tmp = tuple(tmp)
+    protoyp = '_'.join(map(lstr, tmp)) + '_'
     return tuple(env.test_dir / (protoyp + f) for f in files)
 
 
@@ -728,7 +829,10 @@ def sqam_configs(config, items, ch=1, lp20=True, modes=None):
         if modes and mode not in modes:
             continue
         for item, br in itertools.product(items, brs):
-            suffix = '_lp20' if lp20 and sr in (44100, 48000) else ''
+            if config['hrmode'] == '1':
+                suffix = '_24b'
+            else:
+                suffix = '_lp20' if lp20 and sr in (44100, 48000) else ''
             infile = ITEM_DIR / '{}_{}_{}ch{}.wav'.format(item, sr, ch, suffix)
             yield mode, item, fs, sr, br, infile
 
@@ -741,12 +845,18 @@ def test_executor(env, func, tests):
 
 # process a single test item
 # performs encoding, erroring, decoding and evaluation
-# returns tuble of bool, list (pass condition, metric values)
+# returns tuple of bool, list (pass condition, metric values)
 # mode: encode/decode/encdec, fs: frame size, sr: sampling rate, br: bitrate
-def process_item(env, mode, item, fs, sr, br, infile, bandwidth=None, ep_mode=0, error_mode=None, error_pattern=None):
+def process_item(env, mode, item, fs, sr, br, infile, bandwidth=None, ep_mode=0, error_mode=None, error_pattern=None, lfe=0):
     bw_name = 'swf' if is_file(bandwidth) else bandwidth
     ep_name = '1-4' if is_file(ep_mode) else ep_mode
     fmt     = '  {} {:20} {:3g} ms {:5} Hz {:>6} bit/s ep:{}'
+    br_label = br
+    if type(br).__name__ == 'list':
+        br_label = swf_bitrate_to_label(br)
+    opid = '{}__{}__{}__{}__{}__{}__{}__{}'.format(env[0],env[1],mode,item,fs,sr,br_label,ep_name) 
+    env = env._replace(opid = opid) # operation point ID to log commands associated with a operationpoint (=unique configuration)
+    
     print(fmt.format(mode, item, fs, sr, lstr(br), ep_name))
 
     file_names = ['r.g192', 't.g192', 're.g192', 'te.g192', 'r.wav', 't.wav', 'rd', 'td']
@@ -759,11 +869,12 @@ def process_item(env, mode, item, fs, sr, br, infile, bandwidth=None, ep_mode=0,
     try:
         # generate bitratre switching file if needed
         if type(br) in (list, tuple):
-            br = generate_switching_file(env, *br)
+            #br = generate_switching_file(env, *br)
+            br = generate_switching_file2(env, fs, *br)
         # encode
-        encode_reference(env, infile, ref_bin, fs, br, bandwidth=bandwidth, ep_mode=ep_mode)
+        encode_reference(env, infile, ref_bin, fs, br, bandwidth=bandwidth, ep_mode=ep_mode, lfe=lfe)
         if mode in ('encode', 'encdec'):
-            encode_test(env, infile, tst_bin, fs, br, bandwidth=bandwidth, ep_mode=ep_mode)
+            encode_test(env, infile, tst_bin, fs, br, bandwidth=bandwidth, ep_mode=ep_mode, lfe=lfe)
         # apply errors
         if error_mode:
             apply_error_pattern(env, ref_bin, ref_err, error_mode, error_pattern)
@@ -780,21 +891,21 @@ def process_item(env, mode, item, fs, sr, br, infile, bandwidth=None, ep_mode=0,
         if mode == 'decode':
             decode_test(env, ref_bin, tst_wav, error_file=tst_dbg)
         # compare outputs
-        ok, val = compare_wav(env, mode, infile, ref_wav, tst_wav)
+        ok, val = compare_wav(env, mode, sr, infile, ref_wav, tst_wav)
         if ref_dbg and tst_dbg:
             err_ok, err_val = compare_errors(env, ref_dbg, tst_dbg)
-        return ok and err_ok, err_val + val
+        return ok and err_ok, err_val + val, opid
 
     except (OSError, FileNotFoundError, FileExistsError, KeyError) as e:
-        logging.error('process_item: %s: %s', type(e).__name__, str(e))
-        return False, []
+        logging.error('[%s] process_item: %s: %s', opid, type(e).__name__, str(e))
+        return False, [], opid
 
 
 def test_sqam(env):
     print('Testing SQAM ...')
     def func(mode, item, fs, sr, br, infile):
-        ok, values = process_item(env, mode, item, fs, sr, br, infile)
-        return [ok, mode, item, fs, sr, br] + values
+        ok, values, opid = process_item(env, mode, item, fs, sr, br, infile)
+        return [ok, mode, item, fs, sr, br] + values + [opid]
 
     tests = sqam_configs(env.config, ITEMS)
     return test_executor(env, func, tests)
@@ -804,8 +915,8 @@ def test_band_limiting(env):
     print('Testing band limitation ...')
     def func(mode, item, fs, sr, br, bw):
         infile = ITEM_DIR / '{}_{}_1ch_bw{}.wav'.format(item, sr, bw)
-        ok, values = process_item(env, mode, item, fs, sr, br, infile)
-        return [ok, mode, item, fs, sr, br, bw] + values
+        ok, values, opid = process_item(env, mode, item, fs, sr, br, infile)
+        return [ok, mode, item, fs, sr, br, bw] + values + [opid]
 
     tests = set()
     for mode, fs, sr, _ in env.config['configs']:
@@ -820,8 +931,8 @@ def test_band_limiting(env):
 def test_low_pass(env):
     print('Testing low pass ...')
     def func(mode, item, fs, sr, br, infile):
-        ok, values = process_item(env, mode, item, fs, sr, br, infile)
-        return [ok, mode, item, fs, sr, br] + values
+        ok, values, opid = process_item(env, mode, item, fs, sr, br, infile)
+        return [ok, mode, item, fs, sr, br] + values + [opid]
 
     items = [ITEM_LOW_PASS]
     modes = ['encode', 'encdec']
@@ -832,13 +943,33 @@ def test_low_pass(env):
     return test_executor(env, func, tests)
 
 
+def test_lfe(env):
+    print('Testing LFE mode ...')
+    def func(mode, item, fs, sr, br, infile):
+        ok, values, opid = process_item(env, mode, item, fs, sr, br, infile, lfe=1)
+        return [ok, mode, item, fs, sr, br] + values + [opid]
+
+    items = [ITEM_LFE]
+    modes = ['encode']
+    tests = []
+    for mode, item, fs, sr, br, infile in sqam_configs(env.config, items , modes=modes):
+        tests.append((mode, item, fs, sr, br, infile))
+    return test_executor(env, func, tests)
+
+
 def test_bitrate_switching(env):
     print('Testing bitrate switching ...')
     def func(mode, item, fs, sr, bitrates):
-        br     = (int(160000 / fs), max(bitrates))
-        infile = ITEM_DIR / '{}_{}_1ch.wav'.format(item, sr)
-        ok, values = process_item(env, mode, item, fs, sr, br, infile)
-        return [ok, mode, item, fs, sr, br] + values
+        if env.config['hrmode'] == '1':
+            br     = (min(bitrates), max(bitrates)) # take all steps
+            infile = ITEM_DIR / '{}_{}_1ch{}.wav'.format(item, sr, '_24b')
+        else:
+            br     = (int(160000 / fs), max(bitrates))
+            infile = ITEM_DIR / '{}_{}_1ch.wav'.format(item, sr)
+        ok, values, opid = process_item(env, mode, item, fs, sr, br, infile)
+        if type(br).__name__ == 'list':
+            br = swf_bitrate_to_label(br)
+        return [ok, mode, item, fs, sr, br] + values + [opid]
 
     tests = []
     for mode, fs, sr, bitrates in env.config['configs']:
@@ -851,11 +982,11 @@ def test_bandwidth_switching(env):
     print('Testing bandwidth switching ...')
     def func(mode, item, fs, sr, br, infile):
         bwf = generate_switching_file(env, *BAND_WIDTHS[sr])
-        ok, values = process_item(env, mode, item, fs, sr, br, infile, bwf)
-        return [ok, mode, item, fs, sr, br] + values
+        ok, values, opid = process_item(env, mode, item, fs, sr, br, infile, bwf)
+        return [ok, mode, item, fs, sr, br] + values + [opid]
 
     tests = []
-    for mode, item, fs, sr, br, infile in sqam_configs(env.config, ITEMS):
+    for mode, item, fs, sr, br, infile in sqam_configs(env.config, ITEMS, modes=['encode','encdec']):
         if sr >= 16000:
             tests.append((mode, item, fs, sr, br, infile))
     return test_executor(env, func, tests)
@@ -865,19 +996,18 @@ def test_plc(env):
     print('Testing packet loss concealment ...')
     def func(mode, item, fs, sr, br, infile):
         pattern = 'etc/plc_fer_eid.dat'
-        ok, values = process_item(env, mode, item, fs, sr, br, infile, None, 0, 'fer', pattern)
-        return [ok, mode, item, fs, sr, br] + values
+        ok, values, opid = process_item(env, mode, item, fs, sr, br, infile, None, 0, 'fer', pattern)
+        return [ok, mode, item, fs, sr, br] + values + [opid]
 
     tests = sqam_configs(env.config, ITEMS_PLC, modes=['decode'])
     return test_executor(env, func, tests)
 
-
 def test_pc(env):
     print('Testing partial concealment ...')
     def func(mode, item, fs, sr, br, infile):
-        pattern = 'etc/pc_ber_3percent.dat'
-        ok, values = process_item(env, mode, item, fs, sr, br, infile, None, 4, 'ber', pattern)
-        return [ok, mode, item, fs, sr, br] + values
+        pattern = PC_BER_FILES[fs]
+        ok, values, opid = process_item(env, mode, item, fs, sr, br, infile, None, 4, 'ber', pattern)
+        return [ok, mode, item, fs, sr, br] + values + [opid]
 
     tests = sqam_configs(env.config, ITEMS_PLC, modes=['decode'])
     return test_executor(env, func, tests)
@@ -887,11 +1017,11 @@ def test_ep_correctable(env):
     print('Testing channel coder for correctable frames ...')
     def func(mode, item, fs, sr, br, infile, ep_mode):
         pattern = (ep_mode - 1, 50)
-        ok, values = process_item(env, mode, item, fs, sr, br, infile, None, ep_mode, 'flip', pattern)
-        return [ok, mode, item, fs, sr, br, ep_mode] + values
+        ok, values, opid = process_item(env, mode, item, fs, sr, br, infile, None, ep_mode, 'flip', pattern)
+        return [ok, mode, item, fs, sr, br, ep_mode] + values + [opid]
 
     tests = []
-    for mode, item, fs, sr, br, infile in sqam_configs(env.config, ITEMS):
+    for mode, item, fs, sr, br, infile in sqam_configs(env.config, ITEMS_PLC, modes=['encode','decode']):
         for ep_mode in [1, 2, 3, 4]:
             tests.append((mode, item, fs, sr, br, infile, ep_mode))
     return test_executor(env, func, tests)
@@ -901,11 +1031,11 @@ def test_ep_non_correctable(env):
     print('Testing channel coder for non-correctable frames ...')
     def func(mode, item, fs, sr, br, infile, ep_mode):
         pattern = (int(br * ep_mode * fs / 24000), 50)
-        ok, values = process_item(env, mode, item, fs, sr, br, infile, None, ep_mode, 'flip', pattern)
-        return [ok, mode, item, fs, sr, br, ep_mode] + values
+        ok, values, opid = process_item(env, mode, item, fs, sr, br, infile, None, ep_mode, 'flip', pattern)
+        return [ok, mode, item, fs, sr, br, ep_mode] + values + [opid]
 
     tests = []
-    for mode, item, fs, sr, br, infile in sqam_configs(env.config, ITEMS):
+    for mode, item, fs, sr, br, infile in sqam_configs(env.config, ITEMS_PLC, modes=['decode']):
         for ep_mode in [1, 2, 3, 4]:
             tests.append((mode, item, fs, sr, br, infile, ep_mode))
     return test_executor(env, func, tests)
@@ -915,10 +1045,10 @@ def test_ep_mode_switching(env):
     print('Testing ep-mode switching ...')
     ep_mode = generate_switching_file(env, 100, 200, 300, 400)
     def func(mode, item, fs, sr, br, infile):
-        ok, values = process_item(env, mode, item, fs, sr, br, infile, None, ep_mode, None, None)
-        return [ok, mode, item, fs, sr, br, '1-4'] + values
+        ok, values, opid = process_item(env, mode, item, fs, sr, br, infile, None, ep_mode, None, None)
+        return [ok, mode, item, fs, sr, br, '1-4'] + values + [opid]
 
-    tests = sqam_configs(env.config, ITEMS)
+    tests = sqam_configs(env.config, ITEMS_PLC, modes=['encode','decode'])
     return test_executor(env, func, tests)
 
 
@@ -926,12 +1056,14 @@ def test_ep_combined(env):
     print('Testing combined channel coder for correctable frames ...')
     def func(mode, item, fs, sr, br, infile, ep_mode):
         pattern = (ep_mode - 1, 50)
-        ok, values = process_item(env, mode, item, fs, sr, br, infile, None, ep_mode, 'flip', pattern)
-        return [ok, mode, item, fs, sr, br, ep_mode] + values
+        ok, values, opid = process_item(env, mode, item, fs, sr, br, infile, None, ep_mode, 'flip', pattern)
+        return [ok, mode, item, fs, sr, br, ep_mode] + values + [opid]
 
     tests = []
-    for mode, item, fs, sr, br, infile in sqam_configs(env.config, ITEMS, ch=2):
-        if br <= 128000:
+    for mode, item, fs, sr, br, infile in sqam_configs(env.config, ITEMS_PLC, ch=2, modes=['encode','decode']):
+        bytes_per_frame = (br / 800) / (10 / fs)
+        # Combined channel coder works for bitrates up to 128 kbps; 160 = 128000 / 800
+        if bytes_per_frame <= 160:
             for ep_mode in [1, 2, 3, 4]:
                 tests.append((mode, item, fs, sr, br, infile, ep_mode))
 
@@ -942,12 +1074,13 @@ def test_ep_combined_nc(env):
     print('Testing combined channel coder for non-correctable frames ...')
     def func(mode, item, fs, sr, br, infile, ep_mode):
         pattern = (int(br * ep_mode * fs / 24000), 50)
-        ok, values = process_item(env, mode, item, fs, sr, br, infile, None, ep_mode, 'flip', pattern)
-        return [ok, mode, item, fs, sr, br, ep_mode] + values
+        ok, values, opid = process_item(env, mode, item, fs, sr, br, infile, None, ep_mode, 'flip', pattern)
+        return [ok, mode, item, fs, sr, br, ep_mode] + values + [opid]
 
     tests = []
-    for mode, item, fs, sr, br, infile in sqam_configs(env.config, ITEMS, ch=2):
-        if br <= 128000:
+    for mode, item, fs, sr, br, infile in sqam_configs(env.config, ITEMS_PLC, ch=2, modes=['decode']):
+        bytes_per_frame = (br / 800) / (10 / fs)
+        if bytes_per_frame <= 160:
             for ep_mode in [1, 2, 3, 4]:
                 tests.append((mode, item, fs, sr, br, infile, ep_mode))
     return test_executor(env, func, tests)
@@ -964,7 +1097,7 @@ def profile_passed(all_results):
 
 
 def gen_td(value):
-    if type(value) in (tuple, list) and len(value) == 3:
+    if type(value) in (tuple, list) and len(value) == 3 and value[1] != '-to-':
         value, clazz, thresh = value
         clazz  = ' class={}'.format(clazz) if clazz else ''
         thresh = ' ({})'.format(fstr(thresh)) if thresh != None else ''
@@ -988,14 +1121,15 @@ def gen_table(test, mode, config, results):
     buf += ''.join('<th>{}</th>'.format(x) for x in header)
     buf += '</tr>\n'
     for values in results:
-        buf += '<tr>'
-        buf += ''.join(map(gen_td, values[1:]))
+        link = str(pathlib.Path(config['log_dir']) / (values[-1] + '.txt'))
+        buf += '<tr><td><a href="{}">{}</a></td>'.format(link, values[1])
+        buf += ''.join(map(gen_td, values[2:-1]))
         buf += '</tr>\n'
     return buf + '</table>\n'
 
 
 def gen_div(test, config, results):
-    percent = round(100 * pass_ratio(results))
+    percent = math.floor(100 * pass_ratio(results))
     buf     = HTML_DIV.format(label=LABEL[test], percent=percent)
     for mode in TEST_MODES:
         mode_results = [r for r in results if r[1] == mode]
@@ -1013,29 +1147,42 @@ def save_html(profile, config, all_results, html_file):
             buf += gen_div(test, config, all_results[test])
     buf += '</body>\n'
 
-    with open(html_file, 'w') as f:
+    with open(html_file, 'w', encoding='utf-8') as f:
         f.write(buf)
+
+
+def save_op_cmds(opid_log, log_dir):
+    for opid in opid_log.keys():
+        opid_file = str(pathlib.Path(log_dir) / (opid + '.txt'))
+        with open(opid_file, 'w') as fid:
+            fid.write(opid_log[opid])
 
 
 def main(args):
     args.workers = min(max(args.workers, 1), os.cpu_count())
     time_stamp   = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')
-    log_file     = 'lc3_conformance_{}.log'.format(time_stamp)
+    log_file     = 'lc3plus_conformance_{}.log'.format(time_stamp)
+    log_dir      = makedirs('lc3plus_conformance_{}_log'.format(time_stamp))
+    opid_log     = {}
     log_handlers = [logging.FileHandler(log_file)]
     if args.verbose:
         log_handlers += [logging.StreamHandler(sys.stdout)]
     logging.basicConfig(level=logging.DEBUG, handlers=log_handlers)
-    work_dir = makedirs(pathlib.Path('lc3_conformance_' + time_stamp))
+    work_dir = makedirs(pathlib.Path('lc3plus_conformance_' + time_stamp))
+
+    logging.debug(' '.join([str(arg) for arg in sys.argv]))
 
     try:
         all_passed = True
         globels, configs = parse_config(args.config)
         profiles = globels['enabled_tests']
-        check_system(args, globels)
-        build_tools()
-        if not args.system_sox:
-            download_sox()
-        prepare_items(args.workers)
+        # remove these point for remote debug
+        if DEBUG_SETTING == 0:
+            check_system(args, globels)
+            build_tools()
+            if not args.system_sox:
+                download_sox()
+            prepare_items(args.workers)
 
         for profile in profiles:
             print('Running tests for "{}" ...'.format(profile))
@@ -1045,11 +1192,12 @@ def main(args):
                 test_test = 'test_' + test
                 if config[test_test]:
                     test_dir    = makedirs(work_dir / profile / test)
-                    test_env    = TestEnv(profile, test, config, test_dir, args.workers)
+                    test_env    = TestEnv(profile, test, config, test_dir, args.workers, '', opid_log)
                     test_func   = globals()[test_test]
                     test_result = test_func(test_env)
                     if not test_result:
                         print('{} in "{}" is enabled with no suitable configuration!'.format(test, profile))
+                        all_passed = False
                     all_results[test] = test_result
                     if not args.keep_files:
                         removedir(work_dir / profile / test)
@@ -1058,7 +1206,9 @@ def main(args):
                 all_passed = all_passed and profile_passed(all_results)
                 html_file  = '{}_{}.html'.format(profile, time_stamp)
                 print('Saving results ...')
+                config['log_dir'] = log_dir
                 save_html(profile, config, all_results, html_file)
+                save_op_cmds(opid_log, log_dir)
             else:
                 print('No tests in "{}" were enabled!'.format(profile))
 
@@ -1078,6 +1228,7 @@ if __name__ == '__main__':
                                                  'ec is conform to the reference provided by Fraunhofer & Ericsson.')
     parser.add_argument('-keep', action='store_true', dest='keep_files', help="Don't delete workdir at end of test")
     parser.add_argument('-system_sox', action='store_true', help='Use system sox')
+    parser.add_argument('-bit_exact', action='store_true', help='reset thresholds to test for bit exactness')
     parser.add_argument('-v', action='store_true', dest='verbose', help='Activate verbose output')
     parser.add_argument('-w', dest='workers', type=int, default=os.cpu_count(), help='Number of worker threads')
     parser.add_argument('config', help='Conformance config file')
@@ -1085,5 +1236,11 @@ if __name__ == '__main__':
 
     if args.system_sox:
         SOX_EXE = 'sox'
+    if args.bit_exact:
+        for test, mode in itertools.product(TESTS, TEST_MODES):
+            DEFAULTS_TEST['{}_{}_mld_threshold'.format(test, mode)] = 0
+            DEFAULTS_TEST['{}_{}_odg_threshold'.format(test, mode)] = 0
+            DEFAULTS_TEST['{}_{}_rms_threshold'.format(test, mode)] = 16
+            DEFAULTS_TEST['{}_{}_mad_threshold'.format(test, mode)] = 0
 
     main(args)

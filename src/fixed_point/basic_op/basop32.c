@@ -2533,7 +2533,7 @@ Word32 L_shr_r (Word32 L_var1, Word16 var2)
  |   The function returns v * Lv  /  2^15  which is equivalent to            |
  |        a*v / 2^15 + b*v*2                                                 |
  |                                                                           |
- |   Complexity weight : 5													 |
+ |   Complexity weight : 5                                                     |
  |                                                                           |
  |   Inputs :                                                                |
  |                                                                           |

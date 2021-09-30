@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -14,11 +14,6 @@
 #ifndef CFFT_H
 #define CFFT_H
 
-typedef struct {
-    LC3_INT    len;
-    LC3_INT    sign;
-    LC3_FLOAT* table;
-} Cfft;
 
 /* macro to check if cfft supports len  */
 #define CFFT_IS_POWER_OF_TWO(n) ((n != 0) && ((n & (~n + 1)) == n))

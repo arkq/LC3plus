@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -180,6 +180,7 @@
     <ClCompile Include="..\ltpf_decoder.c" />
     <ClCompile Include="..\mdct.c" />
     <ClCompile Include="..\mdct_shaping.c" />
+    <ClCompile Include="..\near_nyquist_detector.c" />
     <ClCompile Include="..\noise_factor.c" />
     <ClCompile Include="..\noise_filling.c" />
     <ClCompile Include="..\olpa.c" />
@@ -195,6 +196,18 @@
     <ClCompile Include="..\plc_noise_substitution0.c" />
     <ClCompile Include="..\plc_tdc_tdac.c" />
     <ClCompile Include="..\plc_update.c" />
+    <ClCompile Include="..\plc_phecu_f0_refine_first.c" />
+    <ClCompile Include="..\plc_phecu_fec_hq.c" />
+    <ClCompile Include="..\plc_phecu_hq_ecu.c" />
+    <ClCompile Include="..\plc_phecu_lf_peak_analysis.c" />
+    <ClCompile Include="..\plc_phecu_rec_frame.c" />
+    <ClCompile Include="..\plc_phecu_setf0hz.c" />
+    <ClCompile Include="..\plc_phecu_subst_spec.c" />
+    <ClCompile Include="..\plc_phecu_spec_ana.c" />
+    <ClCompile Include="..\plc_phecu_tba_per_band_gain.c" />
+    <ClCompile Include="..\plc_phecu_tba_spect_Xavg.c" />
+    <ClCompile Include="..\plc_phecu_tba_trans_dect_gains.c" />
+    <ClCompile Include="..\plc_phecu_trans_burst_ana_sub.c" />
     <ClCompile Include="..\quantize_spec.c" />
     <ClCompile Include="..\reorder_bitstream.c" />
     <ClCompile Include="..\resamp12k8.c" />
@@ -202,6 +215,7 @@
     <ClCompile Include="..\residual_decoding.c" />
     <ClCompile Include="..\setup_dec_lc3.c" />
     <ClCompile Include="..\setup_enc_lc3.c" />
+    <ClCompile Include="..\setup_com_lc3.c" />
     <ClCompile Include="..\sns_compute_scf.c" />
     <ClCompile Include="..\sns_interpolate_scf.c" />
     <ClCompile Include="..\sns_quantize_scf.c" />

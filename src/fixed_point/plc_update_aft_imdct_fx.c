@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -25,7 +25,6 @@ void processPLCUpdateAfterIMDCT_fx(Word16 x_fx[], Word16 q_fx_exp, Word16 concea
    Word16  scale_fac_old, scale_fac_new, q_theo_new_old, q_theo_new_new, q_new, shift_old, shift_new;
    Word16 frontLen, pastLen;
    Word16 marginOldPast;
-   Word16 scale_fac_old_dual;
    Word16   marginNewXlen, marginOldFront;
 
 #ifdef DYNMEM_COUNT
@@ -53,8 +52,8 @@ void processPLCUpdateAfterIMDCT_fx(Word16 x_fx[], Word16 q_fx_exp, Word16 concea
 
 
       logic16();
-      IF( (sub(bfi,1)== 0 )  && sub(concealMethod, 2) == 0)
-      {   /* % reduced buffering update length during concealment method 2 as Xsav_fx is stored in the  joint  q_old_fx and x_old_tot_fx buffer */
+      IF( (sub(bfi,1) == 0) && sub(concealMethod, LC3_CON_TEC_PHASE_ECU) == 0 && xLen == (Word16)(((double)LprotSzPtr[fs_idx])*0.625))
+      {   /* % reduced buffering update length during concealment method 2 as Xsav_fx is stored in the  joint  q_old_fx and pcmbufHist buffer */
          usedHistlen = sub(usedHistlen, sub(LprotSzPtr[fs_idx], s_min(MAX_BW_BIN, xLen)));
          ASSERT(xLen == (Word16)(((double)LprotSzPtr[fs_idx])*0.625)); /*/ only enter here for 10 ms cases */
 
@@ -69,18 +68,23 @@ void processPLCUpdateAfterIMDCT_fx(Word16 x_fx[], Word16 q_fx_exp, Word16 concea
 
       basop_memcpy(&plcAd->x_old_tot_fx[plcAd->max_len_pcm_plc - xLen], &x_fx[0], xLen * sizeof(Word16));
 
-      frontLen = sub(LprotSzPtr[fs_idx], xLen);  /*16-10 =  6ms  of the  prev_synth/xfp part  */
+#ifdef ENABLE_HR_MODE
+      frontLen = 0;
+      IF (sub(fs_idx, 5) < 0)
+#endif
+      {
+          frontLen = sub(LprotSzPtr[fs_idx], xLen);  /*16-10 =  6ms  of the  prev_synth/xfp part  */
+      }
       pastLen = sub(oldLen, frontLen);          /* ~11.8 ms*/
 
       marginOldPast = getScaleFactor16_0(&(plcAd->x_old_tot_fx[plcAd->max_len_pcm_plc - usedHistlen]), pastLen);
       marginOldFront = getScaleFactor16_0(&(plcAd->x_old_tot_fx[plcAd->max_len_pcm_plc - usedHistlen + pastLen]), frontLen);
 
-      scale_fac_old_dual = s_min(marginOldFront, marginOldPast);
-      scale_fac_old = scale_fac_old_dual;
+      scale_fac_old = s_min(marginOldFront, marginOldPast);
       
       frontLen = 0; move16();
       logic16();  logic16();
-      IF(bfi == 1 && *prev_bfi == 0 && sub(concealMethod, 2) == 0)
+      IF(bfi == 1 && *prev_bfi == 0 && sub(concealMethod, LC3_CON_TEC_PHASE_ECU) == 0)
       {   /* prepare localized margin_xfp value  for a next bad concealment Method 2 frame   */
          frontLen = *nbLostFramesInRow;
          frontLen = add(hamm_len2Tab[fs_idx], shr(hamm_len2Tab[fs_idx], 2)); /*  find margin in the   3.75 ms front part   */
@@ -110,10 +114,10 @@ void processPLCUpdateAfterIMDCT_fx(Word16 x_fx[], Word16 q_fx_exp, Word16 concea
          Scale_sig(&plcAd->x_old_tot_fx[plcAd->max_len_pcm_plc - usedHistlen], oldLen, shift_old);
          logic16();
          test();
-         IF ((sub(bfi,1) == 0) && (sub(concealMethod, 3) == 0))
+         IF ((sub(bfi,1) == 0) && (sub(concealMethod, LC3_CON_TEC_TDPLC) == 0))
          {
             plcAd->harmonicBuf_Q -= shift_old;
-            plcAd->tdc_gain_c = L_shl(plcAd->tdc_gain_c, shift_old);
+            plcAd->tdc_gain_c = L_shl_sat(plcAd->tdc_gain_c, shift_old);
          }
          move16(); /* count move to static RAM */
 

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -21,6 +21,10 @@ static Word32 FIRLattice(Word16 order, const Word16 *parCoeff /*Q15*/, Word32 *s
 void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cutoff_idx, Word16 order[],
                         Word16 *numfilters, Word16 enable_lpc_weighting, Word16 nSubdivisions, Word16 frame_dms,
                         Word16 maxLen, Word8 *scratchBuffer
+#ifdef ENABLE_HR_MODE
+                        , Word16 hrmode
+#endif
+                       , Word16 near_nyquist_flag   
 )
 {
     Dyn_Mem_Deluxe_In(Word16 * tmpbuf; Word32 * rxx, epsP, *state, L_tmp, *A, predictionGain, alpha; Word16 * RC, inv;
@@ -49,6 +53,13 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
     *numfilters = 1;
     move16();
 
+#ifdef ENABLE_HR_MODE
+    if (hrmode)
+    {
+        xLen = BW_cutoff_bin_all_HR[BW_cutoff_idx];
+    }
+    else
+#endif
     {
         xLen = BW_cutoff_bin_all[BW_cutoff_idx];
     }
@@ -59,6 +70,17 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
     case 25:
         startfreq[0] = 3;
         move16();
+        
+#ifdef ENABLE_HR_MODE
+        if (hrmode)
+        {
+            subdiv_startfreq = tns_subdiv_startfreq_2_5ms_HR[BW_cutoff_idx - 4];
+            move16();
+            subdiv_stopfreq = tns_subdiv_stopfreq_2_5ms_HR[BW_cutoff_idx - 4];
+            move16();
+        }
+        else
+#endif
         {
             subdiv_startfreq = tns_subdiv_startfreq_2_5ms[BW_cutoff_idx];
             move16();
@@ -72,6 +94,17 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
     case 50:
         startfreq[0] = 6;
         move16();
+        
+#ifdef ENABLE_HR_MODE
+        if (hrmode)
+        {
+            subdiv_startfreq = tns_subdiv_startfreq_5ms_HR[BW_cutoff_idx - 4];
+            move16();
+            subdiv_stopfreq = tns_subdiv_stopfreq_5ms_HR[BW_cutoff_idx - 4];
+            move16();
+        }
+        else
+#endif
         {
             subdiv_startfreq = tns_subdiv_startfreq_5ms[BW_cutoff_idx];
             move16();
@@ -84,6 +117,17 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
     default: /* 100 */
         startfreq[0] = 12;
         move16();
+        
+#ifdef ENABLE_HR_MODE
+        if (hrmode)
+        {
+            subdiv_startfreq = tns_subdiv_startfreq_HR[BW_cutoff_idx - 4];
+            move16();
+            subdiv_stopfreq = tns_subdiv_stopfreq_HR[BW_cutoff_idx - 4];
+            move16();
+        }
+        else
+#endif
         {
             subdiv_startfreq = tns_subdiv_startfreq[BW_cutoff_idx];
             move16();
@@ -184,7 +228,7 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
         inv            = div_s(16383, extract_h(L_shl_pos(epsP, shift)));
         predictionGain = Mpy_32_32(rxx[0], Mpy_32_16(L_sub(MAX_32, Mpy_32_16(L_shl(epsP, shift), inv)), inv));
 
-        IF (L_sub(predictionGain, L_shr_pos_pos(0x30000000, shift)) > 0)
+        IF (L_sub(predictionGain, L_shr_pos_pos(0x30000000, shift)) > 0 && near_nyquist_flag == 0)
         {
             /* If Prediction Gain is low */
             test();
@@ -218,6 +262,11 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
             }
             order[j] = add(i, 1);
 
+            // Disable TNS if order is 0:
+            IF (order[j] == 0) {
+                // Jump to else statement
+                goto tns_disabled;
+            }
             /* Count bits */
             L_tmp = L_deposit_l(ac_tns_order_bits[enable_lpc_weighting][order[j] - 1]);
             FOR (i = 0; i < order[j]; i++)
@@ -247,6 +296,7 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
         }
         ELSE
         {
+tns_disabled:
             /* TNS disabled */
             *bits    = add(*bits, 1);
             order[j] = 0;

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -15,11 +15,21 @@
 
 
 void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 bfi, Word16 prev_bfi,
-                        Word16 frame_length, Word16 la_zeroes, const Word16 w[], Word16 x_fx[], Word16 ola_mem[],
+                        Word16 frame_length, Word16 la_zeroes,
+#ifdef ENABLE_HR_MODE
+                        const Word32 w[],
+#else
+                        const Word16 w[],
+#endif
+                        Word16 x_fx[], Word16 ola_mem[],
                         Word16 *ola_mem_exp, Word16 q_old_d_fx[], Word16 *q_old_fx_exp, Word32 q_d_fx[],
                         Word16 *q_fx_exp, Word16 yLen, Word16 fs_idx, Word16 *damping, Word16 old_pitch_int,
                         Word16 old_pitch_fr, Word16 *ns_cum_alpha, Word16 *ns_seed, Word16 frame_dms, AplcSetup *plcAd,
-                        Word8 *scratchBuffer)
+                        Word8 *scratchBuffer
+#ifdef ENABLE_HR_MODE
+                        , Word16 hrmode
+#endif
+                        )
 {
     Dyn_Mem_Deluxe_In(
         Counter i;
@@ -30,7 +40,7 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
         Word16  d2_fx_exp;
         Word16  r_fx_exp;
         Word16  Q_syn;
-        Word8 * buffer_perBandEnergy, *buffer_preEmphasis, *buffer_InverseODFT, *buffer_Levinson, *buffer_tdc,
+        Word8 * buffer_perBandEnergy, *buffer_preEmphasis, *buffer_InverseODFT, *buffer_Levinson,
             *buffer_tdac, *buffer_phecu;
         Word16        y_e;             /*exponent of L_ecu_rec */
         Word16        tmp_is_trans[2]; /* may be  changed to a single variable */
@@ -52,13 +62,11 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
     L_ecu_rec = (Word32 *)scratchAlign(tdc_A_32, sizeof(*tdc_A_32) * (M + 1)); /* Size = 4 * MAX_LPROT bytes */
 
     buffer_perBandEnergy =
-        (Word8 *)scratchAlign(q_old_d_fx32, sizeof(*q_old_d_fx32) * (MAX_BW)); /* Size = 2 * MAX_BANDS_NUMBER_PLC */
+        (Word8 *)scratchAlign(q_old_d_fx32, sizeof(*q_old_d_fx32) * (MAX_LEN)); /* Size = 2 * MAX_BANDS_NUMBER_PLC */
     buffer_preEmphasis =
         (Word8 *)scratchAlign(tdc_A_32, sizeof(*tdc_A_32) * (M + 1)); /* Size = 2 * MAX_BANDS_NUMBER_PLC */
     buffer_InverseODFT = buffer_preEmphasis;                          /* Size = 640 bytes */
     buffer_Levinson    = buffer_preEmphasis;                          /* Size = 4 * (M + 1) */
-    buffer_tdc = scratchBuffer; /* Size = 2 * (MAX_PITCH + MAX_LEN/2 + MAX_LEN + MDCT_MEM_LEN_MAX + M + MAX_PITCH +
-                                   MAX_LEN/2 + M + 1) bytes */
 
     buffer_tdac  = scratchBuffer; /* Size = 2 * MAX_LEN bytes */
     buffer_phecu = scratchBuffer; /* Size = 2 * MAX_LGW + 8 * MAX_LPROT + 12 * MAX_L_FRAME */
@@ -73,7 +81,7 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
     {
         SWITCH (concealMethod)
         {
-        case 2:
+        case LC3_CON_TEC_PHASE_ECU:
             ASSERT(frame_dms == 100);
             /* call phaseEcu */
             env_stab        = 32767; move16();                 /* 1.0=stable , 0.0=dynamic Q15*/
@@ -170,7 +178,7 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
 
             BREAK;
 
-        case 3:
+        case LC3_CON_TEC_TDPLC:
             IF (sub(nbLostFramesInRow, 1) == 0)
             {
                 plcAd->tdc_fract = old_pitch_fr; move16();
@@ -205,6 +213,9 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
                 /* calculate per band energy*/
                 processPerBandEnergy_fx(d2_fx, &d2_fx_exp, q_old_d_fx32, *q_old_fx_exp, band_offsets, fs_idx, n_bands,
                                         1, frame_dms, buffer_perBandEnergy
+#ifdef ENABLE_HR_MODE
+                                        , hrmode
+#endif
                 );
 
                 /* calculate pre-emphasis */
@@ -222,7 +233,7 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
                 /* 32Q27 -> 16Qx */
                 processPLCLpcScaling_fx(tdc_A_32, plcAd->tdc_A, add(plcAd->tdc_lpc_order, 1));
             }
-
+            
             /* call TD-PLC */
             /* Q_syn = plcAd->q_fx_old_exp; */ /* makes q_fx_old_exp
                available in processTimeDomainConcealment_Apply_fx() for
@@ -233,8 +244,7 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
                 &plcAd->tdc_seed, 
                 &plcAd->tdc_gain_c, x_fx, &Q_syn, damping,
                 plcAd->max_len_pcm_plc,
-                plcAd->harmonicBuf_fx, plcAd->synthHist_fx, &plcAd->harmonicBuf_Q,
-                buffer_tdc);
+                plcAd->harmonicBuf_fx, plcAd->synthHist_fx, &plcAd->harmonicBuf_Q, scratchBuffer);
 
             /* exponent of TD-PLC output */
             Q_syn     = add(Q_syn, sub(15, plcAd->q_fx_old_exp));
@@ -242,13 +252,15 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
 
             /* TDAC */
             processTdac_fx(ola_mem, ola_mem_exp, x_fx, *q_fx_exp, w, la_zeroes, frame_length, buffer_tdac);
+            
             BREAK;
 
-        case 4:
+        case LC3_CON_TEC_NS_ADV:
             *q_fx_exp = *q_old_fx_exp; move16();
 
             /* call Noise Substitution */
             processPLCNoiseSubstitution_fx(q_d_fx, q_old_d_fx, yLen);
+            
             BREAK;
 
         default: ASSERT(!"Unsupported PLC method!");

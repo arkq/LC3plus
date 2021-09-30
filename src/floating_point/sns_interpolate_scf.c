@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -39,7 +39,7 @@ void processSnsInterpolateScf_fl(LC3_FLOAT* gains, LC3_INT encoder_side, LC3_INT
         {
             i = 0;
             for (n = 0; n < 2 * d; n = n + 2) {
-                tmp[i] = (gains_int[n] + gains_int[n + 1]) / 2.0;
+                tmp[i] = (gains_int[n] + gains_int[n + 1]) / (LC3_FLOAT)2.0;
                 i++;
             }
 
@@ -54,8 +54,8 @@ void processSnsInterpolateScf_fl(LC3_FLOAT* gains, LC3_INT encoder_side, LC3_INT
             move_float(gains_int, tmp, d);
         } else if (ceil(64.0 / (LC3_FLOAT) bands_number) == 4)
         {
-            ratio = LC3_FABS((LC3_FLOAT) (1.0 - 32.0 / (LC3_FLOAT) bands_number));
-            n4 = round(ratio * bands_number);
+            ratio = LC3_FABS((LC3_FLOAT) ((LC3_FLOAT)1.0 - (LC3_FLOAT)32.0 / (LC3_FLOAT) bands_number));
+            n4 = LC3_ROUND(ratio * (LC3_FLOAT)bands_number);
             
             for (i = 0; i < n4; i++)
             {

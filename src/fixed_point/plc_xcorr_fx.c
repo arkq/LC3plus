@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -19,8 +19,8 @@
 #define MAX_ACC_LEN (1 << MAX_ACC_LEN_BITS)
 #define MIN_PITCH_8K 20 /* 8000* MIN_PITCH_12k8/12800 */
 
-static const Word16 pitch_min_2[5] = {2 * MIN_PITCH_8K, 2 * MIN_PITCH_8K * 2, 2 * MIN_PITCH_8K * 3,
-                                      2 * MIN_PITCH_8K * 4, 2 * MIN_PITCH_8K * 6};
+static const Word16 pitch_min_2[] = {2 * MIN_PITCH_8K    , 2 * MIN_PITCH_8K * 2, 2 * MIN_PITCH_8K *  3,
+                                     2 * MIN_PITCH_8K * 4, 2 * MIN_PITCH_8K * 6, 2 * MIN_PITCH_8K * 12};
 
 /* req headroom in bits, for safe summing of block results w/o downshift */
 /* also the safe pre subblock acc downshift for various number of blocks */

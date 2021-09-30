@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -14,6 +14,9 @@
 #include "defines.h"
 #include "structs.h"
 
+/* DCT */
+extern const Complex dct2_16[16];
+
 /* Ari coder */
 extern const LC3_INT ari_tns_order_cf[2][9];
 extern const LC3_INT ari_tns_freq_cf[8][18];
@@ -22,15 +25,18 @@ extern const LC3_INT ari_spec_cumfreq_fl[64][18];
 extern const LC3_INT ari_spec_bits_fl[64][17];
 
 /* SNS */
-extern const LC3_FLOAT sns_C1[8][32];
-extern const LC3_FLOAT sns_C2[8][32];
+extern const LC3_FLOAT sns_LFCB[8][32];
+extern const LC3_FLOAT sns_HFCB[8][32];
 extern const LC3_INT   pvq_enc_A[16][11];
+extern const LC3_FLOAT idct_lookup[M][M];
 
 /* 12.8 kHz resampler */
 extern const LC3_FLOAT lp_scale_factors[6];
-extern const LC3_FLOAT lp_filter[240];
-extern const double    highpass50_filt_b[3];
-extern const double    highpass50_filt_a[3];
+
+extern const LC3_INT32 resamp_params[][4];
+extern const LC3_FLOAT *lp_filter[6];
+extern const LC3_FLOAT    highpass50_filt_b[3];
+extern const LC3_FLOAT    highpass50_filt_a[3];
 extern const LC3_INT   up_fac[6];
 
 /* TNS */
@@ -171,5 +177,27 @@ extern const LC3_INT* ACC_COEFF_PER_BAND_2_5ms[5];
 extern const LC3_INT* ACC_COEFF_PER_BAND_5ms_HR[6];
 extern const LC3_INT* ACC_COEFF_PER_BAND_5ms[5];
 
+/* Near Nyquist detector */
+extern const LC3_INT NN_thresh;
+
+
+extern const LC3_INT32 xavg_N_grp[5];
+extern const LC3_FLOAT *hannOla_wins[5];
+extern const LC3_INT32 gwlpr[MAX_LGW+1];
+extern const LC3_INT32 mdct_grp_bins[10];
+extern const LC3_FLOAT* PhECU_whr16ms_wins[5];
+
+extern const LC3_FLOAT plc_preemph_fac[];
+extern const LC3_INT* ACC_COEFF_PER_BAND_PLC[];
+extern const LC3_INT* ACC_COEFF_PER_BAND_PLC_2_5ms[];
+extern const LC3_INT* ACC_COEFF_PER_BAND_PLC_5ms[];
+extern const LC3_FLOAT *plc_tdc_lpc_all[6];
+extern const LC3_FLOAT plc_tdc_lpc_8[17];
+extern const LC3_FLOAT plc_tdc_lpc_16[17];
+extern const LC3_FLOAT plc_tdc_lpc_24[17];
+extern const LC3_FLOAT plc_tdc_lpc_32[17];
+extern const LC3_FLOAT plc_tdc_lpc_48[17];
+extern const LC3_FLOAT plc_tdc_lpc_96[17];
+extern const LC3_FLOAT plc_tdc_lpc_8_25ms[9];
 
 #endif

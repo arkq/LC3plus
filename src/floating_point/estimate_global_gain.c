@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -10,22 +10,6 @@
 
 #include "functions.h"
 
-static LC3_FLOAT array_max_abs(LC3_FLOAT* x, LC3_INT len);
-
-LC3_FLOAT array_max_abs(LC3_FLOAT* x, LC3_INT len)
-{
-    LC3_FLOAT max = 0, tmp_abs = 0;
-    LC3_INT   i = 0;
-
-    for (i = 0; i < len; i++) {
-        tmp_abs = LC3_FABS(x[i]);
-        if (tmp_abs > max) {
-            max = tmp_abs;
-        }
-    }
-
-    return max;
-}
 
 void processEstimateGlobalGain_fl(LC3_FLOAT x[], LC3_INT lg, LC3_INT nbitsSQ, LC3_FLOAT* gain, LC3_INT* quantizedGain,
                                   LC3_INT* quantizedGainMin, LC3_INT quantizedGainOff, LC3_FLOAT* targetBitsOff,
@@ -37,7 +21,7 @@ void processEstimateGlobalGain_fl(LC3_FLOAT x[], LC3_INT lg, LC3_INT nbitsSQ, LC
     LC3_INT   i = 0, N = 0, offset = 0, j = 0, iszero = 0;
     LC3_FLOAT g_min = 0, x_max = 0, tmp = 0, ind = 0, ind_min = 0, target = 0, fac = 0, ener = 0;
     LC3_FLOAT en[MAX_LEN / 4] = {0};
-    LC3_FLOAT reg_val = 0;
+    LC3_FLOAT reg_val = 4.656612873077393e-10;
 
     if (*old_targetBits < 0) {
         *targetBitsOff = 0;
@@ -57,25 +41,30 @@ void processEstimateGlobalGain_fl(LC3_FLOAT x[], LC3_INT lg, LC3_INT nbitsSQ, LC
         LC3_FLOAT thresh = 2*frame_ms;
         for (i = 0; i < lg; i++)
         {
-        		M0 += fabs(x[i]);
-        		M1 += i*fabs(x[i]);
+                M0 += fabs(x[i]);
+                M1 += i*fabs(x[i]);
         }
 
         rB_offset = 8 * (1 - MIN(M1/M0, thresh) / thresh);
         reg_val = x_max * LC3_POW(2,-regBits - rB_offset);
     }
 
-    if (x_max == 0) {
+    if (x_max < LC3_EPS)
+    {
         ind_min         = quantizedGainOff;
         ind             = 0;
         *old_targetBits = -1;
     } else {
         if (hrmode == 1) {
-        	g_min = x_max / (32768 * 256 - 2);
+            g_min = x_max / (32768 * 256 - 2);
         } else {
-            g_min = x_max / (32768 - 0.375);
+            g_min = x_max / (32767 - 0.375);
         }
+        /* Prevent positive rounding errors from LC3_LOG10 function */
         ind_min = ceil(28.0 * LC3_LOG10(g_min));
+        ind_min = ceil(ind_min + LC3_FABS(ind_min) * LC3_EPS);
+        
+        assert(LC3_POW(10, ind_min / 28.0) >= g_min);
         assert(ind_min <= (255 + quantizedGainOff));
 
         N = lg;
@@ -86,7 +75,7 @@ void processEstimateGlobalGain_fl(LC3_FLOAT x[], LC3_INT lg, LC3_INT nbitsSQ, LC
             tmp += x[i + 1] * x[i + 1];
             tmp += x[i + 2] * x[i + 2];
             tmp += x[i + 3] * x[i + 3];
-            en[j] = (28.0 / 20.0) * (7 + 10.0 * LC3_LOG10(tmp + reg_val + LC3_POW(2, -31)));
+            en[j] = (28.0 / 20.0) * (7 + 10.0 * LC3_LOG10(tmp + reg_val));
             j++;
         }
 

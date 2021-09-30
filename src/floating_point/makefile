@@ -1,11 +1,11 @@
 # GNU Makefile
 
 # Options
-AFL         = 0
-CLANG       = 0
-GCOV        = 0
-NO_POST_REL = 0
-OPTIM       = 0
+AFL                      = 0
+CLANG                    = 0
+GCOV                     = 0
+NO_POST_REL_CHANGES_TEST = 0
+OPTIM                    = 0
 
 # Paths
 VPATH  = .
@@ -24,8 +24,8 @@ RM        = rm -f
 CFLAGS   += -std=c99 -O$(OPTIM)                                                            \
             -Wall -pedantic -Wcast-qual -Wno-long-long -Wpointer-arith -Wstrict-prototypes \
             -Wmissing-prototypes -Werror-implicit-function-declaration -Wunused-parameter  \
-            -Wunused-macros -Wunused-local-typedefs
-LDFLAGS += -lm
+            -Wunused-macros -Wunused-local-typedefs -g
+LDFLAGS += -lm -g
 # Include dependency flags
 DEPFLAGS = -MT $@ -MMD -MP -MF $(BUILD)/$*.Td
 
@@ -43,7 +43,7 @@ OPTIM    ?= 0
 CFLAGS   += -O$(OPTIM)
 CFLAGS   += $(foreach DIR,$(SRC_DIRS),-I$(DIR))
 
-ifeq "$(NO_POST_REL)" "1"
+ifeq "$(NO_POST_REL_CHANGES_TEST)" "1"
 CFLAGS   += -DNO_POST_REL_CHANGES
 endif
 
@@ -100,12 +100,12 @@ all: $(NAME_LC3)
 help:
 	@echo 'Syntax: make [OPTION=VALUE ...]'
 	@echo 'Build options:'
-	@echo '    NO_POST_REL $(NO_POST_REL) [0,1]'
-	@echo '    OPTIM       $(OPTIM) [0-3]'
+	@echo '    NO_POST_REL_CHANGES_TEST $(NO_POST_REL_CHANGES_TEST) [0,1]'
+	@echo '    OPTIM                    $(OPTIM) [0-3]'
 	@echo 'Debug options:'
-	@echo '    AFL         $(AFL) [0,1]'
-	@echo '    CLANG       $(CLANG) [0-3]'
-	@echo '    GCOV        $(GCOV) [0,1]'
+	@echo '    AFL                      $(AFL) [0,1]'
+	@echo '    CLANG                    $(CLANG) [0-3]'
+	@echo '    GCOV                     $(GCOV) [0,1]'
 
 $(NAME_LC3): $(OBJS)
 	@echo 'Linking' $@

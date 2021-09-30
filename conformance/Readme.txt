@@ -1,9 +1,9 @@
-================================
-LC3 Conformance script V1.0.4
-================================
+=================================
+LC3plus Conformance script V1.2.2
+=================================
 
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -13,6 +13,25 @@ LC3 Conformance script V1.0.4
 
 Changelog
 ==============
+    - V1.2.2 2021-10-01
+        - Added missing variable initialization in rms.c
+    - V1.2.1 2021-06-23
+        - fixed file generation for lfe tests.
+        - set odg for encode default metric 
+        - bitflip seed can be set from config file
+    - V1.2.0 2021-05-20
+        - added lfe test. (low-frequency effects)
+        - made delta_odg threshold dependent on ref_odg.
+        - fixed combined tests for hrmode, changed seed for epmode switching
+        - added -bit_exact option, which sets thresholds to minimum
+        - use PLC item set for channel coder tests
+    - V1.1.6 2021-02-23
+        - added logs for each operation point in link ('mode') in html file
+        - Added hrmode test functionality
+    - V1.1.4 2020-04-17
+        - Added 24bit handling
+        - fixed file alignment
+        - new energy calculation
     - V1.1.3 2020-03-24
         - Fixed formula of energy difference and changed threshold to 70
     - V1.0.4 2019-07-17
@@ -57,6 +76,8 @@ the following things:
  The reference executable must be the fixed point executable without any modifications.
 -set paths to encoder and decoder executables under test in example_config.cfg
  [globals]
+-if there is a delay between coded test file and original signal, set it under 'delay'
+ in example_config.cfg in the [globals] section
 
 Note: since the conformance script does compensate the delay and resamples the
       PEAQ input files to 48 kHz, the PEAQ binary should not do this.
@@ -64,7 +85,7 @@ Note: since the conformance script does compensate the delay and resamples the
 Usage of the script:
 ====================
 
-lc3_conformance.py [-h] [-v] [-w WORKERS] [-keep] CONFIG
+lc3plus_conformance.py [-h] [-v] [-w WORKERS] [-system_sox] [-keep] CONFIG
 
 LC3plus conformance tool - checks if a vendor implementation of the LC3plus codec
 is conforming to the reference provided by Fraunhofer & Ericsson using PEAQ, MLD
@@ -76,6 +97,7 @@ optional arguments:
   -keep           Keep all files produced in the test run
   -w              Number of workers (threads) for multithreaded execution. Equals
                   number of CPU cores by default.
+  -system_sox     Use system version of sox instead of downloaded one for better speed
 
 The script requires a configuration file which contains paths to executables and
 operating points to be tested. Each test configuration is indicated by a
@@ -108,6 +130,8 @@ peaq_odg_regex = Objective Difference Grade: (-?\d+\.\d+)  # regular expression 
 option_bandwidth = -bandwidth "{arg}"                      # command line option to trigger bandwidth controller, arg is a number or a switching file
 option_ep_debug  = -ep_dbg "{arg}"                         # command line option to write out channel coder debug information, arg is a file name
 option_ep_mode   = -epmode {arg}                           # command line option to specify error protection mode, arg is value between 0 and 4
+delay            = 0                                       # global option to set delay between coded test and original signal (reference has delay=0)
+hrmode           = 0                                       # global option to set hrmode. set hrmode=1 for aktivation, default is 0.d
 
 Since all tests use the G192 format to create and decode bitstreams, be sure to
 add the '-formatG192' option to your encoder and decoder under test command line.
@@ -139,6 +163,7 @@ test_ep_non_correctable  = 1                     # test for channel coder and er
 test_ep_mode_switching   = 1                     # test for error protection mode switching
 test_ep_combined         = 0                     # test for combined channel coding with stereo input with correctable amount of bit errors
 test_ep_combined_nc      = 0                     # test for combined channel coding with stereo input with a non-correctable amount of bit errors
+test_lfe                 = 0                     # test for Low frequency effects mode
 
 # configurations for most tests
 #         Mode, Frame Size, Samplingrate, Bitrate

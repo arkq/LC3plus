@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.2.1                               *
+*                        ETSI TS 103 634 V1.3.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -87,6 +87,11 @@ Word32 BASOP_Util_Log2(Word32 x)
 
 Word32 BASOP_Util_InvLog2(Word32 x)
 {
+#ifdef ENABLE_HR_MODE
+    /* Original code was used for negative x and hence the exp was always 0, which is assumed */
+    Word16 exp;
+    return BASOP_Util_InvLog2_pos(x, &exp);
+#else
     Word16  frac;
     Word16  exp;
     Word32  retVal;
@@ -111,11 +116,11 @@ Word32 BASOP_Util_InvLog2(Word32 x)
 
     frac = extract_l(L_and(x, 0x3FF));
 
-    index3 = L_and(L_shr(x, 10), 0x1F);
-    index2 = L_and(L_shr(x, 15), 0x1F);
-    index1 = L_and(L_shr(x, 20), 0x1F);
+    index3 = L_and(L_shr_pos(x, 10), 0x1F);
+    index2 = L_and(L_shr_pos(x, 15), 0x1F);
+    index1 = L_and(L_shr_pos(x, 20), 0x1F);
 
-    exp = extract_l(L_shr(x, 25));
+    exp = extract_l(L_shr_pos(x, 25));
     if (x > 0)
     {
         exp = sub(31, exp);
@@ -125,14 +130,80 @@ Word32 BASOP_Util_InvLog2(Word32 x)
         exp = negate(exp);
     }
 
-    lookup3f = L_add(exp2x_tab_long[index3], L_shr(Mpy_32_16(0x0016302F, frac), 1));
+    lookup3f = L_add(exp2x_tab_long[index3], L_shr_pos(Mpy_32_16(0x0016302F, frac), 1));
     lookup12 = Mpy_32_32(exp2_tab_long[index1], exp2w_tab_long[index2]);
     lookup   = Mpy_32_32(lookup12, lookup3f);
 
     retVal = L_shr(lookup, sub(exp, 3));
 
     return retVal;
+#endif
 }
+
+#ifdef ENABLE_HR_MODE
+/* New function which works with positive and negative exponents */
+Word32 BASOP_Util_InvLog2_pos(Word32 x, Word16 *exp)
+{
+    Word16  frac;
+    Word16  ret_exp;
+    Word32  retVal;
+    UWord32 index3;
+    UWord32 index2;
+    UWord32 index1;
+    UWord32 lookup3f;
+    UWord32 lookup12;
+    UWord32 lookup;
+
+    /* The usage of exp.mantissa format in LC3 in Word32 is : floatval = mantissa / (2^(31 - exp)) */
+    ret_exp = extract_l(L_shr(x, 25));
+
+    IF (x < -1040187392l /*-31.0/64.0 Q31*/)
+    {
+        *exp = 0;
+        move16();
+        return 0;
+    }
+    test();
+    IF ((L_sub(x, 1040187392l /*31.0/64.0 Q31*/) >= 0))
+    {
+        *exp = 31;
+        move16();
+        return 0x40000000;
+    }
+    ELSE IF(x == 0)
+    {
+        *exp = -1;
+        move16();
+        return 0x10000000;
+    }
+
+    frac = extract_l(L_and(x, 0x3FF));
+
+    index3 = L_and(L_shr(x, 10), 0x1F);
+    index2 = L_and(L_shr(x, 15), 0x1F);
+    index1 = L_and(L_shr(x, 20), 0x1F);
+
+    lookup3f = L_add(exp2x_tab_long[index3], L_shr(Mpy_32_16(0x0016302F, frac), 1));
+    lookup12 = Mpy_32_32(exp2_tab_long[index1], exp2w_tab_long[index2]);
+    lookup   = Mpy_32_32(lookup12, lookup3f);
+
+    IF (x > 0)
+    {
+        /* The returned exponent is the offset from 31, so the float result is
+           retVal / 2^(31 - *exp) */
+        *exp   = add(ret_exp, 3);
+        retVal = lookup;
+    }
+    ELSE
+    {
+        /* For negative powers provide the result in Q31 and ignore the exponent */
+        *exp   = 0;
+        retVal = L_shr(lookup, sub(negate(ret_exp), 3));
+    }
+
+    return retVal;
+}
+#endif
 
 /* local function for Sqrt16 and Sqrt16norm */
 static Word16 Sqrt16_common(Word16 m, Word16 e)
@@ -560,7 +631,7 @@ Word32 Norm32Norm(const Word32 *x, const Word16 headroom, const Word16 length, W
     {
         s     = norm_s(length);
         inc   = L_shl(Mpy_32_16(0x0000fffd, shl(length, s)), sub(15, s));
-        L_tmp = L_add(L_tmp, inc);
+        L_tmp = L_add_sat(L_tmp, inc);
     }
 
     *result_e = sub(1, shl(shift, 1)); move16();
@@ -577,9 +648,10 @@ void Scale_sig(Word16       x[], /* i/o: signal to scale                 Qx     
     Word16  tmp;
     IF (exp0 > 0)
     {
+        tmp = s_min(exp0, 15); move16();
         FOR (i = 0; i < lg; i++)
         {
-            x[i] = shl(x[i], exp0); move16(); /* saturation can occur here */
+            x[i] = shl(x[i], tmp); move16(); /* saturation can occur here */
         }
         return;
     }
@@ -873,3 +945,126 @@ Word16 BASOP_Util_InvLog2_16(Word16 x, Word16 *y_e)
 
     return y;
 }
+
+#ifdef ENABLE_HR_MODE
+#define DFRACT_BITS 32 /* double precision */
+
+#define SQRT_BITS 7
+#define SQRT_BITS_MASK 0x7f
+#define SQRT_FRACT_BITS_MASK 0x007FFFFF
+
+#ifndef Word64
+#define Word64 long long
+#endif
+
+static __inline Word32 Mpy_32_32_noshift(Word32 x1, Word32 x2)
+{
+    Word64 ret = 0;
+    ret        = ((Word64)x1 * (Word64)x2);
+    return ((Word32)((ret & (Word64)0xffffffff00000000) >> 32));
+}
+
+static __inline Word32 fixmadddiv2_DD(const Word32 x, const Word32 a, const Word32 b)
+{
+    return ((((Word64)x << 32) + (Word64)a * b) >> 32);
+}
+
+/**
+ * \brief calculate 1.0/sqrt(op)
+ * \param op_m mantissa of input value.
+ * \param result_e pointer to return the exponent of the result
+ * \return mantissa of the result
+ */
+/*****************************************************************************
+  delivers 1/sqrt(op) normalized to .5...1 and the shift value of the OUTPUT,
+  i.e. the denormalized result is 1/sqrt(op) = invSqrtNorm(op) * 2^(shift)
+  uses Newton-iteration for approximation
+      Q(n+1) = Q(n) + Q(n) * (0.5 - 2 * V * Q(n)^2)
+      with Q = 0.5* V ^-0.5; 0.5 <= V < 1.0
+*****************************************************************************/
+static __inline Word32 invSqrtNorm2(Word32 op, Word32 *shift)
+{
+    Word32 val = op;
+    Word32 reg1, reg2;
+
+    if (val == 0)
+    {
+        *shift = 16;
+        return ((Word32)0x7FFFFFFF); /* maximum positive value */
+    }
+
+/* #define INVSQRTNORM2_NEWTON_ITERATE */
+#define INVSQRTNORM2_LINEAR_INTERPOLATE
+#define INVSQRTNORM2_LINEAR_INTERPOLATE_HQ
+
+    /* normalize input, calculate shift value */
+    assert(val > 0);
+    *shift = norm_l(val); /* CountLeadingBits() is not necessary here since test value is always > 0 */
+    val <<= *shift;           /* normalized input V */
+    *shift += 2;              /* bias for exponent */
+
+#if defined(INVSQRTNORM2_NEWTON_ITERATE)
+    /* Newton iteration of 1/sqrt(V) */
+    reg1 = invSqrtTab[(Word32)(val >> (DFRACT_BITS - 1 - (SQRT_BITS + 1))) & SQRT_BITS_MASK];
+    reg2 = FL2FXCONST_DBL(0.0625f); /* 0.5 >> 3 */
+
+    Word32 regtmp = fPow2Div2(reg1);               /* a = Q^2 */
+    regtmp          = reg2 - fMultDiv2(regtmp, val); /* b = 0.5 - 2 * V * Q^2 */
+    reg1 += (fMultDiv2(regtmp, reg1) << 4);          /* Q = Q + Q*b */
+#elif defined(INVSQRTNORM2_LINEAR_INTERPOLATE)
+    Word32      index = (Word32)(val >> (DFRACT_BITS - 1 - (SQRT_BITS + 1))) & SQRT_BITS_MASK;
+    Word32 Fract = (Word32)(((Word32)val & SQRT_FRACT_BITS_MASK) << (SQRT_BITS + 1));
+    Word32 diff  = invSqrtTab[index + 1] - invSqrtTab[index];
+    reg1              = invSqrtTab[index] + (Word32)(((UWord32)(Mpy_32_32_noshift(diff, Fract)) << 1));
+#if defined(INVSQRTNORM2_LINEAR_INTERPOLATE_HQ)
+    /* reg1 = t[i] + (t[i+1]-t[i])*fract ... already computed ...
+                                         + (1-fract)fract*(t[i+2]-t[i+1])/2 */
+    if (Fract != (Word32)0)
+    {
+        /* fract = fract * (1 - fract) */
+        Fract = Mpy_32_32_noshift(Fract, (Word32)((UWord32)0x80000000 - (Word32)Fract)) << 1;
+        diff  = diff - (invSqrtTab[index + 2] - invSqrtTab[index + 1]);
+        reg1  = fixmadddiv2_DD(reg1, Fract, diff);
+    }
+#endif /* INVSQRTNORM2_LINEAR_INTERPOLATE_HQ */
+#else
+#error "Either define INVSQRTNORM2_NEWTON_ITERATE or INVSQRTNORM2_LINEAR_INTERPOLATE"
+#endif
+    /* calculate the output exponent = input exp/2 */
+    if (*shift & 0x00000001)
+    {   /* odd shift values ? */
+        /* Note: Do not use rounded value 0x5A82799A to avoid overflow with shift-by-2 */
+        reg2 = (Word32)0x5A827999; /* FL2FXCONST_DBL(0.707106781186547524400844362104849f);*/ /* 1/sqrt(2); */
+#ifdef __ADSP21000__
+        reg1 = fMult(reg1, reg2) << 1; /* compiler bug work around (CCES 2.4.0), and better precision */
+#else
+        reg1 = Mpy_32_32_noshift(reg1, reg2) << 2;
+#endif
+    }
+
+    *shift = *shift >> 1;
+
+    return (reg1);
+}
+
+/**
+ * \brief calculate 1.0/(op_m * 2^op_e)
+ * \param op_m mantissa of the input value.
+ * \param op_e pointer into were the exponent of the input value is stored, and the result will be stored into.
+ * \return mantissa of the result
+ */
+Word32 invFixp(Word32 op_m, Word16 *op_e)
+{
+    if ((op_m == (Word32)0x00000000) || (op_m == (Word32)0x00000001))
+    {
+        *op_e = 31 - *op_e;
+        return ((Word32)0x7FFFFFFF);
+    }
+
+    Word32 tmp_exp;
+    Word32 tmp_inv = invSqrtNorm2(op_m, &tmp_exp);
+
+    *op_e = (tmp_exp << 1) - *op_e + 1;
+    return Mpy_32_32_noshift(tmp_inv, tmp_inv);
+}
+#endif
