@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -31,7 +31,18 @@ static void Enc_LC3PLUS_Channel_fl(LC3PLUS_Enc* encoder, int channel, int32_t* s
 
     if (bps == 24) {
         for (i = 0; i < encoder->frame_length; i++) {
-            h_EncSetup->s_in_scaled[i] = (LC3_FLOAT)(s_in[i] / LC3_POW(2, 8));
+            int32_t tmp = ((int32_t*)s_in)[i];
+
+            if (tmp >= 0)
+            {
+                tmp = tmp & 0x007fffff;
+            }
+            else
+            {
+                tmp = tmp | (int32_t)0xff800000;
+            }
+
+            h_EncSetup->s_in_scaled[i] = ((LC3_FLOAT) tmp / (float) LC3_POW(2, 8));
         }
     } else if (bps == 16) {
         for (i = 0; i < encoder->frame_length; i++) {
@@ -70,14 +81,14 @@ static void Enc_LC3PLUS_Channel_fl(LC3PLUS_Enc* encoder, int channel, int32_t* s
     processNearNyquistdetector_fl(&encoder->near_nyquist_flag, encoder->fs_idx, encoder->near_nyquist_index, encoder->bands_number, h_EncSetup->ener);
 
     /* Disable LTPF if nyquist detector triggers or -lfe mode is active*/
-    if (encoder->near_nyquist_flag != 0 || encoder->lfe == 1)
+    if (encoder->near_nyquist_flag != 0 || h_EncSetup->lfe == 1)
     {
         h_EncSetup->ltpf_mem_ltpf_on = 0;
         h_EncSetup->ltpf_param[1] = 0;
     }
 
     /* Bandwidth cut-off detection */
-    if (encoder->lfe == 0) {
+    if (h_EncSetup->lfe == 0) {
     /* No BW Cutoff for 8 kHz and 96 kHz. No detection if bandwidth controller is active */
     if (encoder->fs_idx > 0 && encoder->hrmode == 0 && encoder->bw_ctrl_active == 0) {
         processDetectCutoffWarped_fl(h_EncSetup->ener, encoder->fs_idx, encoder->frame_dms, &BW_cutoff_idx);
@@ -107,7 +118,7 @@ static void Enc_LC3PLUS_Channel_fl(LC3PLUS_Enc* encoder, int channel, int32_t* s
     }
         
     /* TNS encoder */
-    if (encoder->lfe == 0)
+    if (h_EncSetup->lfe == 0)
     {
     processTnsCoder_fl(d_fl, BW_cutoff_idx, encoder->cutoffBins[BW_cutoff_idx], encoder->fs, encoder->frame_length,
                        encoder->frame_dms, h_EncSetup->total_bits, tns_order, indexes, &tns_numfilters,
@@ -123,6 +134,15 @@ static void Enc_LC3PLUS_Channel_fl(LC3PLUS_Enc* encoder, int channel, int32_t* s
     }
     /* Global Gain Estimation */
     h_EncSetup->targetBitsQuant = h_EncSetup->targetBitsInit - (h_EncSetup->tns_bits + ltpfBits);
+
+    if (h_EncSetup->targetBitsQuant < 0 && ltpfBits > 1)
+    {
+        /* Disable LTPF */
+        h_EncSetup->ltpf_mem_ltpf_on = 0;
+        h_EncSetup->ltpf_param[1]    = 0;
+        ltpfBits                     = 1;
+        h_EncSetup->targetBitsQuant  = h_EncSetup->targetBitsInit - (h_EncSetup->tns_bits + ltpfBits);
+    }
 
     processEstimateGlobalGain_fl(d_fl, encoder->yLen, h_EncSetup->targetBitsQuant, &gain, &quantizedGain,
                                  &quantizedGainMin, h_EncSetup->quantizedGainOff, &h_EncSetup->targetBitsOff,
@@ -155,7 +175,7 @@ static void Enc_LC3PLUS_Channel_fl(LC3PLUS_Enc* encoder, int channel, int32_t* s
     }
 
     /* Noise factor */
-    if (encoder->lfe == 0)
+    if (h_EncSetup->lfe == 0)
     {    
     processNoiseFactor_fl(&fac_ns_idx, d_fl, q_d, gain, encoder->cutoffBins[BW_cutoff_idx], encoder->frame_dms,
                           h_EncSetup->targetBytes

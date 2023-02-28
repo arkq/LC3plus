@@ -1,110 +1,151 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
-/*
-    DISCLAIMER
 
-    This software module was originally written by Stefan Gewinner and is
-    hereby placed in the public domain for all purposes, whether commercial,
-    free [as in speech] or educational, etc.
 
-    This code is provided on an "AS IS" basis, WITHOUT WARRANTY OF ANY KIND,
-    EITHER EXPRESS OR IMPLIED, AND THE AUTHOR HEREBY DISCLAIMS ALL SUCH
-    WARRANTIES, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF MERCHANTABILITY,
-    FITNESS FOR A PARTICULAR PURPOSE OR NONINFRINGEMENT.
-
-    The author assumes no liability whatsoever, including infringement of
-    any patent or copyright and any other damages, including any general,
-    special, incidential or consequential damages that may arise out of
-    the use or inability to use this code or any portion thereof (including
-    but not limited to loss of data being rendered inaccurate or losses
-    sustained by you or third parties or a failure of this code to operate
-    with any other programs).
-
-    Copyright (c) 2002 Stefan Gewinner.
-    modified to C: 2004 mh
-
-    $Header: /home/cvs/amm/menc/tinywaveout1/include/tinywaveout_c.h,v 1.21
-   2014-11-27 10:23:58 jdr Exp $
-*/
 
 #ifndef __TINYWAVEOUT_C_H__
 #define __TINYWAVEOUT_C_H__
 
+/*#define TWO_SUPPORT_BWF*/
+
+#include <stdlib.h>
 #include <stdio.h>
-
-/*#define SUPPORT_BWF*/
-
-#ifdef SUPPORT_BWF
+#include <stdint.h>
+#include <limits.h>
+#ifdef TWO_SUPPORT_BWF
 #include <string.h>
 #endif
 
-#if defined(__i386__) || defined(_M_IX86) || defined(_M_X64) ||                \
-    defined(__x86_64__) || defined(__arm__) || defined(__aarch64__)
-#define __TWO_LE /* _T_iny _W_ave _O_ut _L_ittle _E_ndian */
+/***** Interface *********************************************************/
+
+#ifndef TWO_UINT64
+  #if !(defined(WIN32))
+    #include <stdint.h>
+    #define TWO_UINT64 uint64_t
+  #else
+    #define TWO_UINT64 unsigned __int64
+  #endif
 #endif
 
-#if defined(__POWERPC__)
-#define __TWO_BE /* _T_iny _W_ave _O_ut _B_ig _E_ndian */
+typedef struct WAVEFILEOUT WAVEFILEOUT;
+#ifdef TWO_SUPPORT_BWF
+typedef struct WAVEOUT_LOUDNESSINFO WAVEOUT_LOUDNESSINFO;
 #endif
 
-#if defined(__sparc__)
-#define __TWO_BE /* _T_iny _W_ave _O_ut _B_ig _E_ndian */
+#define __TWO_SUCCESS  (0)
+#define __TWO_ERROR    (-1)
+
+static WAVEFILEOUT* CreateWav(
+                              const char *fileName, 
+                              const unsigned int sampleRate, 
+                              const unsigned int numChannels, 
+                              const unsigned int bps
+                              );
+
+#ifdef TWO_SUPPORT_BWF
+static WAVEFILEOUT* CreateWavBWF(
+                                 const char                 *fileName, 
+                                 const unsigned int          sampleRate, 
+                                 const unsigned int          numChannels, 
+                                 const unsigned int          bps,
+                                 const WAVEOUT_LOUDNESSINFO *hBwfData
+                                 );
 #endif
 
-#if !defined(__TWO_LE) && !defined(__TWO_BE)
+/* this function expects values in the 16 bit range +32767..-32768 */
+static int WriteWavShort(
+                         WAVEFILEOUT* self, 
+                         short        sampleBuffer[], 
+                         unsigned int nSamples
+                         );
+
+/* this function expects values in the 24 bit range +8388607..-8388608 */
+static int WriteWavLong(
+                        WAVEFILEOUT* self, 
+                        int          sampleBuffer[], 
+                        unsigned int nSamples
+                        );
+
+/* this function expects normalized values in the range +-1.0f */
+static int WriteWavFloat(
+                         WAVEFILEOUT* self, 
+                         float        sampleBuffer[], 
+                         unsigned int nSamples
+                         );
+
+static int CloseWav(WAVEFILEOUT* self);
+#ifdef TWO_SUPPORT_BWF
+static int CloseWavBWF(WAVEFILEOUT* self, WAVEOUT_LOUDNESSINFO bextData);
+#endif
+
+/***** Implementation *********************************************************/
+
+#if defined (__i386__) || defined (_M_IX86) || defined (_M_X64) || defined (__x86_64__) || defined (__arm__) || defined (__xtensa__) || defined (__aarch64__) || defined (__EMSCRIPTEN__)
+#define __TWO_LE    /* _T_iny _W_ave _O_ut _L_ittle _E_ndian */
+#endif
+
+#if defined (__POWERPC__)
+#define __TWO_BE    /* _T_iny _W_ave _O_ut _B_ig _E_ndian */
+#endif
+
+#if defined (__sparc__)
+#define __TWO_BE    /* _T_iny _W_ave _O_ut _B_ig _E_ndian */
+#endif
+
+#if ! defined (__TWO_LE) && ! defined (__TWO_BE)
 #error unknown processor
 #endif
-
-#define __TWO_SUCCESS (0)
-#define __TWO_ERROR (-1)
 
 /*--- local types/structs ----------------------------------*/
 
 #if defined(_MSC_VER)
-#pragma pack(push, 1)
+  #pragma pack(push, 1)
 #else
-#pragma pack(1)
+  #pragma pack(1)
 #endif
 
-#ifndef TW_INT64
-#if !(defined(WIN32))
-#define TWO_INT64 long long
-#else
-#define TWO_INT64 __int64
-#endif
-#endif
 
-#ifdef SUPPORT_BWF
-typedef struct {
+#ifdef TWO_SUPPORT_BWF
+struct WAVEOUT_LOUDNESSINFO {
   float loudnessVal;
   float loudnessRange;
   float maxTruePeakLevel;
   float maxMomentaryLoudnes;
   float maxShortTermLoudness;
-} LOUDNESSINFO;
-#else
-typedef void LOUDNESSINFO;
+};
 #endif
 
-typedef struct __tinyWaveOutHeader {
-  unsigned int riffType;
-  unsigned int riffSize;
 
-  unsigned int waveType;
+typedef struct __tinyWaveOutHeader
+{
+  unsigned int   riffType;       /* 'RIFF/RF64' */
+  unsigned int   riffSize;       /* file size/-1 */
+  unsigned int   waveType;       /* 'WAVE' */
 } __tinyWaveOutHeader;
 
-#ifdef SUPPORT_BWF
-typedef struct __tinyWaveOutBextChunk {
-  unsigned int formatType; /* = 'bext' */
-  unsigned int formatSize; /* size info */
+typedef struct __tinyWaveOutDs64Chunk
+{
+  unsigned int   formatType;  /* = 'JUNK/ds64' */
+  unsigned int   formatSize;  /* size info */
+  TWO_UINT64     riffSize64;
+  TWO_UINT64     dataSize64;
+  TWO_UINT64     sampleCount64;
+  unsigned int   tableLength;   /* optional tables, always 0 for tinywaveout */
+  /* here: optional tables */
+} __tinyWaveOutDs64Chunk;
+
+#ifdef TWO_SUPPORT_BWF
+typedef struct __tinyWaveOutBextChunk
+{
+  unsigned int   formatType;  /* = 'bext' */
+  unsigned int   formatSize;  /* size info */
 
   unsigned char description[256];
   unsigned char originator[32];
@@ -124,84 +165,98 @@ typedef struct __tinyWaveOutBextChunk {
 
   unsigned char Reserved[180];
 
-  unsigned char
-      codingHistory; /* ASCII: <<History coding>> - undefined length! */
-                     /* for variable length, mve this out of this struct */
+  unsigned char codingHistory; /* ASCII: <<History coding>> - undefined length! */
+                               /* for variable length, mve this out of this struct */
 } __tinyWaveOutBextChunk;
 #endif
 
-typedef struct __tinyWaveOutFmtChunk {
-  unsigned int formatType;
-  unsigned int formatSize;
+typedef struct __tinyWaveOutFmtChunk
+{
+  unsigned int   formatType;
+  unsigned int   formatSize;
 
   unsigned short formatTag;
   unsigned short numChannels;
-  unsigned int sampleRate;
-  unsigned int bytesPerSecond;
+  unsigned int   sampleRate;
+  unsigned int   bytesPerSecond;
   unsigned short blockAlignment;
   unsigned short bitsPerSample;
 
   /* wav fmt ext hdr here */
 } __tinyWaveOutFmtChunk;
 
-typedef struct __tinyWaveOutDataChunk {
-  unsigned int dataType;
-  unsigned int dataSize;
+typedef struct __tinyWaveOutDataChunk
+{
+  unsigned int   dataType;
+  unsigned int   dataSize;
 
 } __tinyWaveOutDataChunk;
 
-typedef struct __tinyWaveOutHandle {
-  FILE *theFile;
-  unsigned int dataSize;
-  TWO_INT64 dataSizeLimit;
-  unsigned int fmtChunkOffset;
-#ifdef SUPPORT_BWF
-  unsigned int bextChunkOffset;
+
+struct WAVEFILEOUT {
+  /* for reasons of memory alignment, have 64 bit data types first */
+  TWO_UINT64        dataSize;
+  TWO_UINT64        dataSizeLimit;    /* maximum size for data chunk for 4 GB files */              
+  TWO_UINT64        dataSizeLimit64;  /* maximum size for data chunk for 2^64 B addressable files */
+  TWO_UINT64        clipCount;
+  FILE*             theFile;
+  unsigned int      junkChunkOffset;
+  unsigned int      fmtChunkOffset;
+#ifdef TWO_SUPPORT_BWF
+  unsigned int      bextChunkOffset;
 #endif
-  unsigned int dataChunkOffset;
-  unsigned int bps;
-  unsigned int clipCount;
-} __tinyWaveOutHandle, WAVEFILEOUT;
+  unsigned int      dataChunkOffset;
+  unsigned int      bps;
+
+  /* only needed for RF64: */
+  unsigned int      blockAlign;     /* only needed for close() of ds64 chunk */
+};
+
 
 /*--- local protos --------------------------------------------------*/
 static __inline unsigned int BigEndian32(char, char, char, char);
 static __inline unsigned int LittleEndian32(unsigned int);
 static __inline unsigned int LittleEndian32s(int);
 static __inline short LittleEndian16(short);
-#ifdef SUPPORT_BWF
+static __inline TWO_UINT64 LittleEndian64(TWO_UINT64);
+#ifdef TWO_SUPPORT_BWF
 static unsigned int EncodeLoudness(float);
 #endif
-static __inline int __dataSizeChk(WAVEFILEOUT *self, int newbytes);
+static __inline int __dataSizeChk( WAVEFILEOUT* self, int newbytes );
 
 #if defined(_MSC_VER)
-#pragma pack(pop)
+  #pragma pack(pop)
 #else
-#pragma pack()
+  #pragma pack()
 #endif
 
-#ifdef SUPPORT_BWF
-static void setDefaultLoudness(LOUDNESSINFO *x) {
-  x->loudnessVal = 1.0f;
-  x->loudnessRange = 2.0f;
-  x->maxTruePeakLevel = 3.0f;
-  x->maxMomentaryLoudnes = 4.0f;
+
+#ifdef TWO_SUPPORT_BWF
+static void setDefaultLoudness(WAVEOUT_LOUDNESSINFO *x)
+{
+  x->loudnessVal          = 1.0f;
+  x->loudnessRange        = 2.0f;
+  x->maxTruePeakLevel     = 3.0f;
+  x->maxMomentaryLoudnes  = 4.0f;
   x->maxShortTermLoudness = 5.0f;
 }
 #endif
 
-static WAVEFILEOUT *CreateBWF(const char *fileName,
-                              const unsigned int sampleRate,
-                              const unsigned int numChannels,
-                              const unsigned int bps
-/* const unsigned int writeWaveExt */
-#ifdef SUPPORT_BWF
-                              ,
-                              const LOUDNESSINFO *hBwfData
+static WAVEFILEOUT* __CreateWavInternal(
+                                        const char                *fileName, 
+                                        const unsigned int         sampleRate, 
+                                        const unsigned int         numChannels, 
+                                        const unsigned int         bps
+#ifdef TWO_SUPPORT_BWF
+                                        ,
+                                        const WAVEOUT_LOUDNESSINFO *hBwfData
 #endif
-) {
-  WAVEFILEOUT *self;
+                                        )
+{
+  WAVEFILEOUT* self = NULL;
   __tinyWaveOutHeader whdr;
-#ifdef SUPPORT_BWF
+  __tinyWaveOutDs64Chunk ds64ch;
+#ifdef TWO_SUPPORT_BWF
   __tinyWaveOutBextChunk wbextch;
 #endif
   __tinyWaveOutFmtChunk wfch;
@@ -209,49 +264,60 @@ static WAVEFILEOUT *CreateBWF(const char *fileName,
   unsigned int blockAlignment = 0;
   unsigned int ByteCnt = 0; /* Byte counter for fwrite */
 
-  self = (WAVEFILEOUT *)calloc(1, sizeof(WAVEFILEOUT));
-  if (!self)
-    goto bail; /* return NULL; */
+  /* pseudo use to avoid unused symbols */
+  (void)WriteWavShort;
+  (void)WriteWavLong;
+  (void)WriteWavFloat;
+#ifdef TWI_SUPPORT_BWF
+  (void)CreateWavBWF;
+  (void)CloseWavBWF;
+  (void)setDefaultLoudness;
+#endif
 
-  if (!fileName)
-    goto bail;
-  if (sampleRate == 0)
-    goto bail;
-  if (sampleRate > 192000)
-    goto bail;
-  if (numChannels == 0)
-    goto bail;
-  if (numChannels > 48)
-    goto bail;
-  if (bps != 16 && bps != 24 && bps != 32)
-    goto bail;
+  /* param check */
+  if (!fileName)                           goto bail;
+  if (sampleRate == 0)                     goto bail;
+  if (sampleRate > 768000)                 goto bail;
+  if (numChannels == 0)                    goto bail;
+  if (numChannels > 64)                    goto bail;
+  if (bps != 16 && bps != 24 && bps != 32) goto bail;
+
+  self = (WAVEFILEOUT*)calloc(1, sizeof(WAVEFILEOUT));
+  if (!self) goto bail; /* return NULL; */
 
   self->theFile = fopen(fileName, "wb+");
-  if (!self->theFile)
-    goto bail;
+  if (!self->theFile)                      goto bail;
 
   /* WAV-Header */
-  whdr.riffType = BigEndian32('R', 'I', 'F', 'F');
-  whdr.riffSize = LittleEndian32(
-      0xffffffff); /* set to maximum, if fseek() doesn't work later */
-  whdr.waveType = BigEndian32('W', 'A', 'V', 'E');
+  whdr.riffType = BigEndian32('R','I','F','F');
+  whdr.riffSize = LittleEndian32(0xffffffff);  /* set to maximum, if fseek() doesn't work later */
+  whdr.waveType = BigEndian32('W','A','V','E');
   /* write to file */
   ByteCnt = 0;
   ByteCnt += fwrite(&whdr, 1, sizeof(whdr), self->theFile);
 
-#ifdef SUPPORT_BWF
+  /* ds64/JUNK-Chunk */
+  ds64ch.formatType = BigEndian32('J','U','N','K');
+  ds64ch.formatSize = LittleEndian32(sizeof(__tinyWaveOutDs64Chunk) - 8);
+  ds64ch.riffSize64    = (TWO_UINT64) -1;
+  ds64ch.dataSize64    = (TWO_UINT64) -1;
+  ds64ch.sampleCount64 = (TWO_UINT64) -1;
+  ds64ch.tableLength   = 0;
+  self->junkChunkOffset = ByteCnt;
+  ByteCnt += fwrite(&ds64ch, 1, sizeof(ds64ch), self->theFile);
+
+#ifdef TWO_SUPPORT_BWF
   /* BEXT-Chunk */
   if (hBwfData) {
     memset(&wbextch, 0, sizeof(__tinyWaveOutBextChunk));
-    wbextch.formatType = BigEndian32('b', 'e', 'x', 't');
+    wbextch.formatType = BigEndian32('b','e','x','t');
     wbextch.formatSize = LittleEndian32(sizeof(__tinyWaveOutBextChunk) - 8);
-    wbextch.version = 0x0002;
-    wbextch.loudnessVal = EncodeLoudness(hBwfData->loudnessVal);
-    wbextch.loudnessRange = EncodeLoudness(hBwfData->loudnessRange);
-    wbextch.maxTruePeakLevel = EncodeLoudness(hBwfData->maxTruePeakLevel);
-    wbextch.maxMomentaryLoudnes = EncodeLoudness(hBwfData->maxMomentaryLoudnes);
-    wbextch.maxShortTermLoudness =
-        EncodeLoudness(hBwfData->maxShortTermLoudness);
+    wbextch.version    = 0x0002;
+    wbextch.loudnessVal          = EncodeLoudness(hBwfData->loudnessVal);
+    wbextch.loudnessRange        = EncodeLoudness(hBwfData->loudnessRange);
+    wbextch.maxTruePeakLevel     = EncodeLoudness(hBwfData->maxTruePeakLevel);
+    wbextch.maxMomentaryLoudnes  = EncodeLoudness(hBwfData->maxMomentaryLoudnes);
+    wbextch.maxShortTermLoudness = EncodeLoudness(hBwfData->maxShortTermLoudness);
     /* t.b.d.:  more values */
 
     /* write to file */
@@ -261,26 +327,25 @@ static WAVEFILEOUT *CreateBWF(const char *fileName,
 #endif
 
   /* FMT-Chunk */
-  wfch.formatType = BigEndian32('f', 'm', 't', ' ');
+  wfch.formatType = BigEndian32('f','m','t',' ');
   wfch.formatSize = LittleEndian32(16);
   switch (bps) {
   case 16:
   case 24:
-    wfch.formatTag = LittleEndian16(0x0001); /* WAVE_FORMAT_PCM */
+    wfch.formatTag    = LittleEndian16(0x0001);  /* WAVE_FORMAT_PCM */
     break;
   case 32:
-    // wfch.formatTag    = LittleEndian16(0x0003);  /* WAVE_FORMAT_IEEE_FLOAT */
-    wfch.formatTag = LittleEndian16(0x0001); /* WAVE_FORMAT_PCM */
+    wfch.formatTag    = LittleEndian16(0x0003);  /* WAVE_FORMAT_IEEE_FLOAT */
     break;
   default:
     goto bail;
   }
-  self->bps = bps;
-  wfch.bitsPerSample = LittleEndian16(bps);
-  wfch.numChannels = LittleEndian16(numChannels);
-  blockAlignment = numChannels * (bps >> 3);
+  self->bps           = bps;
+  wfch.bitsPerSample  = LittleEndian16(bps);
+  wfch.numChannels    = LittleEndian16(numChannels);
+  blockAlignment      = numChannels * (bps >> 3);
   wfch.blockAlignment = LittleEndian16(blockAlignment);
-  wfch.sampleRate = LittleEndian32(sampleRate);
+  wfch.sampleRate     = LittleEndian32(sampleRate);
   wfch.bytesPerSecond = LittleEndian32(sampleRate * blockAlignment);
   /* tbd: wavfmt ext hdr here */
   /* write to file */
@@ -289,42 +354,61 @@ static WAVEFILEOUT *CreateBWF(const char *fileName,
 
   /* DATA-Chunk */
   self->dataChunkOffset = ByteCnt;
-  wdch.dataType = BigEndian32('d', 'a', 't', 'a');
-  wdch.dataSize =
-      LittleEndian32(0xffffffff - ByteCnt); /* yet unknown. set to maximum */
+  wdch.dataType = BigEndian32('d','a','t','a');
+  wdch.dataSize = LittleEndian32(0xffffffff - ByteCnt);  /* yet unknown. set to maximum of 4 GB file */
   /* write to file */
   ByteCnt += fwrite(&wdch, 1, sizeof(wdch), self->theFile);
 
-  self->dataSizeLimit = LittleEndian32(
-      0xffffffff - ByteCnt); /* maximum size for data chunk for 4 GB files */
-  /* self->dataSizeLimit = LittleEndian32(0x7fffffff - ByteCnt); */ /* maximum
-                                                                       size for
-                                                                       data
-                                                                       chunk for
-                                                                       2 GB
-                                                                       files */
+  self->dataSize = 0;
+
+  /* self->dataSizeLimit = 0x7fffffff - ByteCnt; */            /* maximum size for data chunk for 2 GB files */
+  self->dataSizeLimit = 0xffffffff - ByteCnt;                  /* maximum size for data chunk for 4 GB files */
+  self->dataSizeLimit64 =  0xffffffffffffffff - ByteCnt;       /* maximum size for data chunk for 64 bit addressable files */
 
   self->clipCount = 0;
+  self->blockAlign = blockAlignment;
 
   return self;
 
-bail:
-  free(self);
+ bail:
+  if ( NULL != self) {
+      free(self);
+  }
+  
   return NULL;
 }
 
-static WAVEFILEOUT *CreateWav(const char *fileName,
-                              const unsigned int sampleRate,
-                              const unsigned int numChannels,
+static WAVEFILEOUT* CreateWav(
+                              const char*        fileName, 
+                              const unsigned int sampleRate, 
+                              const unsigned int numChannels, 
                               const unsigned int bps
-                              /* const unsigned int writeWaveExt */
-) {
-  return CreateBWF(fileName, sampleRate, numChannels, bps);
+                              )
+{
+#ifdef TWO_SUPPORT_BWF
+  return __CreateWavInternal(fileName, sampleRate, numChannels, bps, NULL);
+#else
+  return __CreateWavInternal(fileName, sampleRate, numChannels, bps);
+#endif
 }
+
+#ifdef TWO_SUPPORT_BWF
+static WAVEFILEOUT* CreateWavBWF(
+                                 const char                 *fileName, 
+                                 const unsigned int          sampleRate, 
+                                 const unsigned int          numChannels, 
+                                 const unsigned int          bps,
+                                 const WAVEOUT_LOUDNESSINFO *hBwfData
+                                 )
+{
+  return __CreateWavInternal(fileName, sampleRate, numChannels, bps, hBwfData);
+}
+#endif
 
 #define MAX_PCM16 (+32767)
 #define MIN_PCM16 (-32768)
-static __inline int CLIP_PCM16(int sample, unsigned int *clipcount) {
+static __inline int CLIP_PCM16(int sample, TWO_UINT64* clipcount)
+{
   int tmp = sample;
 
   if (sample >= MAX_PCM16) {
@@ -342,7 +426,8 @@ static __inline int CLIP_PCM16(int sample, unsigned int *clipcount) {
 
 #define MAX_PCM24 (+8388607)
 #define MIN_PCM24 (-8388608)
-static __inline int CLIP_PCM24(int sample, unsigned int *clipcount) {
+static __inline int CLIP_PCM24(int sample, TWO_UINT64* clipcount)
+{
   int tmp = sample;
 
   if (sample >= MAX_PCM24) {
@@ -360,7 +445,8 @@ static __inline int CLIP_PCM24(int sample, unsigned int *clipcount) {
 
 #define MAX_FLOAT32 (+1.0f)
 #define MIN_FLOAT32 (-1.0f)
-static __inline float CLIP_FLOAT32(float sample, unsigned int *clipcount) {
+static __inline float CLIP_FLOAT32(float sample, TWO_UINT64* clipcount)
+{
   float tmp = sample;
 
   if (sample >= MAX_FLOAT32) {
@@ -376,14 +462,21 @@ static __inline float CLIP_FLOAT32(float sample, unsigned int *clipcount) {
   return tmp;
 }
 
-static int __WriteSample16(WAVEFILEOUT *self, int sample, int scale) {
+
+
+static int __WriteSample16(
+                           WAVEFILEOUT* self, 
+                           int          sample,
+                           int          scale
+                           )
+{
   size_t cnt;
   short v;
 
   if ((scale - 16) > 0)
     sample = sample >> (scale - 16);
   else
-    sample = sample << (16 - scale);
+    sample = (int) ((uint32_t) sample << (16 - scale));
 
   v = (short)CLIP_PCM16(sample, &(self->clipCount));
 #ifdef __TWO_BE
@@ -400,14 +493,20 @@ static int __WriteSample16(WAVEFILEOUT *self, int sample, int scale) {
   return __TWO_ERROR;
 }
 
-static int __WriteSample24(WAVEFILEOUT *self, int sample, int scale) {
+
+static int __WriteSample24(
+                           WAVEFILEOUT* self, 
+                           int          sample,
+                           int          scale
+                           )
+{
   size_t cnt;
   int v;
 
   if ((scale - 24) > 0)
     sample = sample >> (scale - 24);
   else
-    sample = sample << (24 - scale);
+    sample = (int) (((unsigned int)sample) << (24 - scale));
 
   v = (int)CLIP_PCM24(sample, &(self->clipCount));
 #ifdef __TWO_BE
@@ -423,13 +522,29 @@ static int __WriteSample24(WAVEFILEOUT *self, int sample, int scale) {
   return __TWO_ERROR;
 }
 
-static int __WriteSample32(WAVEFILEOUT *self, int sample) {
-  size_t cnt;
-  int v = 0;
 
-  v = sample;
+static int __WriteSample32(
+                           WAVEFILEOUT* self, 
+                           float        sample
+                           )
+{
+  size_t cnt;
+  union fl_int {
+    float v_float;
+    int   v_int;
+  };
+  union fl_int v;
+
+#if CLIP_FLOAT
+  v.v_float = CLIP_FLOAT32(sample, &(self->clipCount));
+#else
+  v.v_float = sample;
+  if((sample > 1.0f) || (sample <-1.0f))
+    self->clipCount++;
+#endif
+
 #ifdef __TWO_BE
-  v = LittleEndian32s(v);
+  v.v_int = LittleEndian32s(v.v_int);
 #endif
   cnt = fwrite(&v, 4, 1, self->theFile);
 
@@ -441,17 +556,19 @@ static int __WriteSample32(WAVEFILEOUT *self, int sample) {
   return __TWO_ERROR;
 }
 
-static int __WriteSampleInt(WAVEFILEOUT *self, int sample, int scale) {
+
+static int __WriteSampleInt(
+                            WAVEFILEOUT* self, 
+                            int          sample,
+                            int          scale
+                            )
+{
   int err;
 
-  if (!self)
-    return __TWO_ERROR;
+  if (!self) return __TWO_ERROR;
+
 
   switch (self->bps) {
-
-  case 32:
-    err = __WriteSample32(self, sample);
-    break;
 
   case 16:
     err = __WriteSample16(self, sample, scale);
@@ -469,10 +586,11 @@ static int __WriteSampleInt(WAVEFILEOUT *self, int sample, int scale) {
   return err;
 }
 
+
 /* this function expects values in the 16 bit range +-32767/8 */
-/* static int WriteWavShort(
-                         WAVEFILEOUT* self,
-                         short        sampleBuffer[],
+static int WriteWavShort(
+                         WAVEFILEOUT* self, 
+                         short        sampleBuffer[], 
                          unsigned int nSamples
                          )
 {
@@ -497,41 +615,45 @@ static int __WriteSampleInt(WAVEFILEOUT *self, int sample, int scale) {
 
   return __TWO_SUCCESS;
 }
-*/
+
 
 /* this function expects values in the 24 bit range +-8388607/8 */
-static int WriteWavLong(WAVEFILEOUT *self, int sampleBuffer[],
-                        unsigned int nSamples) {
+static int WriteWavLong(
+                        WAVEFILEOUT* self, 
+                        int          sampleBuffer[], 
+                        unsigned int nSamples
+                        )
+{
   unsigned long i;
   int err = __TWO_SUCCESS;
 
-  if (!self)
-    return __TWO_ERROR;
-  if (!sampleBuffer)
-    return __TWO_ERROR;
-  if (__dataSizeChk(self, nSamples * sizeof(int)))
-    return __TWO_ERROR;
+  if (!self)                                       return __TWO_ERROR;
+  if (!sampleBuffer)                               return __TWO_ERROR;
+  if (__dataSizeChk(self, nSamples * sizeof(int))) return __TWO_ERROR;
 
   for (i = 0; i < nSamples; i++) {
-    if (self->bps == 16) {
-      err = __WriteSampleInt(self, sampleBuffer[i], 16);
-    } else {
+    if (self->bps == 32)
+    {
+      err = __WriteSample32(self, sampleBuffer[i] / 8388608.0f);
+    }
+    else
+    {
       err = __WriteSampleInt(self, sampleBuffer[i], 24);
     }
+    if (err != __TWO_SUCCESS) return err;
   }
-  if (err != __TWO_SUCCESS)
-    return err;
 
   return __TWO_SUCCESS;
 }
 
+
 /* this function expects normalized values in the range +-1.0 */
-#define MAX_FL (+2.0f * 8388608.0f)
-#define MIN_FL (-2.0f * 8388608.0f)
-#define CLIP_FL(x) (((x) >= MAX_FL) ? MAX_FL : (((x) <= MIN_FL) ? MIN_FL : (x)))
-/* static int WriteWavFloat(
-                         WAVEFILEOUT* self,
-                         float        sampleBuffer[],
+#define MAX_FL (+2.0f * 8388608.0f )
+#define MIN_FL (-2.0f * 8388608.0f )
+#define CLIP_FL(x)   ( ((x) >= MAX_FL) ? MAX_FL : (((x) <= MIN_FL) ? MIN_FL : (x)) )
+static int WriteWavFloat(
+                         WAVEFILEOUT* self, 
+                         float        sampleBuffer[], 
                          unsigned int nSamples
                          )
 {
@@ -549,7 +671,7 @@ static int WriteWavLong(WAVEFILEOUT *self, int sampleBuffer[],
     }
     else
     {
-      float tmp = CLIP_FL(sampleBuffer[i] * 8388608.0f);
+      float tmp = CLIP_FL(sampleBuffer[i] * 8388608.0f);   /* CLIP_FL is just to avoid an INT overrun before the actual cast to int, real clipping and counting is done below */
       err = __WriteSampleInt(self, (int) tmp, 24);
     }
     if (err != __TWO_SUCCESS) return err;
@@ -557,40 +679,78 @@ static int WriteWavLong(WAVEFILEOUT *self, int sampleBuffer[],
 
   return __TWO_SUCCESS;
 }
-*/
 
-static int CloseWav(WAVEFILEOUT *self) {
+
+static int CloseWav(WAVEFILEOUT* self)
+{
   unsigned int riffSize_le = 0;
   unsigned int dataSize_le = 0;
+  TWO_UINT64 riffSize64    = 0;
+  TWO_UINT64 dataSize64    = 0;
+  TWO_UINT64 sampleCount64 = 0;    /* nr of samples in the WAVE sense: 1 sample are all pcm samples of all channels of one time slice */
+  int mustWriteRF64        = 0;
 
-  if (!self)
-    return __TWO_ERROR;
+  if (!self) return __TWO_ERROR;
 
-  riffSize_le = LittleEndian32(
-      self->dataChunkOffset - 8 + 8 +
-      self->dataSize); /* sizeof(hdr) - (8 bytes of riff chunk header) + (8
-                          bytes data chunk header) + sizeof(raw-pcm-data) */
-  dataSize_le = LittleEndian32(self->dataSize);
+  /* check for 4 GB (switch to RF64) */
+  if ( self->dataSize > self->dataSizeLimit ) {
+    /* when we exceed 4 GB: switch from std wave header to RF64 header */
+    mustWriteRF64 = 1;
+  }
 
-#ifndef __NO_FSEEK
-  /* fseek(self->theFile, 0, SEEK_SET);*/
+  /* calc header values */
+  if (mustWriteRF64 == 0) {
+    /* write padding byte if dataSize is uneven */
+    int pad = 0;
+    if (self->dataSize % 2 > 0) {
+      char tmp= 0x00;
+      fwrite(&tmp, sizeof(char), 1, self->theFile);
+      pad = 1;
+    }
+    riffSize_le = LittleEndian32(self->dataChunkOffset - 8 + 8 + (unsigned int)self->dataSize + pad);  /* sizeof(hdr) - (8 bytes of riff chunk header) + (8 bytes data chunk header) + sizeof(raw-pcm-data) + padding Byte */
+    dataSize_le = LittleEndian32((unsigned int)self->dataSize);
+  } else {
+    riffSize_le   = 0xffffffff;
+    dataSize_le   = 0xffffffff;
+    riffSize64    = LittleEndian64( self->dataSize + (TWO_UINT64)self->dataChunkOffset );
+    dataSize64    = LittleEndian64( self->dataSize );
+    sampleCount64 = LittleEndian64( self->dataSize / (TWO_UINT64)self->blockAlign );
+  }
 
-  /* seek to riffsize */
-  fseek(self->theFile, 4, SEEK_SET);
-  fwrite(&riffSize_le, sizeof(riffSize_le), 1, self->theFile);
-  /* seek to datasize */
-  fseek(self->theFile, self->dataChunkOffset + 4, SEEK_SET);
-  fwrite(&dataSize_le, sizeof(dataSize_le), 1, self->theFile);
+  /* now overwrite length/size values in header with the actual/real ones */
+  if (mustWriteRF64 == 0) {
+    /* riffsize32 */
+    fseek(self->theFile, 4, SEEK_SET);
+    fwrite(&riffSize_le, sizeof(riffSize_le), 1, self->theFile);
+    /* datasize32 */
+    fseek(self->theFile, self->dataChunkOffset + 4, SEEK_SET);
+    fwrite(&dataSize_le, sizeof(dataSize_le), 1, self->theFile);
+  } else {
+    unsigned int rf64sig = BigEndian32('R','F','6','4');
+    unsigned int ds64sig = BigEndian32('d','s','6','4');
+    
+    /* replace RIFF->RF64 */
+    fseek(self->theFile, 0, SEEK_SET);
+    fwrite(&rf64sig, sizeof(rf64sig), 1, self->theFile);
 
-#else
-  fclose(self->theFile);
-  fopen();
-  /* tbd ... */
+    /* riffsize32 */
+    fseek(self->theFile, 4, SEEK_SET);
+    fwrite(&riffSize_le, sizeof(riffSize_le), 1, self->theFile);
 
-  /* overwrite the first n bytes w/ wav hdr*/
-  fwrite(self->waveHeader, sizeof(__tinyWaveHeader), 1, self->theFile);
+    /* replace JUNK->ds64 */
+    fseek(self->theFile, self->junkChunkOffset, SEEK_SET);
+    fwrite(&ds64sig, sizeof(ds64sig), 1, self->theFile);
 
-#endif
+    /* riffSize64, dataSize64, sampleCount64 */
+    fseek(self->theFile, self->junkChunkOffset + 8, SEEK_SET);
+    fwrite(&riffSize64, sizeof(riffSize64), 1, self->theFile);
+    fwrite(&dataSize64, sizeof(dataSize64), 1, self->theFile);
+    fwrite(&sampleCount64, sizeof(sampleCount64), 1, self->theFile);
+
+    /* datasize32 */
+    fseek(self->theFile, self->dataChunkOffset + 4, SEEK_SET);
+    fwrite(&dataSize_le, sizeof(dataSize_le), 1, self->theFile);
+  }
 
   fclose(self->theFile);
   free(self);
@@ -598,17 +758,19 @@ static int CloseWav(WAVEFILEOUT *self) {
   return __TWO_SUCCESS;
 }
 
-#ifdef SUPPORT_BWF
-static int CloseBWF(WAVEFILEOUT *self, LOUDNESSINFO bextData) {
+#ifdef TWO_SUPPORT_BWF
+static int CloseWavBWF(
+                       WAVEFILEOUT* self,
+                       WAVEOUT_LOUDNESSINFO bextData
+                       )
+{
   int wordData;
 
-  if (!self)
-    return __TWO_ERROR;
+  if (!self) return __TWO_ERROR;
 
   if (self->bextChunkOffset) {
-    /* Offset for Loudness Data in bext-chunk: 8: Chunck-Header, 412:prev.Data
-     */
-    fseek(self->theFile, self->bextChunkOffset + 8 + 412, SEEK_SET);
+    /* Offset for Loudness Data in bext-chunk: 8: Chunk-Header, 412:prev.Data */
+    fseek(self->theFile, self->bextChunkOffset+8+412, SEEK_SET);
 
     wordData = LittleEndian32(EncodeLoudness(bextData.loudnessVal));
     fwrite(&wordData, 2, 1, self->theFile);
@@ -632,37 +794,55 @@ static int CloseBWF(WAVEFILEOUT *self, LOUDNESSINFO bextData) {
 
 /*------------- local subs ----------------*/
 
-
-static __inline unsigned int BigEndian32(char a, char b, char c, char d) {
+static __inline unsigned int BigEndian32(char a, char b, char c, char d)
+{
 #ifdef __TWO_LE
-  return (unsigned int)d << 24 | (unsigned int)c << 16 | (unsigned int)b << 8 |
-         (unsigned int)a;
+    return
+    (unsigned int) d << 24 |
+    (unsigned int) c << 16 |
+    (unsigned int) b <<  8 |
+    (unsigned int) a ;
 #else
-  return (unsigned int)a << 24 | (unsigned int)b << 16 | (unsigned int)c << 8 |
-         (unsigned int)d;
+  return
+    (unsigned int) a << 24 |
+    (unsigned int) b << 16 |
+    (unsigned int) c <<  8 |
+    (unsigned int) d ;
 #endif
 }
 
-static __inline unsigned int LittleEndian32(unsigned int v) {
+
+static __inline unsigned int LittleEndian32(unsigned int v)
+{
 #ifdef __TWO_LE
   return v;
 #else
-  return (v & 0x000000FF) << 24 | (v & 0x0000FF00) << 8 |
-         (v & 0x00FF0000) >> 8 | (v & 0xFF000000) >> 24;
+  return 
+    (v & 0x000000FF) << 24 |
+    (v & 0x0000FF00) <<  8 |
+    (v & 0x00FF0000) >>  8 |
+    (v & 0xFF000000) >> 24 ;
 #endif
 }
+
 
 /* signed version of the above */
-static __inline unsigned int LittleEndian32s(int v) {
+static __inline unsigned int LittleEndian32s(int v)
+{
 #ifdef __TWO_LE
   return v;
 #else
-  return (v & 0x000000FF) << 24 | (v & 0x0000FF00) << 8 |
-         (v & 0x00FF0000) >> 8 | (v & 0xFF000000) >> 24;
+  return 
+    (v & 0x000000FF) << 24 |
+    (v & 0x0000FF00) <<  8 |
+    (v & 0x00FF0000) >>  8 |
+    (v & 0xFF000000) >> 24 ;
 #endif
 }
 
-static __inline short LittleEndian16(short v) {
+ 
+static __inline short LittleEndian16(short v)
+{
 #ifdef __TWO_LE
   return v;
 #else
@@ -670,23 +850,43 @@ static __inline short LittleEndian16(short v) {
 #endif
 }
 
-#ifdef SUPPORT_BWF
-static unsigned int EncodeLoudness(float x) {
-  int s = (x > 0) - (x < 0);
-  return (int)(x * 100.0f + s * 0.5f);
+static __inline TWO_UINT64 LittleEndian64(TWO_UINT64 v)
+{
+#ifdef __TWO_LE
+  return v;
+#else
+  return 
+    (v & 0x00000000000000FF) << 56 |
+    (v & 0x000000000000FF00) << 40 |
+    (v & 0x0000000000FF0000) << 24 |
+    (v & 0x00000000FF000000) <<  8 |
+    (v & 0x000000FF00000000) >>  8 |
+    (v & 0x0000FF0000000000) >> 24 |
+    (v & 0x00FF000000000000) >> 40 |
+    (v & 0xFF00000000000000) >> 56 ;
+#endif
+}
+
+#ifdef TWO_SUPPORT_BWF
+static unsigned int EncodeLoudness(float x)
+{
+  int s = (x>0)-(x<0);
+  return (int)( x*100.0f + s*0.5f );
 }
 #endif
 
-static __inline int __dataSizeChk(WAVEFILEOUT *self, int newbytes) {
-  if (!self)
-    return __TWO_ERROR;
+static __inline int __dataSizeChk( WAVEFILEOUT* self, int newbytes )
+{
+  if (!self) return __TWO_ERROR;
 
-  if ((((TWO_INT64)self->dataSize) + ((TWO_INT64)newbytes)) >
-      self->dataSizeLimit) {
+  if ( (self->dataSize + ((TWO_UINT64)newbytes) ) > self->dataSizeLimit64 ) {
     return __TWO_ERROR;
   }
 
   return __TWO_SUCCESS;
 }
 
-#endif /* __TINYWAVEOUT_C_H__ */
+#endif  /* __TINYWAVEOUT_C_H__ */
+
+
+

@@ -1,7 +1,7 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
-*                        Software Version V1.6.4ETSI                          *
+*                        Software Version V1.6.9ETSI                          *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
@@ -47,6 +47,24 @@ Changelog
 ---------
   Latest non-bitexact changes are encapsulated in defines listed in defines.h
   for review.
+  
+    - V1.6.9ETSI 2023-03-01 (ETSI TS 103 634 V1.4.1)
+       - General
+            - Updated source headers to version V1.4.1
+            
+    - V1.6.8ETSI 2023-01-20 (ETSI TS 103 634 V1.3.4)
+       - General
+            - Accepted defines CR6 and CR7
+  
+    - V1.6.7ETSI 2022-11-18 (ETSI TS 103 634 V1.3.3)
+       - General
+            - Updated software version and ETSI TS version
+            - Implemented CR1 on TS 103 634 V1.3.2 (changes marked with defines CR7)
+
+    - V1.6.6ETSI 2022-06-22 (ETSI TS 103 634 V1.3.2)
+       - General
+            - Updated software version and ETSI TS version
+            - Implemented CR1 on TS 103 634 V1.3.1 (changes marked with defines CR6)
 
     - V1.6.4ETSI 2021-10-01 (ETSI TS 103 634 V1.3.1)
        - General

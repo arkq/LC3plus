@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -375,11 +375,9 @@ Word16 processAriEncoder_fx(UWord8 *bytes, Word16 bp_side_in, Word16 mask_side_i
     {
         extra_bits = add(extra_bits, shl_pos(st.ac_carry_count_fx, 3));
     }
-    n = sub(nbbits, add(shl_pos(bp, 3), add(extra_bits, nbits_side)));
+    
+    n = s_max(sub(nbbits, add(shl_pos(bp, 3), add(extra_bits, nbits_side))), 0);
     move16();
-
-
-    assert(n >= 0);
 
     IF (lsbMode == 0)
     {
@@ -708,9 +706,9 @@ Word16 processAriEncoder_fx(UWord8 *bytes, Word16 bp_side_in, Word16 mask_side_i
     {
         extra_bits = add(extra_bits, shl_pos(st.ac_carry_count_fx, 3));
     }
-    n = sub(nbbits, add(shl_pos(bp, 3), add(extra_bits, nbits_side)));
+    
+    n = s_max(sub(nbbits, add(shl_pos(bp, 3), add(extra_bits, nbits_side))), 0);
     move16();
-    assert(n >= 0);
 
     IF (lsbMode == 0)
     {

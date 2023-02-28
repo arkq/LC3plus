@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -12,7 +12,7 @@
 
 static const char *const LICENSE =
     "*******************************************************************************\n"
-    "*                        ETSI TS 103 634 V1.3.1                               *\n"
+    "*                        ETSI TS 103 634 V1.4.1                               *\n"
     "*              Low Complexity Communication Codec Plus (LC3plus)              *\n"
     "*               Floating Point Software V%i.%i.%iETSI, " __DATE__ "               *\n"
     "* Copyright licence is solely granted through ETSI Intellectual Property      *\n"

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -117,7 +117,7 @@ void peakDetector_fx(Word16 in_sig[], Word16 yLen, Word16 *xover)
     c = sub(yLen, 2 * BLOCK_SIZE);
 
     test();
-    IF (abs_s(in_sig[0]) >= abs_s(in_sig[1]))
+    IF (abs_s_sat(in_sig[0]) >= abs_s_sat(in_sig[1]))
     {
         block_cent = 0;  move32();
         FOR (j = 0; j <= 1; j++)
@@ -129,12 +129,12 @@ void peakDetector_fx(Word16 in_sig[], Word16 yLen, Word16 *xover)
 
         IF (L_sub(block_cent, mean_block_nrg) > 0)
         {
-            cur_max = abs_s(in_sig[0]);
-            cur_max = MAX(abs_s(in_sig[1]), cur_max);
+            cur_max = abs_s_sat(in_sig[0]);
+            cur_max = MAX(abs_s_sat(in_sig[1]), cur_max);
 
-            next_max = abs_s(in_sig[-1 + BLOCK_SIZE]);
-            next_max = MAX(abs_s(in_sig[-1 + BLOCK_SIZE + 1]), next_max);
-            next_max = MAX(abs_s(in_sig[-1 + BLOCK_SIZE + 2]), next_max);
+            next_max = abs_s_sat(in_sig[-1 + BLOCK_SIZE]);
+            next_max = MAX(abs_s_sat(in_sig[-1 + BLOCK_SIZE + 1]), next_max);
+            next_max = MAX(abs_s_sat(in_sig[-1 + BLOCK_SIZE + 2]), next_max);
 
             IF (sub(cur_max, next_max) > 0)
             {
@@ -147,7 +147,7 @@ void peakDetector_fx(Word16 in_sig[], Word16 yLen, Word16 *xover)
     FOR (i = 0; i < BLOCK_SIZE; i++)
     {
         test();
-        IF (abs_s(in_sig[i + 1]) >= abs_s(in_sig[i]) && abs_s(in_sig[i + 1]) >= abs_s(in_sig[i + 2]))
+        IF (abs_s_sat(in_sig[i + 1]) >= abs_s_sat(in_sig[i]) && abs_s_sat(in_sig[i + 1]) >= abs_s_sat(in_sig[i + 2]))
         {
             block_cent = 0;  move32();
             FOR (j = 0; j < BLOCK_SIZE; j++)
@@ -159,22 +159,22 @@ void peakDetector_fx(Word16 in_sig[], Word16 yLen, Word16 *xover)
 
             IF (L_sub(block_cent, mean_block_nrg) > 0)
             {
-                cur_max = abs_s(in_sig[i]);
-                cur_max = MAX(abs_s(in_sig[i + 1]), cur_max);
-                cur_max = MAX(abs_s(in_sig[i + 2]), cur_max);
+                cur_max = abs_s_sat(in_sig[i]);
+                cur_max = MAX(abs_s_sat(in_sig[i + 1]), cur_max);
+                cur_max = MAX(abs_s_sat(in_sig[i + 2]), cur_max);
 
                 prev_max = 0;  move16();
                 FOR (j = i - BLOCK_SIZE; j <= i - 1; j++)
                 {
                     IF (j > 0)
                     {
-                        prev_max = MAX(abs_s(in_sig[j]), prev_max);
+                        prev_max = MAX(abs_s_sat(in_sig[j]), prev_max);
                     }
                 }
 
-                next_max = abs_s(in_sig[i + BLOCK_SIZE]);
-                next_max = MAX(abs_s(in_sig[i + BLOCK_SIZE + 1]), next_max);
-                next_max = MAX(abs_s(in_sig[i + BLOCK_SIZE + 2]), next_max);
+                next_max = abs_s_sat(in_sig[i + BLOCK_SIZE]);
+                next_max = MAX(abs_s_sat(in_sig[i + BLOCK_SIZE + 1]), next_max);
+                next_max = MAX(abs_s_sat(in_sig[i + BLOCK_SIZE + 2]), next_max);
 
                 test();
                 IF (sub(cur_max, prev_max) >= 0 && sub(cur_max, next_max) > 0)
@@ -206,7 +206,7 @@ void peakDetector_fx(Word16 in_sig[], Word16 yLen, Word16 *xover)
     FOR (i = BLOCK_SIZE; i <= c; i++)
     {
         test();
-        IF (abs_s(in_sig[i + 1]) >= abs_s(in_sig[i]) && abs_s(in_sig[i + 1]) >= abs_s(in_sig[i + 2]))
+        IF (abs_s_sat(in_sig[i + 1]) >= abs_s_sat(in_sig[i]) && abs_s_sat(in_sig[i + 1]) >= abs_s_sat(in_sig[i + 2]))
         {
             block_cent = 0;  move32();
             FOR (j = 0; j < BLOCK_SIZE; j++)
@@ -218,17 +218,17 @@ void peakDetector_fx(Word16 in_sig[], Word16 yLen, Word16 *xover)
 
             IF (L_sub(block_cent, mean_block_nrg) > 0)
             {
-                cur_max = abs_s(in_sig[i]);
-                cur_max = MAX(abs_s(in_sig[i + 1]), cur_max);
-                cur_max = MAX(abs_s(in_sig[i + 2]), cur_max);
+                cur_max = abs_s_sat(in_sig[i]);
+                cur_max = MAX(abs_s_sat(in_sig[i + 1]), cur_max);
+                cur_max = MAX(abs_s_sat(in_sig[i + 2]), cur_max);
 
-                prev_max = abs_s(in_sig[i - BLOCK_SIZE]);
-                prev_max = MAX(abs_s(in_sig[i - BLOCK_SIZE + 1]), prev_max);
-                prev_max = MAX(abs_s(in_sig[i - BLOCK_SIZE + 2]), prev_max);
+                prev_max = abs_s_sat(in_sig[i - BLOCK_SIZE]);
+                prev_max = MAX(abs_s_sat(in_sig[i - BLOCK_SIZE + 1]), prev_max);
+                prev_max = MAX(abs_s_sat(in_sig[i - BLOCK_SIZE + 2]), prev_max);
 
-                next_max = abs_s(in_sig[i + BLOCK_SIZE]);
-                next_max = MAX(abs_s(in_sig[i + BLOCK_SIZE + 1]), next_max);
-                next_max = MAX(abs_s(in_sig[i + BLOCK_SIZE + 2]), next_max);
+                next_max = abs_s_sat(in_sig[i + BLOCK_SIZE]);
+                next_max = MAX(abs_s_sat(in_sig[i + BLOCK_SIZE + 1]), next_max);
+                next_max = MAX(abs_s_sat(in_sig[i + BLOCK_SIZE + 2]), next_max);
 
                 test();
                 IF (sub(cur_max, prev_max) >= 0 && sub(cur_max, next_max) > 0)

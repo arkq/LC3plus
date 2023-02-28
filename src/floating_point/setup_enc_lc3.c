@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -28,7 +28,10 @@ int alloc_encoder(LC3PLUS_Enc* encoder, int channels)
     return (int)size;
 }
 
-LC3PLUS_Error FillEncSetup(LC3PLUS_Enc* encoder, int samplerate, int channels)
+LC3PLUS_Error FillEncSetup(LC3PLUS_Enc* encoder, int samplerate, int channels
+                            , int hrmode
+                            , int32_t lfe_channel_array[]
+)
 {
     memset(encoder, 0, lc3plus_enc_get_size(samplerate, channels));
     alloc_encoder(encoder, channels);
@@ -40,6 +43,9 @@ LC3PLUS_Error FillEncSetup(LC3PLUS_Enc* encoder, int samplerate, int channels)
     if (encoder->fs_idx > 4) {
         encoder->fs_idx = 5;
     }
+
+    encoder->hrmode = hrmode != 0;
+
     encoder->channels          = channels;
     encoder->frame_ms          = 10;
     encoder->envelope_bits     = 38;
@@ -50,10 +56,17 @@ LC3PLUS_Error FillEncSetup(LC3PLUS_Enc* encoder, int samplerate, int channels)
     encoder->r12k8_mem_in_len  = 2 * 8 * encoder->fs / 12800;
     encoder->r12k8_mem_out_len = 24;
 
+    int ch = 0;
+    for (ch = 0; ch < encoder->channels; ch++)
+    {
+        encoder->channel_setup[ch]->lfe = lfe_channel_array[ch] != 0;
+    }
+
     encoder->bw_ctrl_active   = 0;
     encoder->bandwidth        = encoder->fs / 2;
     encoder->bandwidth_preset = encoder->fs / 2;
-    encoder->lfe               = 0;
+
+
     if (encoder->fs == 8000) {
         encoder->tilt = 14;
     } else if (encoder->fs == 16000) {
@@ -83,7 +96,6 @@ void set_enc_frame_params(LC3PLUS_Enc* encoder)
     if (encoder->hrmode == 1)
     {
         encoder->yLen = encoder->frame_length;
-        encoder->sns_damping = 0.6;        
     }
     else
     {
@@ -234,15 +246,40 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc* encoder, int bitrate)
     }
     else
     {
-        minBR = MIN_NBYTES * 8 * (10000.0 / encoder->frame_dms) * (encoder->fs_in == 44100 ? 441. / 480 : 1);
+        minBR = (MIN_NBYTES << 3);
+        maxBR = MAX_BR;
 
         switch (encoder->frame_dms)
         {
-        case  25: maxBR = MAX_NBYTES_025; break;
-        case  50: maxBR = MAX_NBYTES_050; break;
-        case 100: maxBR = MAX_NBYTES_100; break;
+        case  25:
+            minBR = MIN_BR_025DMS;
+            maxBR = MAX_BR;
+            break;
+        case  50:
+            minBR = MIN_BR_050DMS;
+            maxBR = MAX_BR;
+            /* have additional limitations for 5.0ms */
+            switch (encoder->fs_in)
+            {
+            case  8000:  maxBR = MAX_BR_050DMS_NB;   break;
+            default:                                 break;
+            }
+            break;
+        case 100: 
+            /* have additional limitations for 10ms */
+            minBR = MIN_BR_100DMS;
+            maxBR = MAX_BR;
+            switch (encoder->fs_in)
+            {
+            case  8000:  maxBR = MAX_BR_100DMS_NB  ; break;
+            case 16000:  maxBR = MAX_BR_100DMS_WB  ; break;
+            case 24000:  maxBR = MAX_BR_100DMS_SSWB; break;
+            default:     maxBR = MAX_BR;             break;
+            }
+            break;
+        default: return LC3PLUS_FRAMEMS_ERROR;
         }
-        maxBR *= 8 * (10000.0 / encoder->frame_dms) * (encoder->fs_in == 44100 ? 441. / 480 : 1);
+        maxBR *= (encoder->fs_in == 44100 ? 441. / 480 : 1);
     }
     minBR *= encoder->channels;
     maxBR *= encoder->channels;
@@ -407,6 +444,33 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc* encoder, int bitrate)
         }
         if (encoder->hrmode) {
             setup->ltpf_enable = 0;
+        }
+
+        /* turn down SNS shaping for higher rates */
+        if (encoder->hrmode == 0) {
+            encoder->sns_damping = 0.85;
+        } else {
+            encoder->sns_damping = 0.6;
+            if (encoder->fs_idx >= 4) {
+                if (encoder->frame_ms == 10)
+                {
+                    if (setup->total_bits > 4400) {
+                        encoder->sns_damping = 6881.0/32768.0;
+                    }
+                }
+                if (encoder->frame_ms == 5)
+                {
+                    if (setup->total_bits > 4600/2) {
+                        encoder->sns_damping = 4915.0/32768.0;
+                    }
+                }
+                if (encoder->frame_ms == 2.5)
+                {
+                    if (setup->total_bits > 4600/4) {
+                        encoder->sns_damping = 4915.0/32768.0;
+                    }
+                }
+            }
         }
 
         if (encoder->hrmode && encoder->fs_idx >= 4)

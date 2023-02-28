@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -824,6 +824,7 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          Word8 * buffer_fft;
          Word16 currPlocs, endPlocs;
          Word16 P_in_plocs;
+		 Word16 n_real_interp_tail;
 
          BASOP_sub_sub_start("PhECU::spec_ana_fx(1st)");
 #ifdef DYNMEM_COUNT
@@ -846,6 +847,7 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
             Word16  fft_scale_by4;
             Word16  currPlocs, endPlocs;
             Word16  P_in_plocs;
+			Word16 n_real_interp_tail;
          }));
 #endif
          /* Initialize for 48k to avoid warnings
@@ -885,7 +887,7 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          intlvW32_2_flippedW16(L_xfp, sub(Lprot2, 1), Lprot, xfp);
 
          /* Apply zeroing of non-coded FFT spectrum above 20 kHz */
-         IF(sub(output_frame, ((L_FRAME48K) * 40) / 48) >= 0) /* only relevant for 48kHz in LC3 */
+         IF(sub(output_frame, ((L_FRAME48K) * 40) / 48) >= 0) /* only relevant for 48kHz in LC3plus */
          {
             stop_band_start = ((LPROT48K / 2) * 40) / 48; /* initial start position in real part , 320  */
             stop_band_length = ((LPROT48K * 8) / 48) - 1;  /* real tail and into  Im parts ,        128-1 */
@@ -945,10 +947,23 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
             IF(n > 0)
             {
                nJacob = n;  move16();
-               if ( sub( endPlocs, plocs[sub(*num_plocs, 1)]) <= 0  )
-               {
-                  nJacob = sub(nJacob, 1);
-               }
+                
+			   /* catch all three  xxx01 , xxx10 and xxx11 ,
+			      and not only  xxx01, xxx10                */
+
+			   n_real_interp_tail = 0; move16();
+			   if (sub(endPlocs, plocs[sub(*num_plocs, 1)]) <= 0)
+			   {
+				   n_real_interp_tail = add(n_real_interp_tail, 1);
+			   }
+
+			   logic16();
+			   if (sub(n,1) > 0 && sub(endPlocs, plocs[sub(*num_plocs, 2)]) <= 0)
+			   {
+				   n_real_interp_tail = add(n_real_interp_tail, 1);
+			   }
+
+			    nJacob = sub(nJacob, n_real_interp_tail);
 
                FOR (k = 0;  k < nJacob; k++)
                {        
@@ -981,6 +996,12 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
                *pPlocsi_L++ = L_mac(L_acc, fraction, 1); move32(); /* in Q16 */
                currPlocs = *pPlocs++;                    move16();
                n = sub(n, 1); /* This special case is taken care of -- one less  peak to go */
+                
+			   if (n > 0)
+			   {
+			       /* allow for an additional consecutive final plocs after (Fs/2-1) at   Fs/2   */
+				    currPlocs = *pPlocs++;                    move16();
+			   }
             }
 
             /* Here the only remaining point would be a  fs/2 plocs */
@@ -1234,14 +1255,34 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          pImX         = X + im_ind;
          pPlocs       = plocs;
          pCorrPhase_L = L_corr_phase;
-         pkLocation   = *pPlocs;  move16();  /* N.B. No post-increment */
-         pkLocation1  = *pPlocs++;  move16();
-         lastPeak     = sub(*num_plocs, 1);
+          
+          
+	    pkLocation_1 = -4;    move16();  /* dummy value to avoid Out of Array Read    */
+		pkLocation   = -3;    move16();  /* dummy value to avoid Out of Array Read  for  the *num_plocs==0 case */
+		pkLocation1  = -2;    move16();  /* dummy value to avoid Out of Array Read    */
+
+        IF (*num_plocs != 0)
+		{
+
+			pkLocation = *pPlocs;  move16();  /* N.B. No post-increment */
+			lastPeak    = sub(*num_plocs, 1);
+			if (lastPeak >= 0)
+			{
+				pkLocation1 = *pPlocs++;  move16(); /*  get a next peak */
+			}
+		}
+          
          FOR(m = 0; m < *num_plocs; m++)
          {
             pkLocation_1 = pkLocation; /* plocs[m - 1] */ move16();
             pkLocation   = pkLocation1; /* plocs[m] */move16();
-            pkLocation1  = *pPlocs++; /* plocs[m + 1] */ move16();
+             
+			/*location dependent update of  plocs[m + 1] */
+			if ( sub(lastPeak, m) > 0)
+            {   /* only read additional peak when teher is a valid position to read  */
+				pkLocation1 = *pPlocs++;   /* plocs[m + 1] */ move16();
+			}
+             
             delta_tmp = shr_pos(sub(sub(pkLocation, pkLocation_1), 1), 1);
             if (m == 0)
             {

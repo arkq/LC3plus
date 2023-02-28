@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -63,6 +63,8 @@ typedef struct {
 
     Mdct mdctStruct;
     Dct2 dct2StructSNS;
+
+    LC3_INT lfe;
 } EncSetup;
 
 /* Constants and sampling rate derived values go in this struct */
@@ -112,7 +114,6 @@ struct LC3PLUS_Enc {
     
     LC3_INT16 combined_channel_coding;
     LC3_INT16 epmr;
-    LC3_INT lfe;
 };
 
 #endif

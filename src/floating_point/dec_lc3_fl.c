@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -257,7 +257,7 @@ LC3PLUS_Error Dec_LC3PLUS_fl(LC3PLUS_Dec* decoder, uint8_t* input, LC3_INT32 num
                                                     decoder->combined_channel_coding, &decoder->n_pccw, &channel_bfi,
                                                     &decoder->be_bp_left, &decoder->be_bp_right, &decoder->n_pc, &decoder->m_fec);
 
-                decoder->epmr = MIN(decoder->epmr, channel_epmr);
+                decoder->epmr = MIN((LC3PLUS_EpModeRequest) decoder->epmr, channel_epmr);
 
     
 #ifdef ENABLE_PADDING

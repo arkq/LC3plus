@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -13,15 +13,6 @@
 
 #include "stdint.h"
 
-/* Precision Defines */
-#define LC3_FABS(x)   (fabsf(x))
-#define LC3_POW(x, y) (powf(x, y))
-#define LC3_LOG10(x)  (log10f(x))
-#define LC3_LOG2(x)   (log2f(x))
-#define LC3_COS(x)    (cosf(x))
-#define LC3_SIN(x)    (sinf(x))
-#define LC3_SQRT(x)   (sqrtf(x))
-#define LC3_EXP(x)    (expf(x))
 
 typedef float    LC3_FLOAT;
 typedef int32_t  LC3_INT;
@@ -53,12 +44,27 @@ typedef uint32_t LC3_UINT32;
 #ifndef NO_POST_REL_CHANGES
 /* Post-release non-bitexact changes */
 
-
-
-
 #endif /* NO_POST_REL_CHANGES */
 
+/* Precision Defines */
+#define LC3_FABS(x)   (fabsf(x))
+#define LC3_POW(x, y) (powf(x, y))
+#define LC3_LOG10(x)  (log10f(x))
+#define LC3_LOG2(x)   (log2f(x))
+#   define LC3_COS(x)    (cos(x))
+#   define LC3_SIN(x)    (sin(x))
+#define LC3_SQRT(x)   (sqrtf(x))
+#define LC3_EXP(x)    (expf(x))
 
+#  define MAX_BR 320000        /*      400 * 800 */
+#  define MIN_BR_100DMS   16000  /*       20 * 800 * 100/100  */
+#  define MIN_BR_025DMS   64000          /*       20 * 800 * 100/ 25  */
+#  define MIN_BR_050DMS   32000          /*       20 * 800 * 100/ 50  */
+#  define MAX_BR_050DMS_NB   260800  /*      163 * 800 * 100/ 50  */
+#  define MAX_BR_100DMS_NB   114400  /* for 100ms at  8kHz */
+
+#  define MAX_BR_100DMS_WB   221600  /* for 100ms at 16kHz */
+#  define MAX_BR_100DMS_SSWB 314400  /* for 100ms at 24kHz */
 
 typedef int32_t  LC3_INT32;
 
@@ -128,7 +134,7 @@ typedef int32_t  LC3_INT32;
 #define G192_ONE 0x0081
 #define READ_G192FER /* Allow C executable to also read G192 formatted FER files */
 
-#  define LC3_EPS (1e-7f)
+#  define LC3_EPS (1.1e-7f)
 
 #define M_PI 3.14159265358979323846
 

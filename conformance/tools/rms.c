@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-
 
 #include "tinywavein_c.h"
 #include <stdio.h>
@@ -18,7 +17,6 @@
 /* Global defines */
 /* K = 16 bit */
 #define RMS_MAX_BUF 1024
-#define SCALE_16 (1 << 15)
 #define SCALE_24 (1 << 23)
 #define MAX_DIFF 0.000061035
 #define MAX_RMS -101.1008
@@ -38,7 +36,9 @@ static void calculateThr(int k, float *maxDiffThr, float *maxRmsThr);
 int main(int ac, char *av[])
 {
     char     *inputFilename1 = NULL, *inputFilename2 = NULL;
-    int       totalSamples1 = 0, totalSamples2 = 0, differentSamples = 0, k = 0, tmp, bps=0;
+    int       totalSamples1 = 0, totalSamples2 = 0, differentSamples = 0, k = 0;
+    unsigned int tmp_i = 0;
+    short tmp_s = 0, bps = 0;
     float diffMax = 0, ssnr = 0, maxDiffThr = 0, maxRmsThr = 0;
     double rms = 0;
     WAVEFILEIN *in_file1;
@@ -51,7 +51,7 @@ int main(int ac, char *av[])
     
     if(ac == 4)
     {
-        in_file1 = OpenWav(av[1], &tmp, &tmp, &tmp, &bps);
+        in_file1 = OpenWav(av[1], &tmp_i, &tmp_s, &tmp_i, &bps);
         CloseWavIn(in_file1);
 
         k = atoi(av[3]);
@@ -102,10 +102,11 @@ void printResult(char *inputFilename1, char *inputFilename2, int totalSamples1, 
     char *maxDiffReached, *maxRmsReached;
     char *rmsFail, *diffFail;
     int  rmsReached = 0;
-    int tmp, bipsIn1=0;
+    unsigned int tmp_i = 0;
+    short tmp_s = 0, bipsIn1 = 0;
     WAVEFILEIN *in_file1;
 
-    in_file1 = OpenWav(inputFilename1, &tmp, &tmp, &tmp, &bipsIn1);
+    in_file1 = OpenWav(inputFilename1, &tmp_i, &tmp_s, &tmp_i, &bipsIn1);
     CloseWavIn(in_file1);
 
     if(diffMax < maxDiffThr)
@@ -156,11 +157,11 @@ void calculateRms(char *inputFilename1, char *inputFilename2, int *differentSamp
     /* Calculate RMS */
 
     int nSamples1 = 0, nSamples2 = 0, scale = 0, i;
-    int sampleRate1 = 0, sampleRate2 = 0, nLength1 = 0, nLength2 = 0, nSamplesRead1 = 0, nSamplesRead2 = 0;
+    unsigned int sampleRate1 = 0, sampleRate2 = 0, nLength1 = 0, nLength2 = 0, nSamplesRead1 = 0, nSamplesRead2 = 0;
     float sample_buf1_scaled[RMS_MAX_BUF], sample_buf2_scaled[RMS_MAX_BUF];
     int sample_buf1[RMS_MAX_BUF], sample_buf2[RMS_MAX_BUF];
     WAVEFILEIN *in_file1, *in_file2;
-    int nChannels1 = 0, nChannels2 = 0, bipsIn1 = 0, bipsIn2 = 0;
+    short nChannels1 = 0, nChannels2 = 0, bipsIn1 = 0, bipsIn2 = 0;
     float diffMax = 0.0, rms = 0.0;
 
     in_file1 = OpenWav(inputFilename1, &sampleRate1, &nChannels1, &nLength1, &bipsIn1);
@@ -172,17 +173,7 @@ void calculateRms(char *inputFilename1, char *inputFilename2, int *differentSamp
         exit(1);
     }
 
-    if(bipsIn1 == 16)
-    {
-        scale = SCALE_16;
-    } else if (bipsIn1 == 24)
-    {
-        scale = SCALE_24;
-
-    } else {
-        printf("Bits per sample of input files is not supported!\n");
-        exit(1);
-    }
+    scale = SCALE_24;
 
     nSamples1 = sampleRate1 / 100;
     nSamples2 = sampleRate2 / 100;
@@ -192,8 +183,8 @@ void calculateRms(char *inputFilename1, char *inputFilename2, int *differentSamp
         nSamplesRead1 = 0;
         nSamplesRead2 = 0;
 
-        ReadWavShort(in_file1, sample_buf1, nSamples1 * nChannels1, &nSamplesRead1);
-        ReadWavShort(in_file2, sample_buf2, nSamples2 * nChannels2, &nSamplesRead2);
+        ReadWavInt(in_file1, sample_buf1, nSamples1 * nChannels1, &nSamplesRead1);
+        ReadWavInt(in_file2, sample_buf2, nSamples2 * nChannels2, &nSamplesRead2);
 
         for(i = 0; i < (int) nSamplesRead1; i++)
         {
@@ -245,9 +236,9 @@ void calculateSegmentalSnr(char *inputFilename1, char *inputFilename2, float *ss
     float sample_buf1_scaled[RMS_MAX_BUF], sample_buf2_scaled[RMS_MAX_BUF];
     int sample_buf1[RMS_MAX_BUF], sample_buf2[RMS_MAX_BUF];
     WAVEFILEIN *in_file1, *in_file2;
-    int nChannels1 = 0, nChannels2 = 0, bipsIn1 = 0, bipsIn2 = 0;
+    short nChannels1 = 0, nChannels2 = 0, bipsIn1 = 0, bipsIn2 = 0;
     int scale = 0, segmentLength = 0, nSegments = 0, i;
-    int sampleRate1 = 0, sampleRate2 = 0, nLength1 = 0, nLength2 = 0, nSamplesRead1 = 0, nSamplesRead2 = 0;
+    unsigned int sampleRate1 = 0, sampleRate2 = 0, nLength1 = 0, nLength2 = 0, nSamplesRead1 = 0, nSamplesRead2 = 0;
     in_file1 = OpenWav(inputFilename1, &sampleRate1, &nChannels1, &nLength1, &bipsIn1);
     in_file2 = OpenWav(inputFilename2, &sampleRate2, &nChannels2, &nLength2, &bipsIn2);
 
@@ -257,16 +248,7 @@ void calculateSegmentalSnr(char *inputFilename1, char *inputFilename2, float *ss
         exit(1);
     }
 
-    if(bipsIn1 == 16)
-    {
-        scale = SCALE_16;
-    } else if (bipsIn1 == 24)
-    {
-        scale = SCALE_24;
-    } else {
-        printf("Bits per sample of input files is not supported!\n");
-        exit(1);
-    }
+    scale = SCALE_24;
 
     segmentLength = SEGMENT_LENGTH;
 
@@ -276,12 +258,11 @@ void calculateSegmentalSnr(char *inputFilename1, char *inputFilename2, float *ss
         denom = 0;
         skip = 0;
         pow1 = 0;
-
         nSamplesRead1 = 0;
         nSamplesRead2 = 0;
-
-        ReadWavShort(in_file1, sample_buf1, segmentLength, &nSamplesRead1);
-        ReadWavShort(in_file2, sample_buf2, segmentLength, &nSamplesRead2);
+        
+        ReadWavInt(in_file1, sample_buf1, segmentLength, &nSamplesRead1);
+        ReadWavInt(in_file2, sample_buf2, segmentLength, &nSamplesRead2);
 
         for(i = 0; i < (int) nSamplesRead1; i++)
         {
@@ -351,7 +332,7 @@ int checkRmsReached(float rms, int bps)
 
 void printUsage(void)
 {
-    printf("    RMS tool to calculate RMS, max. abs. difference and segmental SNR value between to wave files.\n");
+    printf("    RMS tool to calculate RMS, max. abs. difference and segmental SNR value between two wave files.\n");
     printf("    Usage: rms ref.wav test.wav [k]\n");
     printf("    By default k = 16, i.e. a 16-bit resolution. The user can set k to a range from 1 to the number of bps in the input wave files (e.g. 16 or 24). The segment length is set 320 samples.\n");
     

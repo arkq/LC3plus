@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -11,102 +11,6 @@
 
 #include "functions.h"
 
-
-void dct16_fx(const Word16 *in, Word16 *out)
-{
-    Dyn_Mem_Deluxe_In(
-        Word16 a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15;
-        Word16 b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15;
-    );
-
-    a0  = add(in[15], in[0]);
-    a1  = add(in[14], in[1]);
-    a2  = add(in[13], in[2]);
-    a3  = add(in[12], in[3]);
-    a4  = add(in[11], in[4]);
-    a5  = add(in[10], in[5]);
-    a6  = add(in[9], in[6]);
-    a7  = add(in[8], in[7]);
-    a10 = sub(in[5], in[10]);
-    a11 = sub(in[4], in[11]);
-    a12 = sub(in[3], in[12]);
-    a13 = sub(in[2], in[13]);
-
-    b0  = add(a7, a0);
-    b1  = add(a6, a1);
-    b2  = add(a5, a2);
-    b3  = add(a4, a3);
-    b4  = sub(a3, a4);
-    b5  = sub(a2, a5);
-    b6  = sub(a1, a6);
-    b7  = sub(a0, a7);
-    b8  = sub(in[7], in[8]);
-    b9  = sub(in[6], in[9]);
-    b10 = add(mult_r(a10, -23170), mult_r(a13, 23170)); /* -Cπ/4 Cπ/4 */
-    b11 = add(mult_r(a11, -23170), mult_r(a12, 23170)); /* -Cπ/4 Cπ/4 */
-    b12 = add(mult_r(a12, 23170), mult_r(a11, 23170));  /*  Cπ/4 Cπ/4 */
-    b13 = add(mult_r(a13, 23170), mult_r(a10, 23170));  /*  Cπ/4 Cπ/4 */
-    b14 = sub(in[1], in[14]);
-    b15 = sub(in[0], in[15]);
-
-    a0  = add(b3, b0);
-    a1  = add(b2, b1);
-    a2  = sub(b1, b2);
-    a3  = sub(b0, b3);
-    a4  = b4;                                         move16();
-    a5  = add(mult_r(b5, -23170), mult_r(b6, 23170)); /* -Cπ/4 Cπ/4 */
-    a6  = add(mult_r(b6, 23170), mult_r(b5, 23170));  /*  Cπ/4 Cπ/4 */
-    a7  = b7;                                         move16();
-    a8  = add(b11, b8);
-    a9  = add(b10, b9);
-    a10 = sub(b9, b10);
-    a11 = sub(b8, b11);
-    a12 = sub(b15, b12);
-    a13 = sub(b14, b13);
-    a14 = add(b13, b14);
-    a15 = add(b12, b15);
-
-    out[0]  = add(mult_r(a0, 8192), mult_r(a1, 8192)); move16();   /*  Cπ/4/√8   Cπ/4/√8  */
-    out[8]  = add(mult_r(a1, -8192), mult_r(a0, 8192)); move16();  /* -Cπ/4/√8   Cπ/4/√8  */
-    out[4]  = add(mult_r(a2, 4433), mult_r(a3, 10703)); move16();  /*  Sπ/8/√8   Cπ/8/√8  */
-    out[12] = add(mult_r(a3, 4433), mult_r(a2, -10703)); move16(); /*  C3π/8/√8 -S3π/8/√8 */
-    b4      = add(a5, a4);
-    b5      = sub(a4, a5);
-    b6      = sub(a7, a6);
-    b7      = add(a6, a7);
-    b8      = a8;                                            move16();
-    b9      = add(mult_r(a9, -30274), mult_r(a14, 12540));   /* -Cπ/8  Sπ/8 */
-    b10     = add(mult_r(a10, -12540), mult_r(a13, -30274)); /* -Sπ/8 -Cπ/8 */
-    b11     = a11;                                           move16();
-    b12     = a12;                                           move16();
-    b13     = add(mult_r(a13, 12540), mult_r(a10, -30274));  /* C3π/8 -S3π/8 */
-    b14     = add(mult_r(a14, 30274), mult_r(a9, 12540));    /* S3π/8  C3π/8 */
-    b15     = a15;                                           move16();
-
-    out[2]  = add(mult_r(b4, 2260), mult_r(b7, 11363)); move16();  /* Sπ/16/√8   Cπ/16/√8  */
-    out[10] = add(mult_r(b5, 9633), mult_r(b6, 6436)); move16();   /* S5π/16/√8  C5π/16/√8 */
-    out[6]  = add(mult_r(b6, 9633), mult_r(b5, -6436)); move16();  /* C3π/16/√8 -S3π/16/√8 */
-    out[14] = add(mult_r(b7, 2260), mult_r(b4, -11363)); move16(); /* C7π/16/√8 -S7π/16/√8 */
-    a8      = add(b9, b8);
-    a9      = sub(b8, b9);
-    a10     = sub(b11, b10);
-    a11     = add(b10, b11);
-    a12     = add(b13, b12);
-    a13     = sub(b12, b13);
-    a14     = sub(b15, b14);
-    a15     = add(b14, b15);
-
-    out[1]  = add(mult_r(a8, 1136), mult_r(a15, 11529)); move16();   /* Sπ/32/√8    Cπ/32/√8   */
-    out[9]  = add(mult_r(a9, 8956), mult_r(a14, 7350)); move16();    /* S9π/32/√8   C9π/32/√8  */
-    out[5]  = add(mult_r(a10, 5461), mult_r(a13, 10217)); move16();  /* S5π/32/√8   C5π/32/√8  */
-    out[13] = add(mult_r(a11, 11086), mult_r(a12, 3363)); move16();  /* S13π/32/√8  C13π/32/√8 */
-    out[3]  = add(mult_r(a12, 11086), mult_r(a11, -3363)); move16(); /* C3π/32/√8  -S3π/32/√8  */
-    out[11] = add(mult_r(a13, 5461), mult_r(a10, -10217)); move16(); /* C11π/32/√8 -S11π/32/√8 */
-    out[7]  = add(mult_r(a14, 8956), mult_r(a9, -7350)); move16();   /* C7π/32/√8  -S7π/32/√8  */
-    out[15] = add(mult_r(a15, 1136), mult_r(a8, -11529)); move16();  /* C15π/32/√8 -S15/32/√8  */
-
-    Dyn_Mem_Deluxe_Out();
-}
 
 void idct16_fx(const Word16 *in, Word16 *out)
 {
@@ -204,7 +108,6 @@ void idct16_fx(const Word16 *in, Word16 *out)
     Dyn_Mem_Deluxe_Out();
 }
 
-#ifdef ENABLE_HR_MODE
 void dct32_fx(const Word32 *in, Word32 *out)
 {
     Dyn_Mem_Deluxe_In(Word32 a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15;
@@ -243,7 +146,7 @@ void dct32_fx(const Word32 *in, Word32 *out)
     a0 = L_add(b3, b0);
     a1 = L_add(b2, b1);
     a2 = L_sub(b1, b2);
-    a3 = L_sub(b0, b3);
+    a3 = L_sub_sat(b0, b3);
     a4 = b4;
     move16();
     a5 = L_add(Mpy_32_16(b5, -23170), Mpy_32_16(b6, 23170)); /* -Cπ/4 Cπ/4 */
@@ -269,7 +172,7 @@ void dct32_fx(const Word32 *in, Word32 *out)
     move16(); /*  C3π/8/√8 -S3π/8/√8 */
     b4 = L_add(a5, a4);
     b5 = L_sub(a4, a5);
-    b6 = L_sub(a7, a6);
+    b6 = L_sub_sat(a7, a6);
     b7 = L_add(a6, a7);
     b8 = a8;
     move16();
@@ -293,14 +196,14 @@ void dct32_fx(const Word32 *in, Word32 *out)
     out[14] = L_add(Mpy_32_16(b7, 2260), Mpy_32_16(b4, -11363));
     move16(); /* C7π/16/√8 -S7π/16/√8 */
 
-    a8  = L_add(b9, b8);
-    a9  = L_sub(b8, b9);
-    a10 = L_sub(b11, b10);
-    a11 = L_add(b10, b11);
-    a12 = L_add(b13, b12);
-    a13 = L_sub(b12, b13);
-    a14 = L_sub(b15, b14);
-    a15 = L_add(b14, b15);
+    a8  = L_add_sat(b9, b8);
+    a9  = L_sub_sat(b8, b9);
+    a10 = L_sub_sat(b11, b10);
+    a11 = L_add_sat(b10, b11);
+    a12 = L_add_sat(b13, b12);
+    a13 = L_sub_sat(b12, b13);
+    a14 = L_sub_sat(b15, b14);
+    a15 = L_add_sat(b14, b15);
 
     out[1] = L_add(Mpy_32_16(a8, 1136), Mpy_32_16(a15, 11529));
     move16(); /* Sπ/32/√8    Cπ/32/√8   */
@@ -563,4 +466,3 @@ void idct32_32_fx(const Word32 *in, Word32 *out)
 
     Dyn_Mem_Deluxe_Out();
 }
-#endif /* ENABLE_HR_MODE */

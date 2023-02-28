@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -67,6 +67,8 @@ typedef struct
     Word16  ltpf_mem_in[LTPF_MEMIN_LEN + LEN_12K8 + 1] ALIGN_BUFFER_STRUCT;
     Word16 n_pccw;
     Word16 n_pc;
+
+    Word16 lfe;
 } EncSetup;
 
 /* Constants and sampling rate derived values go in this struct */
@@ -105,7 +107,6 @@ struct LC3PLUS_Enc
     Word16 r12k8_mem_out_len;
     Word16 near_nyquist_index;
     Word16 near_nyquist_flag;
-    Word16 lfe;
 
     Word16 epmr;
     Word16 combined_channel_coding;
@@ -118,6 +119,7 @@ struct LC3PLUS_Enc
     Word16 attdec_damping;
     Word16 attdec_hangover_thresh;
     Word16 hrmode;
+    Word16 sns_damping;
 };
 
 #endif

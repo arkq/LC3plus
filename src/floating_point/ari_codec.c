@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -1089,9 +1089,12 @@ void processAriEncoder_fl(LC3_UINT8* bytes, LC3_INT bp_side, LC3_INT mask_side, 
         nbits_ari = nbits_ari + st.carry_count * 8;
     }
 
-    nbits_residual_enc = total_bits - (nbits_side + nbits_ari);
-    
-    assert(nbits_residual_enc >= 0);
+    nbits_residual_enc = MAX(total_bits - (nbits_side + nbits_ari), 0);
+    /* the max operation avoids in very rare cases, that
+    * nbits_residual_enc becomes negative; having overwritten
+    * the last bit(s) of the side information is in this case
+    * assumed to be not critical, since no spectral data bits
+    * were written */
 
     if (lsbMode == 0) {
         nbits_residual_enc = MIN(nbits_residual_enc, resBitsLen);

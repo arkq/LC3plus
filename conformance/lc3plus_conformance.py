@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
 # /******************************************************************************
-# *                        ETSI TS 103 634 V1.3.1                               *
+# *                        ETSI TS 103 634 V1.4.1                               *
 # *              Low Complexity Communication Codec Plus (LC3plus)              *
 # *                                                                             *
 # * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -9,7 +9,7 @@
 # * estoppel or otherwise.                                                      *
 # ******************************************************************************/
 #
-# Version 1.2.2
+# Version 1.2.3
 
 
 import argparse
@@ -47,7 +47,7 @@ DEBUG_SETTING = 0
 
 # convenience
 Executor = concurrent.futures.ThreadPoolExecutor
-TestEnv  = collections.namedtuple('TestEnv', 'profile test config test_dir workers opid opid_log')
+TestEnv  = collections.namedtuple('TestEnv', 'profile test config test_dir workers opid opid_log wav_only cmp_only')
 WavInfo  = collections.namedtuple('WavInfo', 'ch rate frames')
 
 # constants
@@ -61,9 +61,6 @@ SOX_URL     = 'https://sourceforge.net/projects/sox/files/sox/14.4.2/sox-14.4.2-
 SOX_SHA256  = '8072cc147cf1a3b3713b8b97d6844bb9389e211ab9e1101e432193fad6ae6662'
 SOX_EXE     = pathlib.Path('SoX/sox-14.4.2/sox.exe')
 INF         = float('inf')
-REFERENCE_EXE = './LC3plus.exe'
-REFERENCE_ENCODER = ' -E -q -formatG192 -frame_ms {frame_size} {options} "{input}" "{output}" {bitrate}'
-REFERENCE_DECODER = ' -D -q -formatG192  {options} "{input}" "{output}"'
 
 PC_BER_FILES = {
   2.5  : "etc/pc_ber_2.5ms.dat",
@@ -111,6 +108,7 @@ TESTS = [
     'bitrate_switching',
     'bandwidth_switching',
     'plc',
+    'plc_burst',
     'pc',
     'ep_correctable',
     'ep_non_correctable',
@@ -127,9 +125,10 @@ DEFAULTS_GLOBAL = {
     'option_plc_mode'  : '',
     'peaq_bin'         : '',
     'peaq_odg_regex'   : '',
-    'reference_exe'    : REFERENCE_EXE,
-    'reference_decoder': REFERENCE_DECODER,
-    'reference_encoder': REFERENCE_ENCODER,
+    'ref_encoder'      : '',
+    'ref_decoder'      : '',
+    'tst_encoder'      : '',
+    'tst_decoder'      : '',
     'config_bitrate_unit' : 'bps',
     'config_bitrate_format' : 'list',
     'delay'                 : '0',
@@ -149,6 +148,7 @@ METRIC_DEFAULTS = {
     'low_pass_encode_metric'           : 'eng',
     'low_pass_encdec_metric'           : 'eng',
     'plc_decode_metric'                : 'mld',
+    'plc_burst_decode_metric'          : 'mld',
     'pc_decode_metric'                 : 'mld',
     'ep_non_correctable_decode_metric' : 'mld',
     'ep_non_correctable_encdec_metric' : 'mld',
@@ -187,7 +187,8 @@ LABEL = {
     'low_pass'           : 'Low Pass',
     'bitrate_switching'  : 'Bitrate Switching',
     'bandwidth_switching': 'Bandwidth Switching',
-    'plc'                : 'Packet Loss Concealment',
+    'plc'                : 'Packet Loss Concealment - 10% Random Loss',
+    'plc_burst'          : 'Packet Loss Concealment - 10% Burst Loss',
     'pc'                 : 'Partial Concealment',
     'ep_correctable'     : 'Channel Coder for Correctable Frames',
     'ep_non_correctable' : 'Channel Coder for Non-Correctable Frames',
@@ -245,7 +246,7 @@ def call(cmd, wine=True, unicode=True, hard_fail=True, log_output=True, opid='',
     if opid:
         if opid_log.__contains__(opid) == False:
             opid_log[opid] = ''
-        opid_log[opid] += quoted_cmd + '\n\n' + out + '\n\n'
+        opid_log[opid] += '[CMD] ' + quoted_cmd + '\n\n' + out + '\n\n'
     if unicode and log_output:
         logging.debug(out) 
     if hard_fail and p.returncode != 0:
@@ -253,7 +254,7 @@ def call(cmd, wine=True, unicode=True, hard_fail=True, log_output=True, opid='',
     return out
 
 
-# return url as as bytes object, validate against hash
+# return url as bytes object, validate against hash
 def download(url, sha256=None):
     try:
         buf = call('curl --silent -L "{}"'.format(url), unicode=False)
@@ -292,14 +293,18 @@ def check_system(args, globvars):
     for tool in tools:
         if not exe_exists(tool):
             sys.exit('Failed to find {} executable'.format(tool))
-    if globvars['peaq_bin'] and not exe_exists(globvars['peaq_bin'], wine=True):
-        sys.exit('Failed to find PEAQ executable. Please adjust config file')
-    if not exe_exists(globvars['encoder'], wine=True):
-        sys.exit('Failed to find LC3plus encoder executable ('+globvars['encoder']+'). Please adjust config file.')
-    if not exe_exists(globvars['decoder'], wine=True):
-        sys.exit('Failed to find LC3plus decoder executable ('+globvars['decoder']+'). Please adjust config file.')
-    if not exe_exists(globvars['reference_exe'], wine=True):
-        sys.exit('Failed to find LC3plus reference executable ('+globvars['reference_exe']+'). Please adjust config file.')
+    if not args.wav_only: # no peaq binary needed since only wave files are created 
+        if globvars['peaq_bin'] and not exe_exists(globvars['peaq_bin'], wine=True):
+            sys.exit('Failed to find PEAQ executable. Please adjust config file')
+    if not exe_exists(globvars['ref_encoder'], wine=True):
+        sys.exit('Failed to find LC3plus ref_encoder executable ('+globvars['ref_encoder']+'). Please adjust config file.')
+    if not exe_exists(globvars['ref_decoder'], wine=True):
+        sys.exit('Failed to find LC3plus ref_decoder executable ('+globvars['ref_decoder']+'). Please adjust config file.')
+    if not args.cmp_only: # no test coder needed since files are provided
+        if not exe_exists(globvars['tst_encoder'], wine=True):
+            sys.exit('Failed to find LC3plus tst_encoder executable ('+globvars['tst_encoder']+'). Please adjust config file.')
+        if not exe_exists(globvars['tst_decoder'], wine=True):
+            sys.exit('Failed to find LC3plus tst_decoder executable ('+globvars['tst_decoder']+'). Please adjust config file.')
 
 # search s for expr and return first match or exit
 def regex_search(expr, s):
@@ -530,7 +535,7 @@ def parse_config(path):
     if not is_file(path):
         sys.exit('No such file: ' + path)
 
-    globals_required = ['enabled_tests', 'encoder', 'decoder']
+    globals_required = ['enabled_tests', 'ref_encoder', 'ref_decoder', 'tst_encoder', 'tst_decoder']
     globals_all      = list(DEFAULTS_GLOBAL) + globals_required
     test_keys = ['test_' + t for t in TESTS]
     globels   = DEFAULTS_GLOBAL.copy()
@@ -643,6 +648,9 @@ def run_mld(env, reference, test):
 # calculate energy of wav
 def energy(env, test):
     logging.debug('[{}] '.format(env.opid, opid_log=env.opid_log) + 'energy: %s', str(test))
+    bps = int(call('{} --i -b {}'.format(SOX_EXE, test)))
+    if bps != 16:
+        raise ValueError('energy test not implemented for {} bit'.format(bps))
     with wave.open(str(test), 'rb') as tst_wf:
         bytes_tst = tst_wf.readframes(tst_wf.getnframes())
         tst = byte_to_float(bytes_tst, tst_wf.getnframes(), tst_wf.getnchannels())
@@ -722,7 +730,7 @@ def compare_errors(env, file_ref, file_tst):
     return ok_all, values
 
 
-# ensure inputs exist and nothig is overwritten we're not overwriting anythong
+# ensure inputs exist and nothig is overwritten
 def check_io_files(input, output):
     if not is_file(input):
         raise FileNotFoundError(input)
@@ -732,12 +740,10 @@ def check_io_files(input, output):
 
 def encode_reference(env, input, output, frame_size, bitrate, bandwidth=None, ep_mode=0, lfe=0):
     check_io_files(input, output)
-    cmd = env.config['reference_exe'] + env.config['reference_encoder']
+    cmd = env.config['ref_encoder']
     opt = []
     if lfe:
-        opt += ['-lfe']
-    if env.config['hrmode'] == '1':
-        opt += ['-hrmode']
+        opt += ['-lfe 1']
     if bandwidth:
         opt += ['-bandwidth', bandwidth]
     if ep_mode:
@@ -748,12 +754,10 @@ def encode_reference(env, input, output, frame_size, bitrate, bandwidth=None, ep
 
 def encode_test(env, input, output, frame_size, bitrate, bandwidth=None, ep_mode=0,lfe=0):
     check_io_files(input, output)
-    cmd = env.config['encoder']
+    cmd = env.config['tst_encoder']
     opt = []
     if lfe:
-        opt += ['-lfe']
-    if env.config['hrmode'] == '1':
-        opt += ['-hrmode']
+        opt += ['-lfe 1']
     if bandwidth:
         opt += [env.config['option_bandwidth'].format(arg=bandwidth)]
     if ep_mode:
@@ -764,24 +768,20 @@ def encode_test(env, input, output, frame_size, bitrate, bandwidth=None, ep_mode
 
 def decode_reference(env, input, output, error_file=None):
     check_io_files(input, output)
-    cmd = env.config['reference_exe'] + env.config['reference_decoder']
+    cmd = env.config['ref_decoder']
     opt = []
     if error_file:
         opt += ['-ep_dbg', error_file]
-    if env.config['hrmode'] == '1': 
-        opt += ['-bps 24'] 
     options = ' '.join(map(str, opt))
     call(cmd.format(input=input, output=output, options=options), opid=env.opid, opid_log=env.opid_log)
 
 
 def decode_test(env, input, output, error_file=None):
     check_io_files(input, output)
-    cmd = env.config['decoder']
+    cmd = env.config['tst_decoder']
     opt = []
     if error_file:
         opt += [env.config['option_ep_debug'].format(arg=error_file)]
-    if env.config['hrmode'] == '1': 
-        opt += ['-bps 24'] 
     options = ' '.join(map(str, opt))
     call(cmd.format(input=input, output=output, options=options), opid=env.opid, opid_log=env.opid_log)
 
@@ -852,11 +852,14 @@ def process_item(env, mode, item, fs, sr, br, infile, bandwidth=None, ep_mode=0,
     ep_name = '1-4' if is_file(ep_mode) else ep_mode
     fmt     = '  {} {:20} {:3g} ms {:5} Hz {:>6} bit/s ep:{}'
     br_label = br
-    if type(br).__name__ == 'list':
+    if type(br).__name__ == 'list' or type(br).__name__ == 'tuple':
         br_label = swf_bitrate_to_label(br)
     opid = '{}__{}__{}__{}__{}__{}__{}__{}'.format(env[0],env[1],mode,item,fs,sr,br_label,ep_name) 
     env = env._replace(opid = opid) # operation point ID to log commands associated with a operationpoint (=unique configuration)
-    
+    wav_only = env[7]['active']
+    wav_only_dir = env[7]['path']
+    cmp_only = env[8]['active']
+    cmp_only_dir = env[7]['path']
     print(fmt.format(mode, item, fs, sr, lstr(br), ep_name))
 
     file_names = ['r.g192', 't.g192', 're.g192', 'te.g192', 'r.wav', 't.wav', 'rd', 'td']
@@ -873,27 +876,45 @@ def process_item(env, mode, item, fs, sr, br, infile, bandwidth=None, ep_mode=0,
             br = generate_switching_file2(env, fs, *br)
         # encode
         encode_reference(env, infile, ref_bin, fs, br, bandwidth=bandwidth, ep_mode=ep_mode, lfe=lfe)
-        if mode in ('encode', 'encdec'):
-            encode_test(env, infile, tst_bin, fs, br, bandwidth=bandwidth, ep_mode=ep_mode, lfe=lfe)
+        if not cmp_only:
+            if mode in ('encode', 'encdec'):
+                encode_test(env, infile, tst_bin, fs, br, bandwidth=bandwidth, ep_mode=ep_mode, lfe=lfe)
         # apply errors
         if error_mode:
             apply_error_pattern(env, ref_bin, ref_err, error_mode, error_pattern)
             ref_bin = ref_err
-            if mode in ('encode', 'encdec'):
-                apply_error_pattern(env, tst_bin, tst_err, error_mode, error_pattern)
-                tst_bin = tst_err
+            if not cmp_only:
+                if mode in ('encode', 'encdec'):
+                    apply_error_pattern(env, tst_bin, tst_err, error_mode, error_pattern)
+                    tst_bin = tst_err
         # decode
         decode_reference(env, ref_bin, ref_wav, error_file=ref_dbg)
-        if mode == 'encode':
-            decode_reference(env, tst_bin, tst_wav, error_file=tst_dbg)
-        if mode == 'encdec':
-            decode_test(env, tst_bin, tst_wav, error_file=tst_dbg)
-        if mode == 'decode':
-            decode_test(env, ref_bin, tst_wav, error_file=tst_dbg)
+        if not cmp_only:
+            if mode == 'encode':
+                decode_reference(env, tst_bin, tst_wav, error_file=tst_dbg)
+            if mode == 'encdec':
+                decode_test(env, tst_bin, tst_wav, error_file=tst_dbg)
+            if mode == 'decode':
+                decode_test(env, ref_bin, tst_wav, error_file=tst_dbg)
         # compare outputs
-        ok, val = compare_wav(env, mode, sr, infile, ref_wav, tst_wav)
-        if ref_dbg and tst_dbg:
-            err_ok, err_val = compare_errors(env, ref_dbg, tst_dbg)
+        if wav_only:
+            ok, err_ok, val, err_val = True, True, [], []
+            dest_path = pathlib.Path(str(tst_wav).replace(tst_wav.parts[0], wav_only_dir))
+            call('mkdir -p ' + str(dest_path.parent))
+            call('cp ' + str(tst_wav) + ' ' + str(dest_path))
+            if tst_dbg:
+                call('cp ' + str(tst_dbg) + '.bfi ' + str(dest_path.parent))
+                call('cp ' + str(tst_dbg) + '.epmr ' + str(dest_path.parent))
+                call('cp ' + str(tst_dbg) + '.error_report ' + str(dest_path.parent))
+        else:
+            if cmp_only:
+                tst_wav = pathlib.Path(str(tst_wav).replace(tst_wav.parts[0], cmp_only_dir))
+            ok, val = compare_wav(env, mode, sr, infile, ref_wav, tst_wav)
+            if ref_dbg and tst_dbg:
+                if cmp_only:
+                    dest_path = pathlib.Path(str(tst_wav).replace(tst_wav.parts[0], cmp_only_dir))
+                    tst_dbg = str(dest_path.parent) + '/' + str(tst_dbg.parts[-1])
+                err_ok, err_val = compare_errors(env, ref_dbg, tst_dbg)
         return ok and err_ok, err_val + val, opid
 
     except (OSError, FileNotFoundError, FileExistsError, KeyError) as e:
@@ -1001,6 +1022,18 @@ def test_plc(env):
 
     tests = sqam_configs(env.config, ITEMS_PLC, modes=['decode'])
     return test_executor(env, func, tests)
+
+
+def test_plc_burst(env):
+    print('Testing packet loss concealment ...')
+    def func(mode, item, fs, sr, br, infile):
+        pattern = 'etc/plc_bfer_eid.dat'
+        ok, values, opid = process_item(env, mode, item, fs, sr, br, infile, None, 0, 'fer', pattern)
+        return [ok, mode, item, fs, sr, br] + values + [opid]
+
+    tests = sqam_configs(env.config, ITEMS_PLC, modes=['decode'])
+    return test_executor(env, func, tests)
+
 
 def test_pc(env):
     print('Testing partial concealment ...')
@@ -1138,10 +1171,15 @@ def gen_div(test, config, results):
     return buf + '</div>\n'
 
 
-def save_html(profile, config, all_results, html_file):
+def save_html(profile, config, all_results, html_file, wav_only):
     ok    = profile_passed(all_results)
     state = ('failed', 'passed')[ok]
-    buf   = HTML_HEAD.format(title=profile, style=STYLE, state=state)
+    if wav_only:
+        if state == 'passed':
+            state = 'All files generated!'
+        else:
+            state = 'File generation failed!'     
+    buf = HTML_HEAD.format(title=profile, style=STYLE, state=state)
     for test in TESTS:
         if test in all_results:
             buf += gen_div(test, config, all_results[test])
@@ -1161,8 +1199,9 @@ def save_op_cmds(opid_log, log_dir):
 def main(args):
     args.workers = min(max(args.workers, 1), os.cpu_count())
     time_stamp   = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')
-    log_file     = 'lc3plus_conformance_{}.log'.format(time_stamp)
-    log_dir      = makedirs('lc3plus_conformance_{}_log'.format(time_stamp))
+    log_file     = '{}_{}.log'.format(args.config.replace('.cfg',''), time_stamp)
+    stem_config = str(pathlib.Path(args.config).stem)
+    log_dir      = makedirs('{}_{}_log'.format(stem_config, time_stamp))
     opid_log     = {}
     log_handlers = [logging.FileHandler(log_file)]
     if args.verbose:
@@ -1171,6 +1210,12 @@ def main(args):
     work_dir = makedirs(pathlib.Path('lc3plus_conformance_' + time_stamp))
 
     logging.debug(' '.join([str(arg) for arg in sys.argv]))
+    if args.test_items_only:
+        if not args.system_sox:
+            download_sox()
+        prepare_items(args.workers)
+        print('File preparation complete. All input test files stored in "test_items"')
+        sys.exit(0)
 
     try:
         all_passed = True
@@ -1188,11 +1233,13 @@ def main(args):
             print('Running tests for "{}" ...'.format(profile))
             config      = configs[profile]
             all_results = {}
+            wav_only_dict = {'active':args.wav_only, 'path':'test_files_' + stem_config}
+            cmp_only_dict = {'active':args.cmp_only, 'path':'test_files_' + stem_config}
             for test in TESTS:
                 test_test = 'test_' + test
                 if config[test_test]:
                     test_dir    = makedirs(work_dir / profile / test)
-                    test_env    = TestEnv(profile, test, config, test_dir, args.workers, '', opid_log)
+                    test_env    = TestEnv(profile, test, config, test_dir, args.workers,'', opid_log, wav_only_dict, cmp_only_dict)
                     test_func   = globals()[test_test]
                     test_result = test_func(test_env)
                     if not test_result:
@@ -1207,15 +1254,21 @@ def main(args):
                 html_file  = '{}_{}.html'.format(profile, time_stamp)
                 print('Saving results ...')
                 config['log_dir'] = log_dir
-                save_html(profile, config, all_results, html_file)
+                save_html(profile, config, all_results, html_file, args.wav_only)
                 save_op_cmds(opid_log, log_dir)
             else:
                 print('No tests in "{}" were enabled!'.format(profile))
 
         print('\nLogfile:', log_file)
-        print('Results:', '         \n'.join('%s_%s.html' % (p, time_stamp) for p in profiles))
-        print('\nConformance test', 'passed.' if all_passed else 'failed!', '\n')
-        sys.exit(0 if all_passed else 1)
+        if args.wav_only:
+            if all_passed:
+                print('\nAll test files created successfully and saved in test_files_{}\n'.format(stem_config))
+            else:
+                print('\nFile generation process failed! See {}\n'.format(log_file))
+        else:
+            print('Results:', '         \n'.join('%s_%s.html' % (p, time_stamp) for p in profiles))
+            print('\nConformance test', 'passed.' if all_passed else 'failed!', '\n')
+        sys.exit(0 if all_passed else 2)
     except KeyboardInterrupt:
         print('\rExiting. Please wait while workers shut down ...')
     finally:
@@ -1232,6 +1285,9 @@ if __name__ == '__main__':
     parser.add_argument('-v', action='store_true', dest='verbose', help='Activate verbose output')
     parser.add_argument('-w', dest='workers', type=int, default=os.cpu_count(), help='Number of worker threads')
     parser.add_argument('config', help='Conformance config file')
+    parser.add_argument('-wav_only', action='store_true', help='encode wav files whithout applying peaq comparison')
+    parser.add_argument('-cmp_only', action='store_true', help='use wav files from directory for peaq comparison')
+    parser.add_argument('-test_items_only', action='store_true', help='only prepare test_items folder without running conformance. Can be called with dummy.cfg')
     args = parser.parse_args()
 
     if args.system_sox:
@@ -1242,5 +1298,8 @@ if __name__ == '__main__':
             DEFAULTS_TEST['{}_{}_odg_threshold'.format(test, mode)] = 0
             DEFAULTS_TEST['{}_{}_rms_threshold'.format(test, mode)] = 16
             DEFAULTS_TEST['{}_{}_mad_threshold'.format(test, mode)] = 0
+    if args.cmp_only and args.wav_only:
+        print('Error: -wav_only and -cmp_only can only be used exclusively!')
+        exit(1)
 
     main(args)

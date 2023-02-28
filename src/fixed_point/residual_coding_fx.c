@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -83,7 +83,7 @@ void processResidualCoding_fx(Word16 x_e, Word32 x[],
             gain_offset = 0;
         ELSE
         {
-            gain_offset = L_shl(gain, shift_val);
+            gain_offset = L_shl_sat(gain, shift_val);
         }
         
         Word16 exit_iter   = 0;

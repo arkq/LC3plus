@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -116,7 +116,7 @@ void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Wo
             if (n > ac_min_pitch)
             {
               sum2 = L_msu0(sum2, x[acflen - 1 - (n - 1)], x[acflen - 1 - (n - 1)]);
-              sum2 = L_mac0(sum2, x[-n], x[-n]);
+              sum2 = L_mac0_sat(sum2, x[-n], x[-n]);
             }
             scale2   = norm_l(sum2);
             L_tmp    = L_shl_pos(sum2, scale2);

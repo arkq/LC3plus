@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -152,7 +152,6 @@ static void processDeQuantize_stage1ScfDecStage1_fx(
 #endif
 }
 
-#ifdef ENABLE_HR_MODE
 void downshift_w32_arr(Word32 *w32_arr, Word16 *w16_arr, Word16 shft_val, Word32 len)
 {
     Word32 i;
@@ -174,7 +173,6 @@ void round_w32tow16_arr(Word32 *w32_arr, Word16 *w16_arr,Word32 len)
     }
     return;
 }
-#endif /* ENABLE_HR_MODE */
 
 static void processQuantize_stage1ScfEncStage1_fx(const Word16 *target_st1,
 #ifdef ENABLE_HR_MODE
@@ -528,7 +526,16 @@ static void processQuantize_stage2ScfEncStage2_fx(
     pvq_enc_search_fx(proc_target_lp, enc_pulses_far, enc_pulses_near, enc_pulsesA, enc_pulsesB, L_search_corr,
                       L_search_en, pulses_fin, pulses_proj, M, N_SETA);
 #else
-    dct16_fx(target_st2, proc_target); /* enc analysis */
+    Word32 target_st2_32[M]; Word32 proc_target_32[M]; int i;
+    
+    FOR (i = 0; i < M; i++)
+    {
+        target_st2_32[i] = L_shl_pos(target_st2[i], 16);
+    }
+    
+    dct32_fx(target_st2_32, proc_target_32); /* enc analysis */
+    
+    downshift_w32_arr(proc_target_32, proc_target, 16, M);
 
     /* get the initial four integer shape candidate vectors,  no normalization at this stage  */
     pvq_enc_search_fx(proc_target, enc_pulses_far, enc_pulses_near, enc_pulsesA, enc_pulsesB, L_search_corr,

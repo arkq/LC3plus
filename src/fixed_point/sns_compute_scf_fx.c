@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -17,7 +17,7 @@ void processSnsComputeScf_fx(Word32 *d2_fx, Word16 d2_fx_exp, Word16 fs_idx, Wor
                              )
 {
     Dyn_Mem_Deluxe_In(
-        Word16  i, s, s2, nf;
+        Word16  i, s, s2, nf, tmp;
         Word32  L_mean, L_tmp;
         Word32 *d3_fx;
         Word16 *d3_fx_exp;
@@ -144,7 +144,12 @@ void processSnsComputeScf_fx(Word32 *d2_fx, Word16 d2_fx_exp, Word16 fs_idx, Wor
         FOR (i = 2; i < M - 2; i++)
         {
             L_tmp         = L_add(L_add(L_add(L_add(scf[i - 2], scf[i - 1]), scf[i]), scf[i + 1]), scf[i + 2]);
-            scf_smooth[i] = L_shr(L_mult0(L_tmp, 13107), 16);
+            tmp = norm_s(L_shr(L_abs(L_tmp), 15));
+            if (tmp > 0) {
+                tmp = sub(16, tmp);
+                L_tmp = L_shr(L_tmp, tmp);
+            }
+            scf_smooth[i] = L_shr(L_mult0(L_tmp, 13107), sub(16, tmp));
             L_mean        = L_add(L_mean, scf_smooth[i]);
         }
         scf_smooth[M - 2] = L_shr(L_add(L_add(L_add(scf[M - 4], scf[M - 3]), scf[M - 2]), scf[M - 1]), 2);

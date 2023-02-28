@@ -15,6 +15,8 @@ LINK   = $(CC)
 
 # Binary Name
 NAME_LC3   = LC3plus
+# Shared Library Name
+LIB_LC3    = libLC3plus.so
 
 # Default tool settings
 RM        = rm -f
@@ -25,14 +27,13 @@ QUIET_LINK= @echo '   ' Linking $@;
 QUIET     = @
 endif
 
-CFLAGS += -std=c99
-
 # C compiler flags
 # Preprocessor(-I/-D) / Compiler / Linker flags
 CPPFLAGS += -Ibasic_op -DSUBSET_$(SUBSET)
-CFLAGS   += -pedantic -Wcast-qual -Wall -W -Wextra -Wno-long-long     \
-            -Wpointer-arith -Wstrict-prototypes -Wmissing-prototypes  \
-            -Werror-implicit-function-declaration
+CFLAGS   += -std=c99 -fPIC                                            \
+             -pedantic -Wcast-qual -Wall -W -Wextra -Wno-long-long     \
+             -Wpointer-arith -Wstrict-prototypes -Wmissing-prototypes  \
+             -Werror-implicit-function-declaration
 
 ifneq "$(DEBUG)" "0"
 CFLAGS   += -g3
@@ -84,6 +85,9 @@ OBJS_CCC := $(filter-out $(EXCL_CCC), $(OBJS_CCC_UNF))
 
 OBJS := $(addprefix $(BUILD)/, $(SRCS:.c=.o))
 
+LIBSRCS := $(filter-out $(DIR)/ccConvert.c $(DIR)/codec_exe.c, $(SRCS))
+LIBOBJS := $(addprefix $(BUILD)/, $(LIBSRCS:.c=.o))
+
 ###############################################################################
 
 .PHONY: all clean help force
@@ -93,6 +97,7 @@ all: $(NAME_LC3)
 help:
 	@echo 'Targets:'
 	@echo '    $(NAME_LC3) (default)'
+	@echo '    $(LIB_LC3)'
 	@echo '    ccConvert'
 	@echo 'Syntax: make [OPTION=VALUE ...]'
 	@echo 'Build options:'
@@ -108,13 +113,17 @@ help:
 $(NAME_LC3): $(OBJS)
 	@echo 'Linking' $@
 	$(QUIET) $(LINK)  $(OBJS) -o $@ $(LDFLAGS)
+
+$(LIB_LC3): $(LIBOBJS)
+	@echo 'Linking' $@
+	$(QUIET) $(LINK) --shared $(OBJS) -o $@ $(LDFLAGS)
     
 ccConvert: $(BUILD)/ccConvert.o $(OBJS_CCC)
 	@echo 'Linking' $@
 	$(QUIET) $(LINK) $? -o $@ $(LDFLAGS)
 
 clean:
-	$(QUIET) rm -rf $(NAME_LC3) $(BUILD) ccConvert
+	$(QUIET) rm -rf $(NAME_LC3) $(LIB_LC3) $(BUILD) ccConvert
 
 $(BUILD)/%.o : %.c $(BUILD)/cc_flags
 	@echo 'Compiling' $<

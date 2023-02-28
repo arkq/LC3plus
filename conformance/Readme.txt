@@ -1,9 +1,9 @@
 =================================
-LC3plus Conformance script V1.2.2
+LC3plus Conformance script V1.2.3
 =================================
 
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -13,6 +13,8 @@ LC3plus Conformance script V1.2.2
 
 Changelog
 ==============
+    - V1.2.3 2022-11-10
+        - added plc test with 10% burst pattern
     - V1.2.2 2021-10-01
         - Added missing variable initialization in rms.c
     - V1.2.1 2021-06-23
@@ -72,8 +74,12 @@ the following things:
  ODG value from the console output of the PEAQ tool.
 -Build LC3plus fixed point reference executable, check that it operates correctly
  with the testvector package and place it in the same directory as the conformance
- script. Ensure that it is called 'LC3plus.exe'.
- The reference executable must be the fixed point executable without any modifications.
+ script. Ensure that it is called 'LC3plus_FX.exe'.
+ The reference executable for all non-high-resolution tests must be the fixed point executable without any modifications.
+-Build LC3plus floating point reference executable, check that it operates correctly
+ with the testvector package and place it in the same directory as the conformance
+ script. Ensure that it is called 'LC3plus_FL.exe'.
+ The reference executable for all high-resolution tests must be the floating point executable without any modifications.
 -set paths to encoder and decoder executables under test in example_config.cfg
  [globals]
 -if there is a delay between coded test file and original signal, set it under 'delay'
@@ -81,6 +87,18 @@ the following things:
 
 Note: since the conformance script does compensate the delay and resamples the
       PEAQ input files to 48 kHz, the PEAQ binary should not do this.
+
+
+What is the reference executable – Fixed Point or Floating Point?
+==================================================================
+
+For all Non-High-Resolution tests, the LC3plus fixed point executable shall be used as the reference. These tests are:
+-LC3plus_DECT_AAP_service.cfg
+-LC3plus_DECT_voice_service.cfg
+
+For all High-Resolution tests, the LC3plus floating point executable shall be used as the reference. These tests are:
+-LC3plus_DECT_AAP_HighResolution.cfg
+-LC3plus_precision.cfg
 
 Usage of the script:
 ====================
@@ -156,7 +174,8 @@ test_band_limiting       = 0                     # test band limited signal, e.g
 test_bandwidth_switching = 0                     # test for bandwidth switching, not applicable for 8 kHz
 test_high_pass           = 1                     # test for high pass filter of codec for 20 kHz signal
 test_rate_switching      = 1                     # test for bitrate switching
-test_plc                 = 1                     # test for packet loss concealment
+test_plc                 = 1                     # test for packet loss concealment with 10% random losses
+test_plc_burst           = 1                     # test for packet loss concealment with 10% burst losses 
 test_pc                  = 1                     # test for partial concealment
 test_ep_correctable      = 1                     # test for channel coder and error protection/correction with a correctable amount of bit errors
 test_ep_non_correctable  = 1                     # test for channel coder and error protection/correction with a non-correctable amount of bit errors

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -61,7 +61,8 @@ void processEstimateGlobalGain_fl(LC3_FLOAT x[], LC3_INT lg, LC3_INT nbitsSQ, LC
             g_min = x_max / (32767 - 0.375);
         }
         /* Prevent positive rounding errors from LC3_LOG10 function */
-        ind_min = ceil(28.0 * LC3_LOG10(g_min));
+        ind_min = 28.0 * LC3_LOG10(g_min);
+
         ind_min = ceil(ind_min + LC3_FABS(ind_min) * LC3_EPS);
         
         assert(LC3_POW(10, ind_min / 28.0) >= g_min);

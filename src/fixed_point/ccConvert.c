@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -65,13 +65,13 @@ static FILE *input_bitstream;
 static const char *const USAGE_MESSAGE =
     /* Lines must not be longer than this! --------------------------------------->| */
     "Channel Coder Converter\n\n"
-    "ccConvert unpacks protected lc3 bitstream to unprotected lc3 bitstream and vice versa.\n"
+    "ccConvert unpacks protected lc3plus bitstream to unprotected lc3plus bitstream and vice versa.\n"
     "\n"
     "Usage:\n"
-    "   pack mode:   ./ccConvert -pack gross_bytes ep_mode in.lc3 out.lc3\n"
-    "   unpack mode: ./ccConvert -unpack in.lc3 out.lc3\n"
+    "   pack mode:   ./ccConvert -pack gross_bytes ep_mode in.lc3plus out.lc3plus\n"
+    "   unpack mode: ./ccConvert -unpack in.lc3plus out.lc3plus\n"
     "\n"
-    "   example:     ./ccConvert -pack 80 3 in_ep0.lc3 out_ep3.lc3\n"
+    "   example:     ./ccConvert -pack 80 3 in_ep0.lc3plus out_ep3.lc3plus\n"
     "   For G.192 format use filename extension \".g192\"\n"
     "   example:     ./ccConvert -unpack in_ep3.g192 out_ep0.g192\n"
     "\n"
@@ -165,14 +165,14 @@ int main(int ac, char **av)
     /* Open Output Bitstream File */
     if (arg.mode == PACK)
     {
-        printf("Converting unprotected LC3 bitstream %s to protected LC3 bitstream %s...\n", arg.inputFilename,
+        printf("Converting unprotected LC3plus bitstream %s to protected LC3plus bitstream %s...\n", arg.inputFilename,
                arg.outputFilename);
         exit_if(epmode_in != 0, USAGE_MESSAGE);
         epmode_out  = arg.epmode;
     }
     if (arg.mode == UNPACK)
     {
-        printf("Converting protected LC3 bitstream %s to unprotected LC3 bitstream %s...\n", arg.inputFilename,
+        printf("Converting protected LC3plus bitstream %s to unprotected LC3plus bitstream %s...\n", arg.inputFilename,
                arg.outputFilename);
         exit_if(epmode_in == 0, USAGE_MESSAGE);
         epmode_out  = 0;

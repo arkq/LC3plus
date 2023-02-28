@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 
 /* struct to hold command line arguments */
 typedef struct
@@ -47,7 +48,8 @@ typedef struct
     char *channel_coder_vars_file;
     int32_t   startFrame;
     int32_t   stopFrame;
-    int32_t   lfe;
+    int32_t   lfe[LC3PLUS_MAX_CHANNELS];
+    int32_t   lfeChanCnt;
 } Arguments;
 
 /* local helper functions */
@@ -118,7 +120,7 @@ static const char *const USAGE_MESSAGE =
     "\nPLC options:\n"
     "  -epf FILE               Enable packet loss simulation using error pattern from FILE.\n"
     "  -ept                    Use together with -E -epf FILE to signal lost frames within\n"
-    "                          the LC3 bitstream.\n"
+    "                          the LC3plus bitstream.\n"
     "  -edf FILE               Write error detection pattern to FILE.\n"
     "\nChannel coder options:\n"
     "  -epmode NUM|FILE        Error protection mode. NUM must be one of the following:\n"
@@ -130,7 +132,11 @@ static const char *const USAGE_MESSAGE =
     "  -ep_dbg FILE            Save variables bfi, epmr and error report to binary files\n"
     "                          FILE.bfi, FILE.epmr and FILE.error_report\n"
     "\nLow-frequency effects options:\n"
-    "  -lfe                    Enable LFE mode.\n"
+    "  -lfe NUM[,NUM[,NUM]...] Set lfe flags for all audio channels of the input waveform\n"
+    "                          NUM is interpreted as follows:\n"
+    "                          0: normal channel\n"
+    "                          1: low frequeny enhancement channel\n"
+    "                          All channels are treated as normal, if this parameter is omitted.\n"
 #ifdef ENABLE_HR_MODE
     "\nHigh resolution mode options:\n"
     "  -hrmode                 Enable high resolution mode.\n"
@@ -139,27 +145,29 @@ static const char *const USAGE_MESSAGE =
 
 static const char *const MISSING_ARGUMENT_MESSAGE = "Not enough parameters! Use -h to show help.";
 
-static const char *ERROR_MESSAGE[19] = {
-    "",                                                      /* LC3PLUS_OK                  */
-    "Function call failed!",                                 /* LC3PLUS_ERROR               */
-    "Frame failed to decode and was concealed!",             /* LC3PLUS_DECODE_ERROR        */
-    "Pointer argument is null!",                             /* LC3PLUS_NULL_ERROR          */
-    "Invalid sampling rate!",                                /* LC3PLUS_SAMPLERATE_ERROR    */
-    "Invalid number of channels!",                           /* LC3PLUS_CHANNELS_ERROR      */
-    "Invalid bitrate!",                                      /* LC3PLUS_BITRATE_ERROR       */
-    "Invalid number of bytes!",                              /* LC3PLUS_NUMBYTES_ERROR      */
-    "Invalid PLC method!",                                   /* LC3PLUS_PLCMODE_ERROR       */
-    "Invalid EP mode!",                                      /* LC3_EPCLASS_ERROR           */
-    "Invalid frame ms value!",                               /* LC3PLUS_FRAMEMS_ERROR       */
-    "Invalid usage of hrmode, sampling rate and frame size"  /* LC3PLUS_HRMODE_ERROR        */
-    "Unaligned pointer!",                                    /* LC3PLUS_ALIGN_ERROR         */
-    "Invalid channel mode request!",                         /* LC3_CMR_ERROR               */
-    "Invalid usage of hrmode, sampling rate and frame size!", /* LC3PLUS_HRMODE_ERROR       */
-    "Bitrate has not been set!",                             /* LC3PLUS_BITRATE_UNSET_ERROR */
-    "Function can't be called after bitrate was set!",       /* LC3PLUS_BITRATE_SET_ERROR   */
-    "Invalid external bad frame index!",                     /* LC3PLUS_BFI_EXT_ERROR       */
-    "Generic Warning",                                       /* LC3PLUS_WARNING             */
-    "Invalid bandwidth frequency!"                           /* LC3PLUS_BW_WARNING          */
+static const char* ERROR_MESSAGE[] = {
+    "",                                                                     /* LC3PLUS_OK                  */
+    "Function call failed!",                                                /* LC3PLUS_ERROR               */
+    "Frame failed to decode and was concealed!",                            /* LC3PLUS_DECODE_ERROR        */
+    "Pointer argument is null!",                                            /* LC3PLUS_NULL_ERROR          */
+    "Invalid sampling rate!",                                               /* LC3PLUS_SAMPLERATE_ERROR    */
+    "Invalid number of channels!",                                          /* LC3PLUS_CHANNELS_ERROR      */
+    "Invalid bitrate!",                                                     /* LC3PLUS_BITRATE_ERROR       */
+    "Invalid number of bytes!",                                             /* LC3PLUS_NUMBYTES_ERROR      */
+    "Invalid ep mode!",                                                     /* LC3PLUS_EPMODE_ERROR        */
+    "Invalid frame ms value!",                                              /* LC3PLUS_FRAMEMS_ERROR       */
+    "Unaligned pointer!",                                                   /* LC3PLUS_ALIGN_ERROR         */
+    "96 kHz sampling rate cannot be used without -hrmode option!",          /* LC3PLUS_HRMODE_ERROR        */
+    "Bitrate has not been set!",                                            /* LC3PLUS_BITRATE_UNSET_ERROR */
+    "Function can't be called after bitrate was set!",                      /* LC3PLUS_BITRATE_SET_ERROR   */
+    "High resolution mode and bandwidth switching are exclusive!",          /* LC3PLUS_HRMODE_BW_ERROR     */
+    "Invalid PLC method!",                                                  /* LC3PLUS_PLCMODE_ERROR       */
+    "Invalid EPMR value!",                                                  /* LC3PLUS_EPMR_ERROR          */
+    "Incorrect padding!",                                                   /* LC3PLUS_PADDING_ERROR       */
+    "Incorrect frame size during decoding!",                                /* FRAMESIZE_ERROR             */
+    "LFE support not available!",                                           /* LC3PLUS_LFE_MODE_NOT_SUPPORTED             */
+    "Generic Warning",                                                      /* LC3PLUS_WARNING             */
+    "Invalid bandwidth frequency!"                                          /* LC3PLUS_BW_WARNING          */
 };
 
 
@@ -207,6 +215,13 @@ int main(int ac, char **av)
         exit_if(!input_wav, "Error opening wav file!");
         exit_if(bipsIn != 16 && bipsIn != 24, "Only 16 or 24bits per sample are supported!");
 
+        /* Check if LFE flag was set for each channel */
+        if (arg.lfeChanCnt != 0 && arg.lfeChanCnt != nChannels)
+        {
+            fprintf(stderr, "%" PRIu32 " channel(s) with -lfe configured, but waveform consists of %i channel(s)\n", arg.lfeChanCnt, nChannels);
+            exit_if(1, "Inadequate LFE channel config given!");
+        }
+
         /* Setup Encoder */
         encoder_size = lc3plus_enc_get_size(sampleRate, nChannels);
         encoder      = malloc(encoder_size);
@@ -214,6 +229,7 @@ int main(int ac, char **av)
 #ifdef ENABLE_HR_MODE
                                         , arg.hrmode
 #endif
+                                        , arg.lfe
             );
         exit_if(err, ERROR_MESSAGE[err]);
         
@@ -222,9 +238,6 @@ int main(int ac, char **av)
         exit_if(err, ERROR_MESSAGE[err]);
 
         err = lc3plus_enc_set_ep_mode(encoder, (LC3PLUS_EpMode)arg.epmode);
-        exit_if(err, ERROR_MESSAGE[err]);
-
-        err = lc3plus_enc_set_lfe(encoder, arg.lfe);
         exit_if(err, ERROR_MESSAGE[err]);
 
         err = lc3plus_enc_set_bitrate(encoder, arg.bitrate);
@@ -569,7 +582,6 @@ int main(int ac, char **av)
 
     if (!arg.encoder_only && nSamplesFile > 0 && nSamplesFile <= (uint32_t)nSamples)
     {
-//        printf("WRITING EXTRA\n\n");
         memset(sample_buf, 0, (nSamplesFile * nChannels) * sizeof(sample_buf[0]));
         WriteWavLong(output_wav, sample_buf, nSamplesFile * nChannels);
     }
@@ -639,7 +651,6 @@ static void parseCmdl(int ac, char **av, Arguments *arg)
     arg->bipsOut  = 16;
     arg->frame_ms = 10;
     arg->dc       = 1;
-    arg->lfe = 0;
     arg->plcMeth = LC3PLUS_PLC_ADVANCED;
     exit_if(ac <= 1, USAGE_MESSAGE);
 
@@ -701,7 +712,7 @@ static void parseCmdl(int ac, char **av, Arguments *arg)
         if (!strcmp(av[pos], "-ept"))
         {
             arg->ept = 1;
-            puts("Simulating frame loss by writing reserved values into the LC3 bitstream!");
+            puts("Simulating frame loss by writing reserved values into the LC3plus bitstream!");
         }
         /* Bits per sample */
         if (!strcmp(av[pos], "-bps") && pos + 1 < ac)
@@ -735,10 +746,53 @@ static void parseCmdl(int ac, char **av, Arguments *arg)
         }
 #endif
 
-        if (!strcmp(av[pos], "-lfe")) {
-            arg->lfe = 1;
-            puts("Enabling LFE mode!");
-        }
+            /* lfe mode */
+            if (lc3_enc_supported_lfe())
+            {
+                if (!strcmp(av[pos], "-lfe"))
+                {
+                    char *lfe_string = av[++pos];
+                    char *some_pointer;
+                    char  lfeChans[LC3PLUS_MAX_CHANNELS] = {0};
+                    int   lfeChansCnt = 0;
+                    int   i;
+                    some_pointer = strtok (lfe_string,",");
+
+#ifdef DEBUG
+/* Allow old-style usage of -lfe flag for ETSI vs Trunk tests */
+                    if ((strstr(some_pointer, ".wav") != NULL) || (strstr(some_pointer, ".bin") != NULL)) {
+                        for (i = 0; i < LC3PLUS_MAX_CHANNELS; i ++)
+                        {
+                            arg->lfe[i] = 1;
+                        }
+
+                        pos--;
+                        continue;
+                    }
+#endif
+
+                    while (some_pointer != NULL) {
+                        if (arg->lfeChanCnt >= LC3PLUS_MAX_CHANNELS)
+                        {
+                            fprintf(stderr, "at least %" PRId32 "channels with -lfe configured, but only %i channels are supported\n", arg->lfeChanCnt+1, LC3PLUS_MAX_CHANNELS);
+                            exit_if(1, "More LFE parameters given than supported channels exist!");
+                        }
+                        arg->lfe[arg->lfeChanCnt] = atoi(some_pointer);
+
+                        if (arg->lfe[arg->lfeChanCnt]) lfeChans[lfeChansCnt++] = arg->lfeChanCnt;
+
+                        some_pointer = strtok (NULL, ",");
+                        arg->lfeChanCnt++;
+                    }
+
+                    for (i = 0; i < lfeChansCnt; i ++)
+                    {
+                        printf("Enabling LFE mode for channel %i\n", lfeChans[i]);
+                    }
+
+                    continue;
+                }
+            }
 
         /* Bitrate switching file */
         if (!strcmp(av[pos], "-swf") && pos + 1 < ac)

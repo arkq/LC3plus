@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -89,7 +89,9 @@ int alloc_decoder(LC3PLUS_Dec* decoder, int samplerate, int channels)
     return (int)size;
 }
 
-LC3PLUS_Error FillDecSetup(LC3PLUS_Dec* decoder, int samplerate, int channels, LC3PLUS_PlcMode plc_mode)
+LC3PLUS_Error FillDecSetup(LC3PLUS_Dec* decoder, int samplerate, int channels, LC3PLUS_PlcMode plc_mode
+                            , int hrmode
+)
 {
     memset(decoder, 0, lc3plus_dec_get_size(samplerate, channels));
     alloc_decoder(decoder, samplerate, channels);
@@ -99,6 +101,7 @@ LC3PLUS_Error FillDecSetup(LC3PLUS_Dec* decoder, int samplerate, int channels, L
     decoder->fs_idx = FS2FS_IDX(decoder->fs);
     decoder->plcMeth = plc_mode;
     
+    decoder->hrmode = hrmode != 0;
     
     if (decoder->fs_idx > 4) {
         decoder->fs_idx = 5;

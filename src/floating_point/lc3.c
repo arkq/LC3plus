@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -39,25 +39,16 @@ int lc3plus_channels_supported(int channels)
 
 int lc3plus_samplerate_supported(int samplerate)
 {
-    switch (samplerate) {
-    case 8000:
-        return 1;
-    case 16000:
-        return 1;
-    case 24000:
-        return 1;
-    case 32000:
-        return 1;
-    case 44100:
-        return 1;
-    case 48000:
-        return 1;
-#ifdef ENABLE_HR_MODE_FL_FLAG
-    case 96000:
-        return 1;
-#endif
-    default:
-        return 0;
+    switch (samplerate)
+    {
+    case 8000: return 1;
+    case 16000: return 1;
+    case 24000: return 1;
+    case 32000: return 1;
+    case 44100: return 1;
+    case 48000: return 1;
+    case 96000: return 1;
+    default: return 0;
     }
 }
 
@@ -65,7 +56,8 @@ static int lc3plus_plc_mode_supported(LC3PLUS_PlcMode plc_mode)
 {
     switch ((int)plc_mode)
     {
-    case LC3PLUS_PLC_ADVANCED: return 1;
+    case LC3PLUS_PLC_ADVANCED: /* fallthru */
+        return 1;
     default: return 0;
     }
 }
@@ -88,16 +80,36 @@ static int null_in_list(void **list, int n)
     return 0;
 }
 
+/* return pointer to aligned base + base_size, *base_size += size + 4 bytes align */
+void *balloc(void *base, size_t *base_size, size_t size)
+{
+    uintptr_t ptr = ((uintptr_t)base + *base_size + 3) & ~3;
+    assert((uintptr_t)base % 4 == 0); /* base must be 4-byte aligned */
+    *base_size = (*base_size + size + 3) & ~3;
+    return (void *)ptr;
+}
+
+int32_t lc3_enc_supported_lfe(void)
+{
+    return 1;
+}
 
 /* encoder functions *********************************************************/
-
-LC3PLUS_Error lc3plus_enc_init(LC3PLUS_Enc *encoder, int samplerate, int channels)
+LC3PLUS_Error lc3plus_enc_init(LC3PLUS_Enc *encoder, int samplerate, int channels, int hrmode, int32_t lfe_channel_array[])
 {
     RETURN_IF(encoder == NULL, LC3PLUS_NULL_ERROR);
     RETURN_IF((uintptr_t)encoder % 4 != 0, LC3PLUS_ALIGN_ERROR);
     RETURN_IF(!lc3plus_samplerate_supported(samplerate), LC3PLUS_SAMPLERATE_ERROR);
     RETURN_IF(!lc3plus_channels_supported(channels), LC3PLUS_CHANNELS_ERROR);
-    return FillEncSetup(encoder, samplerate, channels); /* real bitrate check happens here */
+    RETURN_IF(samplerate==96000 && hrmode == 0, LC3PLUS_HRMODE_ERROR);
+
+    int ch = 0;
+    for (ch = 0; ch < channels; ch++)
+    {
+        RETURN_IF(!lc3_enc_supported_lfe() && lfe_channel_array[ch], LC3PLUS_LFE_MODE_NOT_SUPPORTED);
+    }
+
+    return FillEncSetup(encoder, samplerate, channels, hrmode, lfe_channel_array); /* real bitrate check happens here */
 }
 
 int lc3plus_enc_get_size(int samplerate, int channels)
@@ -105,6 +117,13 @@ int lc3plus_enc_get_size(int samplerate, int channels)
     RETURN_IF(!lc3plus_samplerate_supported(samplerate), 0);
     RETURN_IF(!lc3plus_channels_supported(channels), 0);
     return alloc_encoder(NULL, channels);
+}
+
+/* Dummy function for API alignment */
+int lc3plus_enc_get_scratch_size(const LC3PLUS_Enc *encoder)
+{
+    UNUSED(encoder);
+    return 0;
 }
 
 int lc3plus_enc_get_input_samples(const LC3PLUS_Enc *encoder)
@@ -125,18 +144,23 @@ int lc3plus_enc_get_real_bitrate(const LC3PLUS_Enc *encoder)
     int ch = 0, totalBytes = 0;
     RETURN_IF(encoder == NULL, 0);
     RETURN_IF(!encoder->lc3_br_set, LC3PLUS_BITRATE_UNSET_ERROR);
+    
     for (ch = 0; ch < encoder->channels; ch++)
     {
         totalBytes += encoder->channel_setup[ch]->targetBytes;
     }
-    int bitrate = (totalBytes * 80000)/ encoder->frame_dms;
+    
+    int bitrate = (totalBytes * 80000.0 + encoder->frame_dms - 1) / encoder->frame_dms;
+    
     if (encoder->fs_in == 44100)
     {
         int rem = bitrate % 480;
-        bitrate = ((bitrate - rem) / 480)* 441 + (rem * 441) / 480;
+        bitrate = ((bitrate - rem) / 480) * 441 + (rem * 441) / 480;
     }
+    
     return bitrate;
 }
+
 
 LC3PLUS_Error lc3plus_enc_set_bitrate(LC3PLUS_Enc *encoder, int bitrate)
 {
@@ -154,27 +178,16 @@ int lc3plus_enc_get_delay(const LC3PLUS_Enc *encoder)
     return encoder->frame_length - 2 * encoder->la_zeroes;
 }
 
-LC3PLUS_Error lc3plus_enc_set_frame_ms(LC3PLUS_Enc *encoder, float frame_ms)
+LC3PLUS_Error lc3plus_enc_set_frame_dms(LC3PLUS_Enc *encoder, int frame_dms)
 {
     RETURN_IF(encoder == NULL, LC3PLUS_NULL_ERROR);
-    RETURN_IF(!lc3plus_frame_size_supported(frame_ms), LC3PLUS_FRAMEMS_ERROR);
+    RETURN_IF(!lc3plus_frame_size_supported(frame_dms / 10.0), LC3PLUS_FRAMEMS_ERROR);
     RETURN_IF(encoder->lc3_br_set, LC3PLUS_BITRATE_SET_ERROR);
-    encoder->frame_dms = (int)(frame_ms * 10);
-    encoder->frame_ms = frame_ms;
+    encoder->frame_dms = frame_dms;
+    encoder->frame_ms = frame_dms / 10.0;
     set_enc_frame_params(encoder);
     return LC3PLUS_OK;
 }
-
-#ifndef STRIP_HR_MODE_API
-LC3PLUS_Error lc3plus_enc_set_hrmode(LC3PLUS_Enc* encoder, int hrmode)
-{
-    RETURN_IF(encoder == NULL, LC3PLUS_NULL_ERROR);
-    RETURN_IF(encoder->fs_in < 48000 && hrmode != 0, LC3PLUS_SAMPLERATE_ERROR);
-    encoder->hrmode = hrmode > 0;
-    set_enc_frame_params(encoder);
-    return LC3PLUS_OK;
-}
-#endif
 
 LC3PLUS_Error lc3plus_enc_set_bandwidth(LC3PLUS_Enc *encoder, int bandwidth)
 {
@@ -200,20 +213,20 @@ LC3PLUS_Error lc3plus_enc_set_bandwidth(LC3PLUS_Enc *encoder, int bandwidth)
     return LC3PLUS_OK;
 }
 
-LC3PLUS_Error lc3plus_enc_set_lfe(LC3PLUS_Enc *encoder, int lfe)
-{
-    RETURN_IF(encoder == NULL, LC3PLUS_NULL_ERROR);
-    encoder->lfe = (lfe != 0);
-    return LC3PLUS_OK;
-}
 
-LC3PLUS_Error lc3plus_enc16(LC3PLUS_Enc* encoder, int16_t** input_samples, void* output_bytes, int* num_bytes)
+LC3PLUS_Error lc3plus_enc16(LC3PLUS_Enc* encoder, int16_t** input_samples, void* output_bytes, int* num_bytes
+, void *scratch
+)
 {
+    UNUSED(scratch);
     return lc3plus_enc_fl(encoder, (void**)input_samples, 16, output_bytes, num_bytes);
 }
 
-LC3PLUS_Error lc3plus_enc24(LC3PLUS_Enc* encoder, int32_t** input_samples, void* output_bytes, int* num_bytes)
+LC3PLUS_Error lc3plus_enc24(LC3PLUS_Enc* encoder, int32_t** input_samples, void* output_bytes, int* num_bytes
+, void *scratch
+)
 {
+    UNUSED(scratch);
     return lc3plus_enc_fl(encoder, (void**)input_samples, 24, output_bytes, num_bytes);
 }
 
@@ -222,7 +235,7 @@ LC3PLUS_Error lc3plus_enc_fl(LC3PLUS_Enc* encoder, void** input_samples, int bit
 {
     RETURN_IF(!encoder || !input_samples || !output_bytes || !num_bytes, LC3PLUS_NULL_ERROR);
     RETURN_IF(null_in_list(input_samples, encoder->channels), LC3PLUS_NULL_ERROR);
-    RETURN_IF(bitdepth != 16 && bitdepth != 24 && bitdepth != 32, LC3PLUS_ERROR);
+    RETURN_IF(bitdepth != 16 && bitdepth != 24, LC3PLUS_ERROR);
     *num_bytes = Enc_LC3PLUS_fl(encoder, input_samples, output_bytes, bitdepth
                             , *num_bytes == -1
                            );
@@ -232,13 +245,14 @@ LC3PLUS_Error lc3plus_enc_fl(LC3PLUS_Enc* encoder, void** input_samples, int bit
 
 /* decoder functions *********************************************************/
 
-LC3PLUS_Error lc3plus_dec_init(LC3PLUS_Dec* decoder, int samplerate, int channels, LC3PLUS_PlcMode plc_mode)
+LC3PLUS_Error lc3plus_dec_init(LC3PLUS_Dec* decoder, int samplerate, int channels, LC3PLUS_PlcMode plc_mode, int hrmode)
 {
     RETURN_IF(decoder == NULL, LC3PLUS_NULL_ERROR);
     RETURN_IF(!lc3plus_samplerate_supported(samplerate), LC3PLUS_SAMPLERATE_ERROR);
     RETURN_IF(!lc3plus_channels_supported(channels), LC3PLUS_CHANNELS_ERROR);
     RETURN_IF(!lc3plus_plc_mode_supported(plc_mode), LC3PLUS_PLCMODE_ERROR);
-    return FillDecSetup(decoder, samplerate, channels, plc_mode);
+    RETURN_IF(samplerate==96000 && hrmode == 0, LC3PLUS_HRMODE_ERROR);
+    return FillDecSetup(decoder, samplerate, channels, plc_mode, hrmode);
 }
 
 int lc3plus_dec_get_size(int samplerate, int channels)
@@ -248,13 +262,21 @@ int lc3plus_dec_get_size(int samplerate, int channels)
     return alloc_decoder(NULL, samplerate, channels);
 }
 
-LC3PLUS_Error lc3plus_dec_set_frame_ms(LC3PLUS_Dec* decoder, float frame_ms)
+/* Dummy function for API alignment */
+int lc3plus_dec_get_scratch_size(const LC3PLUS_Dec *decoder)
+{
+    UNUSED(decoder);
+    return 0;
+}
+
+LC3PLUS_Error lc3plus_dec_set_frame_dms(LC3PLUS_Dec *decoder, int frame_dms)
 {
     RETURN_IF(decoder == NULL, LC3PLUS_NULL_ERROR);
-    RETURN_IF(!lc3plus_frame_size_supported(frame_ms), LC3PLUS_FRAMEMS_ERROR);
-    RETURN_IF(decoder->plcMeth == 2 && frame_ms != 10, LC3PLUS_FRAMEMS_ERROR);
-    decoder->frame_ms = frame_ms;
-    decoder->frame_dms = (LC3_INT) (frame_ms * 10);
+    RETURN_IF(!lc3plus_frame_size_supported(frame_dms / 10.0), LC3PLUS_FRAMEMS_ERROR);
+    RETURN_IF(decoder->plcMeth == 2 && frame_dms != 100, LC3PLUS_FRAMEMS_ERROR);
+
+    decoder->frame_dms = frame_dms;
+    decoder->frame_ms = frame_dms / 10.0;
     set_dec_frame_params(decoder);
     return LC3PLUS_OK;
 }
@@ -278,13 +300,19 @@ LC3PLUS_Error lc3plus_dec_fl(LC3PLUS_Dec* decoder, void* input_bytes, int num_by
     return Dec_LC3PLUS_fl(decoder, input_bytes, num_bytes, output_samples, bps, bfi_ext);
 }
 
-LC3PLUS_Error lc3plus_dec16(LC3PLUS_Dec* decoder, void* input_bytes, int num_bytes, int16_t** output_samples, int bfi_ext)
+LC3PLUS_Error lc3plus_dec16(LC3PLUS_Dec* decoder, void* input_bytes, int num_bytes, int16_t** output_samples,
+ void* scratch,
+ int bfi_ext)
 {
+    UNUSED(scratch);
     return lc3plus_dec_fl(decoder, input_bytes, num_bytes, (void**)output_samples, 16, bfi_ext);
 }
 
-LC3PLUS_Error lc3plus_dec24(LC3PLUS_Dec* decoder, void* input_bytes, int num_bytes, int32_t** output_samples, int bfi_ext)
+LC3PLUS_Error lc3plus_dec24(LC3PLUS_Dec* decoder, void* input_bytes, int num_bytes, int32_t** output_samples,
+ void* scratch,
+ int bfi_ext)
 {
+    UNUSED(scratch);
     return lc3plus_dec_fl(decoder, input_bytes, num_bytes, (void**)output_samples, 24, bfi_ext);
 }
 
@@ -295,7 +323,6 @@ LC3PLUS_Error lc3plus_enc_free_memory(LC3PLUS_Enc* encoder)
     RETURN_IF(!encoder, LC3PLUS_NULL_ERROR);
 
     lc3plus_free_encoder_structs(encoder);
-    free(encoder);
 
     return LC3PLUS_OK;
 }
@@ -305,7 +332,6 @@ LC3PLUS_Error lc3plus_dec_free_memory(LC3PLUS_Dec* decoder)
     RETURN_IF(!decoder, LC3PLUS_NULL_ERROR);
 
     lc3plus_free_decoder_structs(decoder);
-    free(decoder);
 
     return LC3PLUS_OK;
 }
@@ -337,30 +363,17 @@ LC3PLUS_Error lc3plus_free_decoder_structs(LC3PLUS_Dec* decoder)
     return LC3PLUS_OK;
 }
 
-#ifndef STRIP_HR_MODE_API_MODE_API
-LC3PLUS_Error lc3plus_dec_set_hrmode(LC3PLUS_Dec* decoder, int hrmode)
-{
-    RETURN_IF(decoder == NULL, LC3PLUS_NULL_ERROR);
-    RETURN_IF(decoder->fs_idx < 4 && hrmode != 0, LC3PLUS_SAMPLERATE_ERROR);
-    RETURN_IF((decoder->fs_idx == 5) && (hrmode == 0), LC3PLUS_HRMODE_ERROR);
-    decoder->hrmode = hrmode > 0;
-    set_dec_frame_params(decoder);
-    return LC3PLUS_OK;
-}
-#endif
 
-LC3PLUS_Error lc3plus_dec_get_ep_mode_request(const LC3PLUS_Dec* decoder, LC3PLUS_EpModeRequest* const epmr)
+LC3PLUS_EpModeRequest lc3plus_dec_get_ep_mode_request(const LC3PLUS_Dec *decoder)
 {
-    RETURN_IF(decoder == NULL, LC3PLUS_NULL_ERROR);
-    *epmr = (LC3PLUS_EpModeRequest)decoder->epmr;
-    return LC3PLUS_OK;
+    RETURN_IF(decoder == NULL, LC3PLUS_EPMR_ZERO);
+    return (LC3PLUS_EpModeRequest)decoder->epmr;
 }
 
-LC3PLUS_Error lc3plus_dec_get_error_report(const LC3PLUS_Dec *decoder, int32_t* const errorReport)
+int lc3plus_dec_get_error_report(const LC3PLUS_Dec *decoder)
 {
-    RETURN_IF(decoder == NULL, LC3PLUS_NULL_ERROR);
-    *errorReport = decoder->error_report == 2047 ? -1 : decoder->error_report & 0x07FF;
-    return LC3PLUS_OK;
+    RETURN_IF(decoder == NULL, 0);
+    return decoder->error_report == 2047 ? -1 : decoder->error_report & 0x07FF;
 }
 
 LC3PLUS_Error lc3plus_enc_set_ep_mode(LC3PLUS_Enc *encoder, LC3PLUS_EpMode epmode)
@@ -393,11 +406,10 @@ LC3PLUS_Error lc3plus_dec_set_ep_enabled(LC3PLUS_Dec *decoder, int32_t ep_enable
     return LC3PLUS_OK;
 }
 
-LC3PLUS_Error lc3plus_dec_get_epok_flags(LC3PLUS_Dec* const decoder, int32_t* const epokFlags)
+int lc3plus_dec_get_epok_flags(const LC3PLUS_Dec *decoder)
 {
-    RETURN_IF(decoder == NULL, LC3PLUS_NULL_ERROR);
-    *epokFlags = decoder->error_report >> 11;
-    return LC3PLUS_OK;
+    RETURN_IF(decoder == NULL, 0);
+    return decoder->error_report >> 11;
 }
 
 #ifndef STRIP_ERROR_PROTECTION_API_FL

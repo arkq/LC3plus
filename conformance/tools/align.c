@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -15,17 +15,20 @@
 
 static void printUsage(void);
 void WriteWav(WAVEFILEOUT* out_file, int *sample_buf, int nSamples, int bps);
+void check_file_exists(char *filename);
 
 
 int main(int ac, char * av[])
 {
-    char     *in_filename = NULL, *out_filename = NULL;
-    int       samplerate = 0, channels = 0, input_len = 0, bps = 0;
+    char         *in_filename = NULL, *out_filename = NULL;
+    short         channels = 0, bps = 0;
+    unsigned int  samplerate = 0, input_len = 0, nSamplesRead = 0;
     WAVEFILEIN  *in_file;
     WAVEFILEOUT *out_file;
     int sample_buf[MAX_CHANNEL_NUMBER];
+    short sample_buf_short[MAX_CHANNEL_NUMBER];
     int zero_buf[MAX_CHANNEL_NUMBER];
-    int nSamplesRead = 0, ref_len = 0, delay = 0, count = 0, end_1, end_2;
+    int  ref_len = 0, delay = 0, count = 0, end_1, end_2;
 
 
     if ( ac < 4 )
@@ -38,6 +41,7 @@ int main(int ac, char * av[])
     ref_len = atoi(av[3]);
     delay = atoi(av[4]);
     
+    check_file_exists(in_filename);
     if ( delay < 0 )
     {
         printf("delay must be a positiv value!\n");
@@ -61,7 +65,19 @@ int main(int ac, char * av[])
     while(1)
     {
         if (count < input_len){
-            ReadWavShort(in_file, sample_buf, channels, &nSamplesRead); //read only one sample per iteration
+            if ( bps == 16 ){
+                ReadWavShort(in_file, sample_buf_short, channels, &nSamplesRead); //read only one sample per iteration
+                for (int i = 0; i < channels; i++ ){
+                    sample_buf[i] = (int) sample_buf_short[i];
+                }
+            }
+            else if (bps == 24 ){
+                ReadWavInt(in_file, sample_buf, channels, &nSamplesRead); //read only one sample per iteration
+            }
+            else {
+                printf("  Only 16 or 24 bits per samples supported!");
+                exit(1);
+            }
         }
         if (delay <= count && count < end_1){
             WriteWav(out_file, sample_buf, channels, bps);
@@ -113,6 +129,19 @@ void WriteWav(WAVEFILEOUT* out_file, int *sample_buf, int nSamples, int bps)
     }
     else {
         printf("  Only 16 or 24 bits per samples supported!");
+        exit(1);
+    }
+}
+
+void check_file_exists(char *filename)
+{
+    FILE *fp;
+    if ((fp = fopen(filename, "r")))
+    {
+        fclose(fp);
+    }
+    else {
+        printf("File not found error: %s\n",filename);
         exit(1);
     }
 }

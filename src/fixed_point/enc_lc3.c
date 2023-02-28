@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -40,7 +40,6 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
                       UWord8 * resBits;
                       Word16 ltpf_idx[3]; 
                       EncSetup * h_EncSetup;
-                      Word16 sns_damping;
                       Word8 * currentScratch;
                      );
 #else
@@ -52,7 +51,7 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
                       Word32 * L_scf_idx; Word32 * d_fx, *ener_fx;
                       Word16 * s_12k8, *int_scf_fx_exp, *q_d_fx16, *int_scf_fx, tns_order[TNS_NUMFILTERS_MAX], *indexes;
                       Word16 * scf, *scf_q; Word16 * codingdata; Word16 * s_in_scaled; UWord8 * resBits;
-                      Word8 * currentScratch; Word16 ltpf_idx[3]; EncSetup * h_EncSetup; Word16 sns_damping;);
+                      Word8 * currentScratch; Word16 ltpf_idx[3]; EncSetup * h_EncSetup;);
 #endif /* ENABLE_HR_MODE */
     
     h_EncSetup = encoder->channel_setup[channel];
@@ -221,14 +220,14 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
                                       encoder->bands_number, ener_fx, ener_fx_exp);
 
         /* Disable LTPF if nyquist detector triggers */
-        IF (encoder->near_nyquist_flag != 0 || sub(encoder->lfe, 1) == 0)
+        IF (encoder->near_nyquist_flag != 0 || sub(h_EncSetup->lfe, 1) == 0)
         {
             h_EncSetup->ltpf_mem_ltpf_on = 0;  move16();
             ltpf_idx[1] = 0;  move16();
         }
     BASOP_sub_end();
     BASOP_sub_start("BW Cutoff-Detection");
-    IF (encoder->lfe == 0)
+    IF (h_EncSetup->lfe == 0)
     {
 #ifdef ENABLE_HR_MODE
     /* No BW Cutoff for 8 kHz and 96 kHz */
@@ -254,20 +253,10 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
 
     BASOP_sub_start("SnsCompScf");
 
-#ifdef ENABLE_HR_MODE
-    IF (encoder->hrmode)
-    {
-        sns_damping = SNS_DAMPING_HRMODE;
-    }
-    ELSE
-#endif
-    {
-        sns_damping = SNS_DAMPING;
-    }
 
     /* currentScratch Size = 512 bytes */
     processSnsComputeScf_fx(ener_fx, ener_fx_exp, encoder->fs_idx, encoder->bands_number, scf,
-                            h_EncSetup->attdec_detected, encoder->attdec_damping, currentScratch, sns_damping
+                            h_EncSetup->attdec_detected, encoder->attdec_damping, currentScratch, encoder->sns_damping
     );
     BASOP_sub_end();
 
@@ -296,8 +285,8 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
     BASOP_sub_end();
     BASOP_sub_start("Tns_enc");
     /* currentScratch Size = 2 * MAX_LEN + 220 */
-        
-    IF (encoder->lfe == 0)
+
+    IF (h_EncSetup->lfe == 0)
     {
     processTnsCoder_fx(&(h_EncSetup->tns_bits), indexes, d_fx, BW_cutoff_idx, tns_order, &tns_numfilters,
                        h_EncSetup->enable_lpc_weighting, encoder->nSubdivisions, encoder->frame_dms,
@@ -322,6 +311,16 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
     BASOP_sub_start("Est. Global Gain");
     /* currentScratch Size = 4 * MAX_LEN bytes */
     h_EncSetup->targetBitsQuant = sub(h_EncSetup->targetBitsInit, add(h_EncSetup->tns_bits, ltpf_bits));
+
+    test();
+    IF (h_EncSetup->targetBitsQuant < 0 && sub(ltpf_bits, 1) > 0)
+    {
+        /* Disable LTPF */
+        h_EncSetup->ltpf_mem_ltpf_on = 0;  move16();
+        ltpf_idx[1]                  = 0;  move16();
+        ltpf_bits                    = 1;  move16();
+        h_EncSetup->targetBitsQuant  = sub(h_EncSetup->targetBitsInit, add(h_EncSetup->tns_bits, ltpf_bits));
+    }
         
 #ifdef ENABLE_HR_MODE
     Word32 gain32;
@@ -415,7 +414,7 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
 
     BASOP_sub_start("Noise fac");
     /* currentScratch Size = 2 * MAX_LEN bytes */
-    IF (encoder->lfe == 0)
+    IF (h_EncSetup->lfe == 0)
     {
         processNoiseFactor_fx(&fac_ns_idx, d_fx_exp, d_fx,
 #ifdef ENABLE_HR_MODE

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -8,18 +8,6 @@
 ******************************************************************************/
                                                                                
 #include "functions.h"
-
-
-/* return pointer to aligned base + base_size, *base_size += size + 8 bytes align */
-void *balloc(void *base, size_t *base_size, size_t size)
-{
-    uintptr_t ptr = ((uintptr_t)base + *base_size + ALIGNMENT_BALLOC_RED) & (uintptr_t)~ALIGNMENT_BALLOC_RED;
-    assert((uintptr_t)base % ALIGNMENT_BALLOC == 0); /* base must be 8-byte aligned */
-    *base_size = (ptr - (uintptr_t)base) + size;
-    //*base_size = (*base_size + size + ALIGNMENT_BALLOC_RED) & (size_t)~ALIGNMENT_BALLOC_RED;
-    return (void *)ptr;
-}
-
 
 LC3_FLOAT array_max_abs(LC3_FLOAT *in, LC3_INT32 len)
 {

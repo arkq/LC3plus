@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -335,10 +335,8 @@ void processSnsInterpolateScf_fx(
                                  Word16 mdct_scf_exp[], Word16 inv_scf,
                                  Word16 n_bands, Word8 *scratchBuffer);
 
-#ifdef ENABLE_HR_MODE
 void   downshift_w32_arr(Word32 *w32_arr, Word16 *w16_arr, Word16 shft_val, Word32 len);
 void   round_w32tow16_arr(Word32 *w32_arr, Word16 *w16_arr, Word32 len);
-#endif
 
 void processPLCmain_fx(Word16 plcMeth, Word16 *concealMethod, Word16 *nbLostFramesInRow, Word16 bfi, Word16 prev_bfi,
                        Word16 frame_length, Word16 la_zeroes,
@@ -694,14 +692,11 @@ void processPcApplyDamping_fx(Word32 x[], Word16 xLen, Word16 fac, Word16 spec_i
 
 void process_cutoff_bandwidth(Word32 d_fx[], Word16 len, Word16 bw_bin);
 
-void dct16_fx(const Word16 *in, Word16 *out);
 void idct16_fx(const Word16 *in, Word16 *out);
 
-#ifdef ENABLE_HR_MODE
 void dct32_fx(const Word32 *in, Word32 *out);
 void idct32_fx(const Word32 *in, Word32 *out);
 void idct32_32_fx(const Word32 *in, Word32 *out);
-#endif
 
 /* Functions used in arithmetic coder */
 
@@ -733,6 +728,7 @@ LC3PLUS_Error FillEncSetup(LC3PLUS_Enc *encoder, int samplerate, int channels
 #ifdef ENABLE_HR_MODE
                            , int hrmode
 #endif
+                           , int32_t lfe_channel_array[]
                           );
 
 /* setup_dec_lc3.c */

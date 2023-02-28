@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -25,9 +25,7 @@
 #  define extractW16(a) (a)
 #endif
 
-#ifdef ENABLE_HR_MODE
-#  define MAX_BR 320000        /*      400 * 800 */
-#endif
+#define MAX_BR 320000        /*      400 * 800 */
 
 /* FUNCTION MACROS */
 /* NB, divisions in some of these MACROs, use mainly for initial setup, do not use in loops */
@@ -99,6 +97,17 @@
 
 #endif /* NO_POST_REL_CHANGES Post-release changes */
 
+#  define MIN_BR_100DMS   16000  /*       20 * 800 * 100/100  */
+#    ifdef SUBSET_NB
+#      define MAX_BR_100DMS_NB   114400  /* for 100ms at  8kHz */
+#    endif
+#    ifdef SUBSET_WB
+#      define MAX_BR_100DMS_WB   221600  /* for 100ms at 16kHz */
+#    endif
+#    ifdef SUBSET_SSWB
+#      define MAX_BR_100DMS_SSWB 314400  /* for 100ms at 24kHz */
+#    endif
+
 /* G192 bitstream writing/reading */
 #define G192_GOOD_FRAME 0x6B21
 #define G192_BAD_FRAME 0x6B20
@@ -137,6 +146,20 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #    define SUBSET_UB
 #  endif
 #endif
+
+#  define MIN_BR_100DMS   16000  /*       20 * 800 * 100/100  */
+#  define MIN_BR_025DMS   64000          /*       20 * 800 * 100/ 25  */
+#  define MIN_BR_050DMS   32000          /*       20 * 800 * 100/ 50  */
+#  define MAX_BR_050DMS_NB   260800  /*      163 * 800 * 100/ 50  */
+#    ifdef SUBSET_NB
+#      define MAX_BR_100DMS_NB   114400  /* for 100ms at  8kHz */
+#    endif
+#    ifdef SUBSET_WB
+#      define MAX_BR_100DMS_WB   221600  /* for 100ms at 16kHz */
+#    endif
+#    ifdef SUBSET_SSWB
+#      define MAX_BR_100DMS_SSWB 314400  /* for 100ms at 24kHz */
+#    endif
 
 #define PACK_RESBITS
 
@@ -228,6 +251,9 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #define SNS_DAMPING 27853        /* 0.85 in Q15 */
 #ifdef ENABLE_HR_MODE
 #  define SNS_DAMPING_HRMODE 19661 /* 0.6 in Q15 */
+#    define SNS_DAMPING_HRMODE_UB_10MS  6881 /* 0.21 in Q15 */
+#    define SNS_DAMPING_HRMODE_UB_5MS   4915 /* 0.15 in Q15 */
+#    define SNS_DAMPING_HRMODE_UB_2_5MS 4915 /* 0.15 in Q15 */
 #endif
 
 /* PVQ VQ setup */

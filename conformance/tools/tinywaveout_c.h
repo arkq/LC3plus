@@ -1,11 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
-******************************************************************************/                                                                           
+******************************************************************************/
 
 #ifndef __TINYWAVEOUT_C_H__
 #define __TINYWAVEOUT_C_H__
@@ -84,7 +84,7 @@ static int CloseWavBWF(WAVEFILEOUT* self, WAVEOUT_LOUDNESSINFO bextData);
 
 /***** Implementation *********************************************************/
 
-#if defined (__i386__) || defined (_M_IX86) || defined (_M_X64) || defined (__x86_64__) || defined (__arm__) || defined (__xtensa__) || defined (__aarch64__) || defined (__EMSCRIPTEN__)
+#if defined (__i386__) || defined (_M_IX86) || defined (_M_X64) || defined (__x86_64__) || defined (__arm__) || defined (__xtensa__) || defined (__aarch64__) || defined (__EMSCRIPTEN__) || defined(__hexagon__)
 #define __TWO_LE    /* _T_iny _W_ave _O_ut _L_ittle _E_ndian */
 #endif
 
@@ -503,7 +503,7 @@ static int __WriteSample24(
   if ((scale - 24) > 0)
     sample = sample >> (scale - 24);
   else
-    sample = sample << (24 - scale);
+    sample = (int) (((unsigned int)sample) << (24 - scale));
 
   v = (int)CLIP_PCM24(sample, &(self->clipCount));
 #ifdef __TWO_BE
@@ -791,6 +791,14 @@ static int CloseWavBWF(
 
 /*------------- local subs ----------------*/
 
+#if 0
+static __inline int IsLittleEndian(void)
+{
+  short s = 0x01 ;
+
+  return *((char *) &s) ? 1 : 0;
+}
+#endif
 
 
 static __inline unsigned int BigEndian32(char a, char b, char c, char d)

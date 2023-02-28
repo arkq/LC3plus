@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -125,14 +125,22 @@ void *balloc(void *base, size_t *base_size, size_t size)
     return (void *)ptr;
 }
 
+int32_t lc3_enc_supported_lfe(void)
+{
+    return 1;
+}
+
 /* encoder functions *********************************************************/
 
 LC3PLUS_Error lc3plus_enc_init(LC3PLUS_Enc *encoder, int samplerate, int channels
 #ifdef ENABLE_HR_MODE
                                , int hrmode
 #endif
+                               , int32_t lfe_channel_array[]
                               )
 {
+    int ch = 0;
+
     RETURN_IF(encoder == NULL, LC3PLUS_NULL_ERROR);
     RETURN_IF((uintptr_t)encoder % 4 != 0, LC3PLUS_ALIGN_ERROR);
     RETURN_IF(!lc3plus_samplerate_supported(samplerate), LC3PLUS_SAMPLERATE_ERROR);
@@ -141,10 +149,19 @@ LC3PLUS_Error lc3plus_enc_init(LC3PLUS_Enc *encoder, int samplerate, int channel
     RETURN_IF(samplerate==96000 && hrmode == 0, LC3PLUS_HRMODE_ERROR);
 #endif
 
+    for (ch = 0; ch < channels; ch++)
+    {
+        RETURN_IF(!lc3_enc_supported_lfe() && lfe_channel_array[ch], LC3PLUS_LFE_MODE_NOT_SUPPORTED);
+    }
+
 #ifdef ENABLE_HR_MODE
-    return FillEncSetup(encoder, samplerate, channels, hrmode); /* real bitrate check happens here */
+    return FillEncSetup(encoder, samplerate, channels, hrmode
+                        , lfe_channel_array
+    ); /* real bitrate check happens here */
 #else
-    return FillEncSetup(encoder, samplerate, channels); /* real bitrate check happens here */
+    return FillEncSetup(encoder, samplerate, channels
+                        , lfe_channel_array
+    ); /* real bitrate check happens here */
 #endif
 }
 
@@ -264,12 +281,6 @@ LC3PLUS_Error lc3plus_enc_set_bandwidth(LC3PLUS_Enc *encoder, int bandwidth)
     return LC3PLUS_OK;
 }
 
-LC3PLUS_Error lc3plus_enc_set_lfe(LC3PLUS_Enc *encoder, int lfe)
-{
-    RETURN_IF(encoder == NULL, LC3PLUS_NULL_ERROR);
-    encoder->lfe = (lfe != 0);
-    return LC3PLUS_OK;
-}
 
 static LC3PLUS_Error lc3plus_enc(LC3PLUS_Enc *encoder, void **input_samples, int bitdepth, void *output_bytes, int *num_bytes,
                          void *scratch)

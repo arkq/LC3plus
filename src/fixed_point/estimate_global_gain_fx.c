@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -447,19 +447,19 @@ void processEstimateGlobalGain_fx(Word32 x[], Word16 x_e, Word16 lg, Word16 nbit
                     {
                         if (iszero == 0)
                         {
-                            ener = L_add(ener, 0x3C7AE); /* 0x3C7AE -> (28/20)*(2.7) in Q16 */
+                            ener = L_add_sat(ener, 0x3C7AE); /* 0x3C7AE -> (28/20)*(2.7) in Q16 */
                         }
                     }
                     else 
                     {
-                        ener   = L_add(ener, tmp32);
+                        ener   = L_add_sat(ener, tmp32);
                         iszero = 0;
                         move16();
 
                         diff2 = L_sub(tmp32, 0x460000); /* 0x460000 -> (28/20)*(50) in Q16 */
                         if (diff2 >= 0)
                         {
-                            ener = L_add(ener, diff2);
+                            ener = L_add_sat(ener, diff2);
                         }
                     }
                 

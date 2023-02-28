@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -154,7 +154,7 @@ Word32 BASOP_Util_InvLog2_pos(Word32 x, Word16 *exp)
     UWord32 lookup12;
     UWord32 lookup;
 
-    /* The usage of exp.mantissa format in LC3 in Word32 is : floatval = mantissa / (2^(31 - exp)) */
+    /* The usage of exp.mantissa format in LC3plus in Word32 is : floatval = mantissa / (2^(31 - exp)) */
     ret_exp = extract_l(L_shr(x, 25));
 
     IF (x < -1040187392l /*-31.0/64.0 Q31*/)
@@ -692,7 +692,7 @@ void Copy_Scale_sig(const Word16 x[], /* i  : signal to scale input           Qx
     }
     FOR (i = 0; i < lg; i++)
     {
-        y[i] = shl(x[i], exp0); move16(); /* saturation can occur here */
+        y[i] = shl_sat(x[i], exp0); move16(); /* saturation can occur here */
     }
 }
 

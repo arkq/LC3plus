@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -149,7 +149,8 @@ void write_bit_backward_fl(LC3_UINT8* ptr, LC3_INT* bp_side, LC3_INT* mask_side,
 void write_uint_backward_fl(LC3_UINT8* ptr, LC3_INT* bp_side, LC3_INT* mask_side, LC3_INT val, LC3_INT numbits);
 
 void processAriEncoder_fl(LC3_UINT8* bytes, LC3_INT bp_side, LC3_INT mask_side, LC3_INT* x, LC3_INT* tns_order, LC3_INT tns_numfilters,
-                          LC3_INT* tns_idx, LC3_INT lastnz, LC3_INT* codingdata, uint8_t* res_bits, LC3_INT resBitsLen, LC3_INT lsbMode,
+                          LC3_INT* tns_idx, LC3_INT lastnz,
+                          LC3_INT* codingdata, uint8_t* res_bits, LC3_INT resBitsLen, LC3_INT lsbMode,
                           LC3_INT nbbits, LC3_INT enable_lpc_weighting);
 
 void attack_detector_fl(LC3_FLOAT* in, LC3_INT frame_size, LC3_INT fs, LC3_INT* lastAttackPosition, LC3_FLOAT* accNrg, LC3_INT* attackFlag,
@@ -165,13 +166,14 @@ int       alloc_encoder(LC3PLUS_Enc* encoder, int channels);
 void      set_enc_frame_params(LC3PLUS_Enc* encoder);
 LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc* encoder, int bitrate);
 
-LC3PLUS_Error FillEncSetup(LC3PLUS_Enc* encoder, int samplerate, int channels);
+LC3PLUS_Error FillEncSetup(LC3PLUS_Enc* encoder, int samplerate, int channels, int hrmode, int32_t lfe_channel_array[]);
 
 /* Setup Functions */
 int       alloc_decoder(LC3PLUS_Dec* decoder, int samplerate, int channels);
 void      set_dec_frame_params(LC3PLUS_Dec* decoder);
 LC3PLUS_Error update_dec_bitrate(LC3PLUS_Dec* decoder, int ch, int nBytes);
-LC3PLUS_Error FillDecSetup(LC3PLUS_Dec* decoder, int samplerate, int channels, LC3PLUS_PlcMode plc_mode);
+
+LC3PLUS_Error FillDecSetup(LC3PLUS_Dec* decoder, int samplerate, int channels, LC3PLUS_PlcMode plc_mode, int hrmode);
 
 int       Enc_LC3PLUS_fl(LC3PLUS_Enc* encoder, void** input, LC3_UINT8* output, int bps
 , LC3_INT32 bfi_ext

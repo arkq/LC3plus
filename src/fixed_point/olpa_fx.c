@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.3.1                               *
+*                        ETSI TS 103 634 V1.4.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -65,7 +65,7 @@ void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[]
     FOR (n = 5; n < len; n += 2)
     {
         sum     = L_mac(L_mac(L_mult(s12k8[n - 4], 4053), s12k8[n - 3], 7712), s12k8[n - 2], 9239);
-        *s6k4++ = round_fx(L_mac_sat(L_mac(sum, s12k8[n - 1], 7712), s12k8[n], 4053)); move16();
+        *s6k4++ = round_fx_sat(L_mac_sat(L_mac(sum, s12k8[n - 1], 7712), s12k8[n], 4053)); move16();
     }
 
     mem_s12k8[0] = s12k8[len - 3]; move16();
