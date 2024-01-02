@@ -10,7 +10,7 @@
 
 #include "defines.h"
 #include "functions.h"
-#include "lc3.h"
+#include "lc3plus.h"
 #include "setup_dec_lc3.h"
 #include "setup_enc_lc3.h"
 

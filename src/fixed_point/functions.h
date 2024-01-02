@@ -20,7 +20,7 @@
 
 #include "basop_util.h"
 #include "constants.h"
-#include "lc3.h"
+#include "lc3plus.h"
 #include "setup_dec_lc3.h" /* for decoder state handle ptr  */
 #include "setup_enc_lc3.h" /* for encoder state handle ptr  */
 #include "basop_mpy.h"

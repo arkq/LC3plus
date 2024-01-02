@@ -184,7 +184,7 @@
     <ClInclude Include="..\defines.h" />
     <ClInclude Include="..\dynmem.h" />
     <ClInclude Include="..\functions.h" />
-    <ClInclude Include="..\lc3.h" />
+    <ClInclude Include="..\lc3plus.h" />
     <ClInclude Include="..\rom_basop_util.h" />
     <ClInclude Include="..\setup_dec_lc3.h" />
     <ClInclude Include="..\setup_enc_lc3.h" />

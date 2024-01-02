@@ -14,7 +14,7 @@
 #include "clib.h"
 #include "defines.h"
 #include "float.h"
-#include "lc3.h"
+#include "lc3plus.h"
 #include "setup_dec_lc3.h"
 #include "setup_enc_lc3.h"
 #include "structs.h"

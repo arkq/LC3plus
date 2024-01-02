@@ -10,7 +10,7 @@
 
 
 #include "functions.h"
-#include "lc3.h"
+#include "lc3plus.h"
 #include "tinywavein_c.h"
 #include "tinywaveout_c.h"
 

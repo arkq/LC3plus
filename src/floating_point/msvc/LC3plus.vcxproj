@@ -229,7 +229,7 @@
     <ClInclude Include="..\defines.h" />
     <ClInclude Include="..\file_io.h" />
     <ClInclude Include="..\functions.h" />
-    <ClInclude Include="..\lc3.h" />
+    <ClInclude Include="..\lc3plus.h" />
     <ClInclude Include="..\setup_dec_lc3.h" />
     <ClInclude Include="..\setup_enc_lc3.h" />
     <ClInclude Include="..\structs.h" />

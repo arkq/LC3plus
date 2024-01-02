@@ -9,7 +9,7 @@
                                                                                
 
 #include "functions.h"
-#include "lc3.h"
+#include "lc3plus.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>

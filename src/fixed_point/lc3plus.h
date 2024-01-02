@@ -8,28 +8,29 @@
 ******************************************************************************/
                                                                                
 
-/*! \file lc3.h
+/*! \file lc3plus.h
  *  This header provides the API for LC3plus.
  *
  *  This library is targeting devices with extreme memory limitations, so memory management
- *  must be handeled by the user. This includes allocating memory for the structs. The structs are persistent 
- *  between function calls.
+ *  must be handeled by the user. This includes allocating memory for the structs and scratch
+ *  memory. The structs are persistent between function calls. The scratch memory is working
+ *  memory that does not persist between function calls.
  *
  *  The amount of memory needed for various configurations can be obtained from the lc3plus_*_get_size
- *  function. The LC3PLUS_*_MAX_SIZE macro can be used for all configurations.
+ *  and lc3plus_*_get_scratch_size functions. If memory usage is not a concern the LC3PLUS_*_MAX_SIZE
+ *  LC3PLUS_*_MAX_SCRATCH_SIZE macros can be used for all configurations.
  *
  *  Depending on the build configuration some functions might not be available.
  */
 
 #ifndef LC3PLUS_H
-#define LC3PLUS_H
+#define LC3PLUS_H 
 
 #ifndef _MSC_VER
 #include <stdint.h>
 #else
-typedef unsigned char uint8_t;
-typedef __int16       int16_t;
-typedef __int32       int32_t;
+typedef __int16 int16_t;
+typedef __int32 int32_t;
 #endif
 
 /*! Construct version number from major/minor/micro values. */
@@ -42,20 +43,48 @@ typedef __int32       int32_t;
  *  less, use lc3plus_channels_supported() to check. */
 #define LC3PLUS_MAX_CHANNELS 2
 
-/*! Maximum number of samples per channel that can be stored in one LC3plus frame.
- */
+/*! Maximum number of samples per channel that can be stored in one LC3plus frame. */
+#ifdef ENABLE_HR_MODE
 #define LC3PLUS_MAX_SAMPLES 960
+#else
+#define LC3PLUS_MAX_SAMPLES 480
+#endif
 
 /*! Maximum number of bytes of one LC3plus frame. */
-#define LC3PLUS_MAX_BYTES 1250
+#ifdef ENABLE_HR_MODE
+#define LC3PLUS_MAX_BYTES   (625 * LC3PLUS_MAX_CHANNELS)
+#else
+#define LC3PLUS_MAX_BYTES 870
+#endif
 
 /*! Maximum size needed to store encoder state. */
-#define LC3PLUS_ENC_MAX_SIZE 20392
+#ifdef ENABLE_HR_MODE
+#define LC3PLUS_ENC_MAX_SIZE 12628
+#else
+#define LC3PLUS_ENC_MAX_SIZE 7226
+#endif
 
 /*! Maximum size needed to store decoder state. */
-#define LC3PLUS_DEC_MAX_SIZE 87528
+#ifdef ENABLE_HR_MODE
+#define LC3PLUS_DEC_MAX_SIZE 42488
+#else
+#define LC3PLUS_DEC_MAX_SIZE 28446
+#endif
 
-/*! Error codes returned by functions. */
+/*! Maximum scratch size needed by lc3plus_enc16() or lc3plus_enc24().*/
+#ifdef ENABLE_HR_MODE
+#  define LC3PLUS_ENC_MAX_SCRATCH_SIZE 45624
+#else
+#  define LC3PLUS_ENC_MAX_SCRATCH_SIZE 6784
+#endif
+
+/*! Maximum scratch size needed by lc3plus_dec16() or lc3plus_dec24(). */
+#ifdef ENABLE_HR_MODE
+#define LC3PLUS_DEC_MAX_SCRATCH_SIZE 59768
+#else
+#define LC3PLUS_DEC_MAX_SCRATCH_SIZE 27474
+#endif
+/*! Decoder packet loss concealment mode */
 typedef enum
 {
     LC3PLUS_PLC_ADVANCED = 1  /*!< Enhanced concealment method */
@@ -171,14 +200,18 @@ int lc3plus_samplerate_supported(int samplerate);
  *  \param[in]  hrmode      High resolution mode.
  *  \return                 LC3PLUS_OK on success or appropriate error code.
  */
-LC3PLUS_Error lc3plus_enc_init(LC3PLUS_Enc* encoder, int samplerate, int channels, int hrmode, int32_t lfe_channel_array[]);
+LC3PLUS_Error lc3plus_enc_init(LC3PLUS_Enc *encoder, int samplerate, int channels
+#ifdef ENABLE_HR_MODE
+                               , int hrmode
+#endif
+                               , int32_t lfe_channel_array[]
+                              );
 
 /*!
  *  Encode LC3plus frame with 16 bit input.
  *
  *  Each call consumes a fixed number of samples. The number of input samples
  *  can be obtained from lc3plus_enc_get_input_samples().
- *  Scratch parameter only works as dummy parameter to align fixed-point and floating-point APIs
  *
  *  \param[in]  encoder         Encoder handle initialized by lc3plus_enc_init().
  *  \param[in]  input_samples   Input samples. The left channel is stored in input_samples[0],
@@ -187,31 +220,23 @@ LC3PLUS_Error lc3plus_enc_init(LC3PLUS_Enc* encoder, int samplerate, int channel
  *  \param[out] output_bytes    Output buffer. It must have a at least lc3plus_enc_get_num_bytes()
  *                              or at most LC3PLUS_MAX_BYTES.
  *  \param[out] num_bytes       Number of bytes written to output_bytes.
- *  \param      scratch         See comment above.
+ *  \param      scratch         A pointer to an allocated work buffer of at least
+ *                              lc3plus_enc_get_scratch_size() or at most LC3PLUS_ENC_SCRATCH_SIZE bytes.
+ *                              The buffer does not have to persist, so it can be used for other
+ *                              purposes in between calls.
  *  \return                     LC3PLUS_OK on success or appropriate error code.
  */
-LC3PLUS_Error lc3plus_enc16(LC3PLUS_Enc* encoder, int16_t** input_samples, void* output_bytes, int* num_bytes
-, void *scratch
-);
+LC3PLUS_Error lc3plus_enc16(LC3PLUS_Enc *encoder, int16_t **input_samples, void *output_bytes, int *num_bytes, void *scratch);
 
 /*! Encode LC3plus frame with 24 bit input.
  *
  *  The input samples are expected to be 24-bit values, sign-extended to 32-bit.
  *  See lc3plus_enc16() for parameter documentation.
  */
-LC3PLUS_Error lc3plus_enc24(LC3PLUS_Enc* encoder, int32_t** input_samples, void* output_bytes, int* num_bytes
-, void *scratch
-);
+LC3PLUS_Error lc3plus_enc24(LC3PLUS_Enc *encoder, int32_t **input_samples, void *output_bytes, int *num_bytes, void *scratch);
 
-/*!
- *  Internal function. Use lc3plus_enc16() or lc3plus_enc24() for encoding.
- */
-
-LC3PLUS_Error lc3plus_enc_fl(LC3PLUS_Enc* encoder, void** input_samples, int bitdepth, void* output_bytes, int* num_bytes);
-
-/*! Get the size of the LC3plus encoder struct for a samplerate / channel
- * configuration. If memory is not restricted LC3PLUS_ENC_MAX_SIZE can be used for
- * all configurations.
+/*! Get the size of the LC3plus encoder struct for a samplerate / channel configuration.
+ *  If memory is not restricted LC3PLUS_ENC_MAX_SIZE can be used for all configurations.
  *
  *  \param[in]  samplerate  Sampling rate.
  *  \param[in]  channels    Number of channels.
@@ -219,7 +244,9 @@ LC3PLUS_Error lc3plus_enc_fl(LC3PLUS_Enc* encoder, void** input_samples, int bit
  */
 int lc3plus_enc_get_size(int samplerate, int channels);
 
-/*! Dummy function as no scratch management available in floating-point code. Returns always zero. Used to align fixed-point and floating-point APIs.
+/*! Get the size of the scratch buffer required by lc3plus_enc16() or lc3plus_enc24() for the current
+ *  encoder configuration. If memory is not restricted, LC3PLUS_ENC_MAX_SCRATCH_SIZE can be used for
+ *  all configurations.
  *
  *  \param[in]  encoder     Encoder handle.
  *  \return                 Size in bytes or 0 on error.
@@ -231,18 +258,18 @@ int lc3plus_enc_get_scratch_size(const LC3PLUS_Enc *encoder);
  *  \param[in]  encoder     Encoder handle.
  *  \return                 Number of samples or 0 on error.
  */
-int lc3plus_enc_get_input_samples(const LC3PLUS_Enc* encoder);
+int lc3plus_enc_get_input_samples(const LC3PLUS_Enc *encoder);
 
-/*! Get real internal bitrate of the encoder. It might differ from the requested
- *  bitrate due to 44.1 kHz input.
+/*! Get real internal bitrate of the encoder. It might differ from the requested bitrate due
+ *  to error protection or 44.1 kHz input.
  *
  *  \param[in]  encoder     Encoder handle.
  *  \return                 Bitrate in bits per second or 0 on error.
  */
-int lc3plus_enc_get_real_bitrate(const LC3PLUS_Enc* encoder);
+int lc3plus_enc_get_real_bitrate(const LC3PLUS_Enc *encoder);
 
 /*! Get the maximum number of bytes produced by lc3plus_enc16() or lc3plus_enc24() for the current
- *  bitrate. It should be equal to the num_bytes output of lc3plus_enc16/24().
+ *  bitrate. It should be equal to the num_bytes output of lc3plus_enc16().
  *
  *  \param[in]  encoder     Encoder handle.
  *  \return                 Size in bytes or 0 on error.
@@ -251,7 +278,7 @@ int lc3plus_enc_get_num_bytes(const LC3PLUS_Enc *encoder);
 
 /*! Set encoder bitrate for all channels.
  *  This function must be called at least once before encoding the first frame, but
- *  after other configuration functions such as lc3plus_enc_set_frame_ms().
+ *  after other configuration functions such as lc3plus_enc_set_frame_dms().
  *
  *  Recommended bitrates for input sampling rates with 10 ms framing:
  *  kHz     | kbps
@@ -261,13 +288,20 @@ int lc3plus_enc_get_num_bytes(const LC3PLUS_Enc *encoder);
  *  24      | 48
  *  32      | 64
  *  44.1/48 | 80(voice) 128(music)
- *  96      | 128 
  *
  *  \param[in]  encoder     Encoder handle.
  *  \param[in]  bitrate     Bitrate in bits per second.
  *  \return                 LC3PLUS_OK on success or appropriate error code.
  */
-LC3PLUS_Error lc3plus_enc_set_bitrate(LC3PLUS_Enc* encoder, int bitrate);
+LC3PLUS_Error lc3plus_enc_set_bitrate(LC3PLUS_Enc *encoder, int bitrate);
+
+/*! Set encoder Low-frequency effect moded. deactivates LTPF, TNS, NF.
+ *
+ *  \param[in]  encoder     Encoder handle.
+ *  \param[in]  lfe         LFE mode flag
+ *  \return                 LC3PLUS_OK on success or appropriate error code.
+ */
+LC3PLUS_Error lc3plus_enc_set_lfe(LC3PLUS_Enc* encoder, int lfe);
 
 /*! Get the encoder delay in number of samples.
  *
@@ -276,47 +310,27 @@ LC3PLUS_Error lc3plus_enc_set_bitrate(LC3PLUS_Enc* encoder, int bitrate);
  */
 int lc3plus_enc_get_delay(const LC3PLUS_Enc *encoder);
 
-/*! Set the frame length for LC3plus decoder in deci milliseconds.
+/*! Set the frame length for LC3plus encoder in deci milliseconds.
  *  Not all lengths may be enabled, in that case LC3PLUS_FRAMEMS_ERROR is returned.
- *  This only works correcly if the encoder was configured with the same vale.
+ *  This function must be called before lc3plus_enc_set_bitrate(). The decoder must be
+ *  configured with lc3plus_dec_set_frame_dms() with the same value.
  *
- *  \param[in]  decoder     Decoder handle.
+ *  \param[in]  encoder     Encoder handle.
  *  \param[in]  frame_ms    Frame length in ms.
  *  \return                 LC3PLUS_OK on success or appropriate error code.
  */
 LC3PLUS_Error lc3plus_enc_set_frame_dms(LC3PLUS_Enc *encoder, int frame_ms);
 
-
-/*! Set encoder Low-frequency effect moded. deactivates LTPF, TNS, NF
+/*! Set error protection mode. The default is LC3PLUS_EP_OFF. It is possible to switch between
+ *  different modees during encoding. Dynamic switching is only allowed between LC3PLUS_EP_ZERO,
+ *  LC3PLUS_EP_LOW, LC3_EP_MEDIUM, and LC3PLUS_EP_HIGH. The the decoder must be notified with
+ *  lc3plus_dec_set_ep_enabled() to expect protected data if epmode is other than LC3PLUS_EP_OFF.
  *
  *  \param[in]  encoder     Encoder handle.
- *  \param[in]  lfe         LFE mode flag
+ *  \param[in]  epmode      Error protection mode.
  *  \return                 LC3PLUS_OK on success or appropriate error code.
  */
-LC3PLUS_Error lc3plus_enc_set_lfe(LC3PLUS_Enc* encoder, int lfe);
-
-/*! Free memory allocated within LC3plus encoder struct.
- *
- *  \param[in]  encoder     Encoder handle.
- *  \return                 LC3PLUS_OK on success or appropriate error code.
- */
-LC3PLUS_Error lc3plus_enc_free_memory(LC3PLUS_Enc* encoder);
-
-/*! Set encoder bandwidth to a different value. All frequency bins above the cutoff
- *  frequency are cut off. Allowed frequencies are: 4 kHz, 8 kHz, 12 kHz, 16 kHz and 24 kHz.
- *
- *  \param[in]  encoder     Encoder handle.
- *  \param[in]  bandwidth   Cutoff Frequency in Hz
- *  \return                 LC3PLUS_OK on success or appropriate error code.
- */
-LC3PLUS_Error lc3plus_enc_set_bandwidth(LC3PLUS_Enc *encoder, int bandwidth);
-
-/*! Internal function called by lc3plus_enc_free_memory.
- *
- *  \param[in]  encoder     Encoder handle.
- *  \return                 LC3PLUS_OK on success or appropriate error code.
- */
-LC3PLUS_Error lc3plus_free_encoder_structs(LC3PLUS_Enc* encoder);
+LC3PLUS_Error lc3plus_enc_set_ep_mode(LC3PLUS_Enc *encoder, LC3PLUS_EpMode epmode);
 
 /*! Sets error protection mode request transmitted in each channel encoded frame.
  *  The channel coder includes an error protection mode request (EPMR) in every frame.
@@ -330,41 +344,44 @@ LC3PLUS_Error lc3plus_free_encoder_structs(LC3PLUS_Enc* encoder);
  */
 LC3PLUS_Error lc3plus_enc_set_ep_mode_request(LC3PLUS_Enc *encoder, LC3PLUS_EpModeRequest epmr);
 
-/*! Set error protection mode. The default is LC3PLUS_EP_OFF. It is possible to switch between
- *  different modees during encoding. Dynamic switching is only allowed between LC3PLUS_EP_ZERO,
- *  LC3PLUS_EP_LOW, LC3_EP_MEDIUM, and LC3PLUS_EP_HIGH. The the decoder must be notified with
- *  lc3plus_dec_set_ep_enabled() to expect protected data if epmode is other than LC3PLUS_EP_OFF.
+/*! Set encoder bandwidth to a different value. All frequency bins above the cutoff
+ *  frequency are cut off. Allowed frequencies are: 4 kHz, 8 kHz, 12 kHz, 16 kHz and 24 kHz.
  *
  *  \param[in]  encoder     Encoder handle.
- *  \param[in]  epmode      Error protection mode.
+ *  \param[in]  bandwidth   Cutoff Frequency in Hz
  *  \return                 LC3PLUS_OK on success or appropriate error code.
  */
-LC3PLUS_Error lc3plus_enc_set_ep_mode(LC3PLUS_Enc *encoder, LC3PLUS_EpMode epmode);
+LC3PLUS_Error lc3plus_enc_set_bandwidth(LC3PLUS_Enc *encoder, int bandwidth);
 
 /*! \}
  *  \addtogroup Decoder
  *  \{ */
 
+
 /*!
  *  Initialize LC3plus decoder.
  *
- *  This function is used to fill a user-allocated decoder struct. This is
- * typically called once for a samplerate / channel configuration.
+ *  This function is used to fill a user-allocated decoder struct. This is typically
+ *  called once for a samplerate / channel / plc_mode configuration.
  *
- *  The samplerate and channel arguments must have the same values that were
- * used for encoding. LC3plus does not provide a signalling scheme, transporting
- * these values is the responsibility of the application.
+ *  The samplerate and channel arguments must have the same values that were used for encoding.
+ *  LC3plus does not provide a signalling scheme, transporting these values is the responsibility
+ *  of the application.
  *
- *  \param[out] decoder         Pointer to decoder memory. It must have as size
- *                              of least lc3plus_dec_get_size() or at most LC3PLUS_DEC_MAX_SIZE.
- *  \param[in] samplerate       Bitstream sampling rate. \param[in]  channels Bitstream
- *                              number of channels.
+ *  \param[out] decoder         Pointer to decoder memory. It must have as size of least
+ *                              lc3plus_dec_get_size() or at most LC3PLUS_DEC_MAX_SIZE.
+ *  \param[in]  samplerate      Bitstream sampling rate.
+ *  \param[in]  channels        Bitstream number of channels.
+ *  \param[in]  plc_mode        Packet loss concealment mode.
+ *  \param[in]  hrmode        High resolution mode mode.
  *
  *  \return                     LC3PLUS_OK on success or appropriate error code.
  */
-LC3PLUS_Error lc3plus_dec_init(LC3PLUS_Dec* decoder, int samplerate, int channels, LC3PLUS_PlcMode plc_mode, int hrmode);
-
-
+LC3PLUS_Error lc3plus_dec_init(LC3PLUS_Dec *decoder, int samplerate, int channels, LC3PLUS_PlcMode plc_mode
+#ifdef ENABLE_HR_MODE
+                               , int hrmode
+#endif
+                              );
 
 /*!
  *  Decode compressed LC3plus frame to 16 bit PCM output.
@@ -385,82 +402,67 @@ LC3PLUS_Error lc3plus_dec_init(LC3PLUS_Dec* decoder, int samplerate, int channel
  *                              should provide enough space to hold at most LC3PLUS_MAX_SAMPLES. The
  *                              left channel is stored in output_samples[0], the right channel in
  *                              output_samples[1].
- *  \param      scratch         Scratch parameter only works as dummy parameter to align fixed-point and floating-point APIs
+ *  \param      scratch         A pointer to an allocated work buffer of at least
+ *                              lc3plus_dec_get_scratch_size() or at most LC3PLUS_DEC_MAX_SCRATCH_SIZE
+ *                              bytes. The scratch buffer does not have to persist, so it can be
+ *                              used for other purposes in between calls.
  *  \return                     Returns LC3PLUS_OK on success or appropriate error code. Note there is
  *                              a special case for LC3PLUS_DECODE_ERROR where the output is still valid.
  */
-LC3PLUS_Error lc3plus_dec16(LC3PLUS_Dec* decoder, void* input_bytes, int num_bytes, int16_t** output_samples,
- void* scratch,
- int bfi_ext);
+LC3PLUS_Error lc3plus_dec16(LC3PLUS_Dec *decoder, void *input_bytes, int num_bytes, int16_t **output_samples, void *scratch,
+                    int bfi_ext);
 
 /*! Decode compressed LC3plus frame to 24 bit PCM output.
  *
  *  The output samples are 24-bit values, sign-extended to 32-bit.
  *  See lc3plus_dec16() for parameter documentation.
  */
-LC3PLUS_Error lc3plus_dec24(LC3PLUS_Dec* decoder, void* input_bytes, int num_bytes, int32_t** output_samples,
- void* scratch,
- int bfi_ext);
+LC3PLUS_Error lc3plus_dec24(LC3PLUS_Dec *decoder, void *input_bytes, int num_bytes, int32_t **output_samples, void *scratch,
+                    int bfi_ext);
 
-/* Internal function */
- LC3PLUS_Error lc3plus_dec_fl(LC3PLUS_Dec* decoder, void* input_bytes, int num_bytes, void** output_samples, int bps, int bfi_ext);
-
-/*! Get the size of the LC3plus decoder struct for a samplerate / channel
- * configuration. If memory is not restricted LC3PLUS_DEC_MAX_SIZE can be used for
- * all configurations.
+/*! Get the size of the LC3plus decoder struct for a samplerate / channel / plc_mode configuration.
+ *  If memory is not restricted LC3PLUS_DEC_MAX_SIZE can be used for all configurations.
  *
  *  \param[in]  channels    Number of channels.
  *  \param[in]  samplerate  Sampling rate.
+ *  \param[in]  plc_mode    Packet loss concealment mode.
  *  \return                 Size in bytes or 0 on error.
  */
-int lc3plus_dec_get_size(int samplerate, int channels);
+int lc3plus_dec_get_size(int samplerate, int channels, LC3PLUS_PlcMode plc_mode);
 
-/*! Dummy function as no scratch management available in floating-point code. Returns always zero. Used to align fixed-point and floating-point APIs.
+/*! Get the size of the scratch buffer required by lc3plus_dec16() or lc3plus_dec24() for the current
+ *  decoder configuration. If memory is not restricted LC3PLUS_DEC_MAX_SCRATCH_SIZE can be used for
+ *  all configurations.
  *
  *  \param[in]  decoder     Decoder handle.
  *  \return                 Size in bytes or 0 on error.
  */
 int lc3plus_dec_get_scratch_size(const LC3PLUS_Dec *decoder);
 
-/*! Get the number of samples per channel produced by lc3plus_dec16() or lc3plus_dec24.
+/*! Get the number of samples per channel produced by lc3plus_dec16() or lc3plus_dec24().
  *
  *  \param[in]  decoder     Decoder handle.
  *  \return                 Number of samples or 0 on error.
  */
-int lc3plus_dec_get_output_samples(const LC3PLUS_Dec* decoder);
+
+int lc3plus_dec_get_output_samples(const LC3PLUS_Dec *decoder);
 
 /*! Get the decoder delay in number of samples.
  *
  *  \param[in]  decoder     Decoder handle.
  *  \return                 Delay in samples or 0 on error.
  */
-int lc3plus_dec_get_delay(const LC3PLUS_Dec* decoder);
+int lc3plus_dec_get_delay(const LC3PLUS_Dec *decoder);
 
-/*! Set the frame length for LC3plus encoder in deci milliseconds.
+/*! Set the frame length for LC3plus decoder in deci milliseconds.
  *  Not all lengths may be enabled, in that case LC3PLUS_FRAMEMS_ERROR is returned.
- *  This function must be called before lc3plus_enc_set_bitrate(). The decoder must be
- *  configured with lc3plus_dec_set_frame_dms() with the same value.
+ *  This only works correcly if the encoder was configured with the same vale.
  *
- *  \param[in]  encoder     Encoder handle.
+ *  \param[in]  decoder     Decoder handle.
  *  \param[in]  frame_ms    Frame length in ms.
  *  \return                 LC3PLUS_OK on success or appropriate error code.
  */
 LC3PLUS_Error lc3plus_dec_set_frame_dms(LC3PLUS_Dec *decoder, int frame_ms);
-
-
-/*! Free memory allocated within LC3plus decoder struct.
- *
- *  \param[in]  decoder     Decoder handle.
- *  \return                 LC3PLUS_OK on success or appropriate error code.
- */
-LC3PLUS_Error lc3plus_dec_free_memory(LC3PLUS_Dec* decoder);
-
-/*! Internal function called by lc3plus_dec_free_memory.
- *
- *  \param[in]  decoder     Decoder handle.
- *  \return                 LC3PLUS_OK on success or appropriate error code.
- */
-LC3PLUS_Error lc3plus_free_decoder_structs(LC3PLUS_Dec* decoder);
 
 /*! Enable or disable error protection. Default value is 0 (disabled). If error protection is
  *  enabled, the decoder expects that the frames were encoded with error protection mode

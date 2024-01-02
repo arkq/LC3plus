@@ -8,7 +8,7 @@
 ******************************************************************************/
                                                                                
 
-#include "lc3.h"
+#include "lc3plus.h"
 #include "defines.h"
 #include "functions.h"
 #include <stdio.h>
