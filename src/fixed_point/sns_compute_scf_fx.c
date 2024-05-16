@@ -1,16 +1,13 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
-
-
 
 void processSnsComputeScf_fx(Word32 *d2_fx, Word16 d2_fx_exp, Word16 fs_idx, Word16 n_bands, Word16 *scf,
                              Word16 scf_smoothing_enabled, Word16 attdec_damping_factor, Word8 *scratchBuffer, Word16 sns_damping
@@ -24,7 +21,6 @@ void processSnsComputeScf_fx(Word32 *d2_fx, Word16 d2_fx_exp, Word16 fs_idx, Wor
         Word16 *d4_fx;
         Word16 *scf_smooth;
     );
-
 
     UNUSED(attdec_damping_factor);
 

@@ -1,16 +1,14 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "defines.h"
 #include "functions.h"
-
 
 #define MAX_ACCS 3 /* sum(x.*y), sum(x.*x), sum(y.*y),  nb of always nonsaturated shorter sub_blocks*/
 #define MAX_BLOCKS 8

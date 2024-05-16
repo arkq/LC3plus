@@ -1,16 +1,13 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
-
-
 
 void ProcessingIMDCT(
     Word32       y[],       /* i:   spectra data */
@@ -91,9 +88,12 @@ void ProcessingIMDCT(
             case 50:
                 max_bw = MAX_BW >> 1; move16();
                 BREAK;
-        case 100:
-            max_bw = MAX_BW; move16();
-            BREAK;
+            case 75:
+                max_bw = (MAX_BW >> 2) * 3; move16();
+                BREAK;
+            case 100:
+                max_bw = MAX_BW; move16();
+                BREAK;
             }
         }
         
@@ -109,9 +109,13 @@ void ProcessingIMDCT(
                 y[i] = L_shl(y[i], y_s);
             }
             *y_e = sub(*y_e, y_s);
-
+#ifdef ENABLE_HR_MODE
+            dct_IV(y, y_e, N, 
+            hrmode, 
+            workBuffer);
+#else
             dct_IV(y, y_e, N, workBuffer);
-
+#endif
             y_s  = getScaleFactor32(y, N);
             y_s  = sub(y_s, 1);
             *y_e = sub(*y_e, y_s + 3); /* mdct window is scaled by pow(2,x) */

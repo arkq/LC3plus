@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "peaq.h"
 #include "wav_io.h"
@@ -25,6 +24,7 @@ static const char* HELP_MESSAGE =
     "    -d       Disable multithreading\n"
     "    -h       Print help\n"
     "    -l LEVEL Playback level in dBspl (default: 92)\n"
+    "    -f FRAME frame size in ms, must be integer (default: 20)\n"
     "    -o FILE  Write output to file\n"
     "    -s       Print segment values\n"
     "    -v       Print version";
@@ -45,6 +45,7 @@ typedef struct {
     bool   print_version;
     bool   single_thread;
     double playback_level;
+    int    frame_size;
     char*  infile1;
     char*  infile2;
     char*  outfile;
@@ -68,6 +69,7 @@ static const char* parse_args(Arguments* args, int argc, char** argv)
 {
     *args = (Arguments){0};
 
+    args->frame_size = CHUNK_SIZE_EP;
     for (int i = 1, n = 1; n < argc;) {
         int ninc = 1;
         if (argv[n][0] == '-') {
@@ -76,7 +78,7 @@ static const char* parse_args(Arguments* args, int argc, char** argv)
             char* parm = argv[n][i] ? &argv[n][i] : argv[n + 1];
             if (strchr("hdsv", flag)) { // flags with no parameter
                 ninc = !argv[n][i];
-            } else if (strchr("lo", flag)) { // flags with parameter
+            } else if (strchr("lof", flag)) { // flags with parameter
                 ninc += !argv[n][i];
             } else {
                 return "Invalid option";
@@ -88,6 +90,11 @@ static const char* parse_args(Arguments* args, int argc, char** argv)
             args->single_thread |= flag == 'd';
             if (flag == 'l' && !atof_c(parm, &args->playback_level)) {
                 return "Expecting float argument";
+            } else if (flag == 'f') {
+                args->frame_size = atoi(parm); // default 20
+                if (args->frame_size <= 0 || strstr(parm,".")) {
+                    return "frame_size must be an integer >= 0";
+                }
             } else if (flag == 'o') {
                 args->outfile = parm;
             }
@@ -191,9 +198,9 @@ int main(int argc, char** argv)
 
     // print result
     if (args.print_segments) {
-        peaq_print_mld(pr1.peaq, pr2.peaq, 10, fout);
+        peaq_print_mld(pr1.peaq, pr2.peaq, args.frame_size, fout);
     } else {
-        fprintf(fout, "maximum loudness difference: %f\n", peaq_get_mld(pr1.peaq, pr2.peaq));
+        fprintf(fout, "maximum loudness difference: %f\n", peaq_get_mld(pr1.peaq, pr2.peaq, args.frame_size));
     }
 
     wav_close(&pr1.wav);

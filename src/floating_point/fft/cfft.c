@@ -1,13 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
-
 
 #include "cfft.h"
 #include "iisfft.h" /* for M_PIl  */
@@ -385,8 +383,10 @@ void LC3_cfft(LC3_FLOAT* re, LC3_FLOAT* im, LC3_INT length, LC3_INT stride, LC3_
 LC3_INT LC3_cfft_plan(Cfft* handle, LC3_INT length, LC3_INT sign)
 {
     /* check if length is power of two */
-    if (!CFFT_PLAN_SUPPORT(length) || abs(sign) != 1)
+    if (!CFFT_PLAN_SUPPORT(length) || (abs(sign) != 1))
+    {
         return 0;
+    }
 
     handle->len  = length;
     handle->sign = sign;
@@ -417,5 +417,7 @@ void LC3_cfft_apply(Cfft* handle, LC3_FLOAT* re, LC3_FLOAT* im, LC3_INT stride)
 void LC3_cfft_free(Cfft* handle)
 {
     if (handle->table)
+    {
         free(handle->table);
+    }
 }

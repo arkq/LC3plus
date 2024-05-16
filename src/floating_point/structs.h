@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #ifndef STRUCTS_H
 #define STRUCTS_H
@@ -66,6 +65,7 @@ typedef struct {
   LC3_INT32 pc_be_bp_left;
   LC3_INT32 pc_be_bp_right;
   LC3_INT32 pc_return;
+  LC3_INT16 pc_inv_bin;
 } Decoder_State_fl;
 
 typedef struct {
@@ -154,6 +154,7 @@ typedef struct {
    LC3_INT32  PhECU_num_plocs;
    HANDLE_IIS_FFT handle_fft_phaseecu;
    HANDLE_IIS_FFT handle_ifft_phaseecu;
+   LC3_INT16  PhECU_nonpure_tone_flag;         /* BASOP Word16 PhECU_nonpure_tone_flag*/
  
 } PlcPhEcuSetup;
 
@@ -179,8 +180,19 @@ typedef struct {
     LC3_FLOAT cum_fflcAtten;
     LC3_FLOAT scf_q_old[M];
     LC3_FLOAT scf_q_old_old[M];
-    PlcPhEcuSetup PlcPhEcuSetup;   
+    PlcPhEcuSetup PlcPhEcuSetup;
+    
+    LC3_INT16       longterm_counter_plcTdc;
+    LC3_INT16       longterm_counter_plcNsAdv;
+    LC3_INT16       longterm_analysis_counter_max;  /* Maximum longterm frames number */
+    LC3_INT16       longterm_analysis_counter_max_bytebuffer;  /* Same as above but reduced for circular bit-buffer */
+    LC3_INT32       *plc_longterm_advc_tdc;
+    LC3_INT32       *plc_longterm_advc_ns;
+    LC3_UINT8       plc_fadeout_type;
+    LC3_UINT8       plc_fadeout_type_first;
+    LC3_INT16       overall_counter;
+    LC3_INT8        longterm_counter_byte_position;
+    LC3_INT8        longterm_counter_bit_position;
 } PlcAdvSetup;
-
 
 #endif

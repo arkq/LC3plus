@@ -1,20 +1,19 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "defines.h"
-
 #include "constants.h"
 #include "functions.h"
 
-
-void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 bfi, Word16 prev_bfi,
+void processPLCapply_fx(
+    Word16 *concealMethod, 
+    Word16 nbLostFramesInRow, Word16 bfi, Word16 prev_bfi,
                         Word16 frame_length, Word16 la_zeroes,
 #ifdef ENABLE_HR_MODE
                         const Word32 w[],
@@ -29,6 +28,8 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
 #ifdef ENABLE_HR_MODE
                         , Word16 hrmode
 #endif
+                        , Word32 rel_pitch_change
+                        , Word16 *alpha_type_2_table
                         )
 {
     Dyn_Mem_Deluxe_In(
@@ -51,7 +52,16 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
         Word32 *      L_ecu_rec; /*  local xtda  output is MAX_LEN -> input  buffer,
                                     as  tmp buffer for w32 fft MAX_LPROT */
     );
-    
+    Word16 consecutiveLostThreshold = 0;
+
+#ifndef ENABLE_HR_MODE
+    UNUSED(rel_pitch_change);
+#endif
+
+    Word16 thresh_tdc_cnt;
+    Word16 thresh_ns_cnt;
+    Word16 thresh_tdc_ns_cnt;
+
     band_offsets = NULL;
 
     d2_fx        = (Word32 *)scratchAlign(scratchBuffer, 0); /* Size = 4 * MAX_BANDS_NUMBER_PLC */
@@ -79,7 +89,66 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
     /* Apply/Prepare PLC in bfi-case */
     IF (sub(bfi, 1) == 0)
     {
-        SWITCH (concealMethod)
+            SWITCH(frame_dms)
+            {
+                case 25: 
+                    consecutiveLostThreshold  = 16;
+                    thresh_tdc_cnt = THRESH_025_DMS_TDC_CNT;
+                    thresh_ns_cnt = THRESH_025_DMS_NS_CNT;
+                    thresh_tdc_ns_cnt =  THRESH_025_DMS_TDC_NS_CNT;                  
+                    break;
+                case 50: consecutiveLostThreshold  = 8;  
+                    thresh_tdc_cnt = THRESH_050_DMS_TDC_CNT;
+                    thresh_ns_cnt = THRESH_050_DMS_NS_CNT;
+                    thresh_tdc_ns_cnt =  THRESH_050_DMS_TDC_NS_CNT;                
+                    break;
+                case 75: consecutiveLostThreshold  = 6;
+                    thresh_tdc_cnt = THRESH_075_DMS_TDC_CNT;
+                    thresh_ns_cnt = THRESH_075_DMS_NS_CNT;
+                    thresh_tdc_ns_cnt =  THRESH_075_DMS_TDC_NS_CNT;                  
+                    break;
+                case 100: consecutiveLostThreshold = 4;  
+                    thresh_tdc_cnt = THRESH_100_DMS_TDC_CNT;
+                    thresh_ns_cnt = THRESH_100_DMS_NS_CNT;
+                    thresh_tdc_ns_cnt =  THRESH_100_DMS_TDC_NS_CNT;
+                    break;
+                default: assert(0);
+            }
+
+            IF (sub(fs_idx, 2) == 0 || sub(fs_idx, 4) >= 0)
+            {
+                if (sub(plcAd->longterm_counter_plcTdc, thresh_tdc_cnt) < 0){
+                    plcAd->plc_fadeout_type = 1;
+                }
+                else if (sub(plcAd->longterm_counter_plcNsAdv, thresh_ns_cnt) < 0){
+                    plcAd->plc_fadeout_type = 1;
+                }
+                else if (sub(plcAd->longterm_counter_plcTdc + plcAd->longterm_counter_plcNsAdv, thresh_tdc_ns_cnt) < 0){
+                    plcAd->plc_fadeout_type = 1;
+                }
+                else {
+                    plcAd->plc_fadeout_type = 0;
+                }
+
+                env_stab = norm_s(plcAd->longterm_analysis_counter_max);           
+                IF(sub(shl_pos(plcAd->overall_counter, env_stab), mult(shl_pos(plcAd->longterm_analysis_counter_max, env_stab), PLC_LONGTERM_ANALYSIS_STARTUP_FILL)) < 0)
+                {
+                    plcAd->plc_fadeout_type = 0;
+                }
+#ifdef ENABLE_HR_MODE
+            IF (L_sub(rel_pitch_change,REL_PITCH_THRESH) > 0 && sub(hrmode,1) == 0 && (sub(frame_dms,50) == 0 || sub(frame_dms,25) == 0)){
+                plcAd->plc_fadeout_type = 2;move16();
+            } ELSE 
+#endif
+                IF((sub(nbLostFramesInRow, consecutiveLostThreshold) < 0) && (*concealMethod != LC3_CON_TEC_PHASE_ECU))
+                {
+                    plcAd->plc_fadeout_type = 0;
+                }
+            } ELSE {
+                plcAd->plc_fadeout_type = 0; /*fs_idx == 0,1,3 */
+            } 
+
+        SWITCH (*concealMethod)
         {
         case LC3_CON_TEC_PHASE_ECU:
             ASSERT(frame_dms == 100);
@@ -158,6 +227,8 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
                 plcAd->PhECU_L_old_xfp_w_E_fx,plcAd->PhECU_old_xfp_w_E_exp_fx, plcAd->PhECU_old_Ltot_exp_fx,
                 plcAd->PhECU_old_grp_shape_fx,
                 plcAd->PhECU_margin_xfp,
+                plcAd->plc_fadeout_type  ,                          /* i  : fadeout scheme  */
+				&(plcAd->PhECU_nonpure_tone_flag),  /* i/o : non-pure single tone indicator state */
                 buffer_phecu);
  
             y_e = 18;  move16();  /*  the  fixed exponent (exp)  from Lecu_rec  from PhaseECU is 18    */
@@ -174,8 +245,6 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
                 sub(frame_length, LowDelayShapes_n960_la_zeroes[fs_idx]) /* i:   overlap add buffer size */
             ); 
            *q_fx_exp = y_e;  move16();   /*  assign updated Q */
-
-
             BREAK;
 
         case LC3_CON_TEC_TDPLC:
@@ -198,6 +267,20 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
                     {
                         n_bands = 40; move16();
                     }
+                    BREAK;
+                case 75:
+                    band_offsets = bands_offset_lin_7_5ms[fs_idx];  move16();
+#        ifdef ENABLE_HR_MODE
+                    IF (sub(fs_idx, 5) != 0)
+                    {
+#        endif
+                        IF (sub(fs_idx, 3) != 0)
+                        {
+                            n_bands = 60;  move16();
+                        }
+#        ifdef ENABLE_HR_MODE
+                    }
+#        endif
                     BREAK;
                 case 100:
                     band_offsets = bands_offset_lin[fs_idx]; move16();
@@ -244,15 +327,17 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
                 &plcAd->tdc_seed, 
                 &plcAd->tdc_gain_c, x_fx, &Q_syn, damping,
                 plcAd->max_len_pcm_plc,
-                plcAd->harmonicBuf_fx, plcAd->synthHist_fx, &plcAd->harmonicBuf_Q, scratchBuffer);
-
+                plcAd->harmonicBuf_fx, plcAd->synthHist_fx, &plcAd->harmonicBuf_Q, scratchBuffer
+                , plcAd->plc_fadeout_type
+                , alpha_type_2_table
+);
+                
             /* exponent of TD-PLC output */
             Q_syn     = add(Q_syn, sub(15, plcAd->q_fx_old_exp));
             *q_fx_exp = sub(15, Q_syn); move16();
 
             /* TDAC */
             processTdac_fx(ola_mem, ola_mem_exp, x_fx, *q_fx_exp, w, la_zeroes, frame_length, buffer_tdac);
-            
             BREAK;
 
         case LC3_CON_TEC_NS_ADV:
@@ -262,7 +347,6 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
             processPLCNoiseSubstitution_fx(q_d_fx, q_old_d_fx, yLen);
             
             BREAK;
-
         default: ASSERT(!"Unsupported PLC method!");
         }
     }

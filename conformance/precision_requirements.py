@@ -2,14 +2,15 @@
 # LC3plus Precision Requirement script for High Resolution V1.0.0
 # ================================================================
 
-# /******************************************************************************
-# *                        ETSI TS 103 634 V1.4.1                               *
-# *              Low Complexity Communication Codec Plus (LC3plus)              *
-# *                                                                             *
-# * Copyright licence is solely granted through ETSI Intellectual Property      *
-# * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
-# * estoppel or otherwise.                                                      *
-# ******************************************************************************/
+#******************************************************************************
+#                        ETSI TS 103 634 V1.5.1                               *
+#              Low Complexity Communication Codec Plus (LC3plus)              *
+#                                                                             *
+# Copyright licence is solely granted through ETSI Intellectual Property      *
+# Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
+# estoppel or otherwise.                                                      *
+#*****************************************************************************/
+
 
 import sys
 import shlex
@@ -28,6 +29,8 @@ import configparser
 import multiprocessing
 from multiprocessing import Process, Queue
 import datetime
+import platform
+import struct
 
 rdict = {"freq":0, "thd": 0, "snr": 0}
 
@@ -60,6 +63,15 @@ def call(cmd, wine=True, unicode=True, hard_fail=True, log_output=True):
         raise OSError(quoted_cmd + ' failed!\n' + out )
         exit(1)
     return out
+
+
+# convert byte objects to signed int16
+def byte_to_float(b, frames, channels):
+    return struct.unpack("%ih" % (frames * channels), b)
+
+
+def float_to_byte(y2): #16 bit
+    return struct.pack("%ih" % len(y2), *y2)
 
 
 def bytes_to_float_24(b):
@@ -116,31 +128,21 @@ def measure_thd_plus_n(call_string_enc, call_string_dec, freq, op):
     log = call(call_string_enc.format(infile=infile, bitstream=bitstream))
     log = call(call_string_dec.format(bitstream=bitstream, outfile=outfile))
 
-    sox_cmd = 'sox {infile} {outfile} '.format(infile = outfile, outfile=outfile2)
-
-    sox_log = call(sox_cmd)
-
     if op['bps'] == 32:
-        tmp = '%s.tmp.wav' % (outfile2)
-        log = call('sox %s -b 24 -e signed-integer %s' % (outfile2, tmp))
-        shutil.move(tmp, outfile2)
-
         tmp = '%s.tmp.wav' % (outfile)
         log = call('sox %s -b 24 -e signed-integer %s' % (outfile, tmp))
         shutil.move(tmp, outfile)
 
-    log = call('sox %s %s' % (outfile2, outfile2_raw))
     log = call('sox %s %s' % (outfile, outfile_raw))
-
-    fid = open(outfile2_raw, 'rb')
-    b = fid.read()
-    y_out2 = bytes_to_float_24(b)
 
     fid = open(outfile_raw, 'rb')
     b = fid.read()
-    y_out = bytes_to_float_24(b)
 
-    t = thd_plus_n(y_out2[sinctaps:-sinctaps], y_out[sinctaps:-sinctaps], freq, op['fs'])
+    if op['bps'] == 16:
+        y_out = byte_to_float(b,len(b)*8//op['bps'],1)
+    else:
+        y_out = bytes_to_float_24(b)
+    t = thd_plus_n(y_out[sinctaps:-sinctaps], freq, op['fs'])
     s = snr(y[4800:-4800], y_out[4800:-4800])
                       
     return freq, t, s
@@ -302,7 +304,8 @@ def select_threshold(test_mode, xxx_threshold):
         elif xxx_threshold[:3] == 'thd':
             return min(float(globals[key_enc]), float(globals[key_dec]))
 
-
+if platform.system() == 'Darwin':
+    multiprocessing.set_start_method('fork')
 q = Queue()
 if __name__ == "__main__":
     if len(sys.argv) < 2:

@@ -1,17 +1,92 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "defines.h"
-
 #include "functions.h"
 
+static Word32 change_bit_at_position(Word32 value, Word8 bit_position, UWord8 bit)
+{
+    Word32 helper_mask = ~L_shl_pos(1, bit_position);
+    Word32 tmp = L_and(value, helper_mask);
+    tmp = L_or(tmp, L_shl_pos(bit, bit_position));
+    return tmp;
+}
+
+static void update_bit_and_byte_positions(Word16 longterm_analysis_counter_max_bytebuffer, Word8 *byte_position, Word8 *bit_position)
+{
+    IF (sub(*bit_position, 29) == 0)
+    {
+        *bit_position = 0; move16();
+        
+        if (sub(*byte_position, longterm_analysis_counter_max_bytebuffer) < -1)
+        {
+            *byte_position = add(*byte_position, 1);
+        } else {
+            *byte_position = 0; move16();
+        }
+    } ELSE {
+        *bit_position = add(*bit_position, 1);
+    }
+}
+
+static void array_insert_and_shift(Word32 *array, UWord8 value, Word16 longterm_analysis_counter_max, Word16 *overall_counter, Word8 *byte_position, Word8 *bit_position)
+{
+    Word32 current_byte = 0;
+    
+    BASOP_sub_sub_start("PLC::array_insert_and_shift");
+
+    IF( overall_counter != NULL) 
+    {
+        *overall_counter = s_min(add(*overall_counter, 1), longterm_analysis_counter_max);
+    }
+    
+    current_byte = array[*byte_position]; move16();
+    current_byte = change_bit_at_position(current_byte, *bit_position, value);
+    array[*byte_position] = current_byte; move16();
+    
+    BASOP_sub_sub_end();
+}
+
+static void array_calculate(Word32 *array_tdc, Word32 *array_ns, int length, Word16 *counter_tdc, Word16 *counter_ns, Word16 longterm_analysis_counter_max)
+{
+    int i, k;
+    Word32 current_byte_tdc = 0, current_byte_ns = 0;
+    Word16 counter_loc_tdc = 0, counter_loc_ns = 0, counter_tmp = 0;
+    
+    BASOP_sub_sub_start("PLC::array_calculate");
+
+    for (i = length - 1; i >= 0; i--)
+    {
+        current_byte_tdc = array_tdc[i];
+        current_byte_ns = array_ns[i];
+        
+        for (k = 0; k < 30; k++)
+        {
+            counter_loc_tdc += ((current_byte_tdc >> k) & 1);
+            counter_loc_ns += ((current_byte_ns >> k) & 1);
+            counter_tmp++;
+            
+            /* Break from both loops if full 2s buffer has been evaluated */
+            if (counter_tmp >= longterm_analysis_counter_max)
+            {
+                i = -1;
+                k = 30;
+                break;
+            }
+        }
+    }
+    
+    *counter_tdc = counter_loc_tdc;
+    *counter_ns = counter_loc_ns;
+
+    BASOP_sub_sub_end();
+}
 
 static Word16 spectral_centroid_fx_lc(Word16 old_scf_q[], const Word16 *band_offsets, Word16 bands_number, Word16 frame_length,
                                       Word16 fs_idx, Word8 *scratchBuffer
@@ -43,57 +118,76 @@ void processPLCclassify_fx(Word16 plcMeth, Word16 *concealMethod, Word16 *nbLost
         plcAd->norm_corrQ15_fx = 0; move16();
     }
     
-    IF (sub(bfi, 1) == 0)
+    /*  assert(bfi != 2 && "Error bfi flag value, state of fadeout cntr   is affected by PartialConcealment  here "); */
+    /* Save statistics for 24 kHz, 48 kHz and 96 kHz */
+    IF((sub(bfi, 1) == 0) || (((bfi >= 0) && (sub(bfi, 2) <= 0)) && ((sub(fs_idx, 2) == 0) || (sub(fs_idx, 4) == 0) || (sub(fs_idx, 5) == 0))))  /* note  for PC  bfi==2  is possible */
     {
         /* increase counter of lost-frames-in-a-row */
-        *nbLostFramesInRow = add(*nbLostFramesInRow, 1);
-        *nbLostFramesInRow = s_min(*nbLostFramesInRow, 0x100);
+        IF (sub(bfi, 1) == 0)
+        {
+            *nbLostFramesInRow = add(*nbLostFramesInRow, 1);
+            *nbLostFramesInRow = s_min(*nbLostFramesInRow, 0x100);
+        }
 
-        IF (sub(*nbLostFramesInRow, 1) == 0)
+        /*assert((bfi != 2) && "PartialConcealment checked vs bfi==0 can cause issues "); */
+        IF ((sub(*nbLostFramesInRow, 1) == 0) || (bfi != 1) )  /* was "|| (bfi==0)"  ,  NB only test bfi vs "1" as bfi can have the states [0(good),1(bad),2(good,partialConcealment) }  */
         {
             *concealMethod = plcMeth; move16();
 
-            IF (sub(plcMeth, 1) == 0)
+            IF(sub(plcMeth, 1) == 0)
             {
-                IF (ltpf_mem_pitch_int > 0)
+                IF(ltpf_mem_pitch_int > 0)
                 {
                     *concealMethod = LC3_CON_TEC_TDPLC; move16(); /* TD-PLC */
                     /* Calculate Features */
-                    
+
                     plcAd->norm_corrQ15_fx = plc_xcorr_lc_fx(plcAd->x_old_tot_fx, plcAd->max_len_pcm_plc, ltpf_mem_pitch_int, fs_idx);
                     scQ15 = spectral_centroid_fx_lc(plcAd->old_scf_q, band_offsets, bands_number, frame_length,
-                                                    fs_idx, scratchBuffer
+                        fs_idx, scratchBuffer
 #ifdef ENABLE_HR_MODE
-                                                    , hrmode
+                        , hrmode
 #endif
-                                                    );
+                    );
 
                     /* Classify */
                     class = L_mult(plcAd->norm_corrQ15_fx, 7640);
                     class = L_mac(class, scQ15, -32768);
                     class = L_add_sat(class, -335020208);
 
-                    IF (class <= 0)
+                    IF(class <= 0)
                     {
 #ifdef ENABLE_HR_MODE
-                        IF ((frame_dms == 100) && (hrmode == 0))
+                        IF((frame_dms == 100) && (hrmode == 0))
 #else
-                        IF (frame_dms == 100)
+                        IF(frame_dms == 100)
 #endif
                         {
                             *concealMethod = LC3_CON_TEC_PHASE_ECU; move16(); /* Phase ECU selected */
+                            array_insert_and_shift(plcAd->plc_longterm_advc_tdc, 0, plcAd->longterm_analysis_counter_max, &plcAd->overall_counter, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
+                            array_insert_and_shift(plcAd->plc_longterm_advc_ns, 0, plcAd->longterm_analysis_counter_max, NULL, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
                         }
                         ELSE
                         {
-                            *concealMethod = LC3_CON_TEC_NS_ADV; move16(); /* Noise Substitution */
-                        }                        
+                            array_insert_and_shift(plcAd->plc_longterm_advc_tdc, 0, plcAd->longterm_analysis_counter_max, &plcAd->overall_counter, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
+                            array_insert_and_shift(plcAd->plc_longterm_advc_ns, 0, plcAd->longterm_analysis_counter_max, NULL, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
+                        }
+                    }
+                    ELSE {
+                        array_insert_and_shift(plcAd->plc_longterm_advc_tdc, 1, plcAd->longterm_analysis_counter_max, &plcAd->overall_counter, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
+                        array_insert_and_shift(plcAd->plc_longterm_advc_ns, 0, plcAd->longterm_analysis_counter_max, NULL, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
                     }
                 }
                 ELSE
                 {
                     *concealMethod = LC3_CON_TEC_NS_ADV; move16(); /* Noise Substitution */
+                    array_insert_and_shift(plcAd->plc_longterm_advc_tdc, 0, plcAd->longterm_analysis_counter_max, &plcAd->overall_counter, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
+                    array_insert_and_shift(plcAd->plc_longterm_advc_ns, 1, plcAd->longterm_analysis_counter_max, NULL, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
                 }
-            }
+            
+            array_calculate(plcAd->plc_longterm_advc_tdc, plcAd->plc_longterm_advc_ns, plcAd->longterm_analysis_counter_max_bytebuffer, &plcAd->longterm_counter_plcTdc, &plcAd->longterm_counter_plcNsAdv, plcAd->longterm_analysis_counter_max);
+            update_bit_and_byte_positions(plcAd->longterm_analysis_counter_max_bytebuffer, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
+            } 
+
         }
     }
 

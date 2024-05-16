@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
 
@@ -420,7 +419,7 @@ LC3_INT find_last_indice_le(LC3_INT compare, const LC3_INT* array, LC3_INT len)
 
 void pvq_dec(LC3_INT k, LC3_INT m, LC3_INT LS_ind, LC3_INT MPVQ_ind, LC3_INT* pulses)
 {
-    LC3_INT leading_sign = 0, idx = 0, k_delta = 0, pos = 0;
+    LC3_INT leading_sign, idx, k_delta = 0, pos;
 
     leading_sign = 1 - 2 * LS_ind;
 
@@ -453,9 +452,9 @@ void pvq_dec(LC3_INT k, LC3_INT m, LC3_INT LS_ind, LC3_INT MPVQ_ind, LC3_INT* pu
 
 void process_snsQuantizesScf_Dec(LC3_INT* scf_idx, LC3_FLOAT* scf_q)
 {
-    LC3_INT   i = 0, submode = 0;
+    LC3_INT   i, submode;
     LC3_INT   pulses2[6] = {0}, pulses[M] = {0};
-    LC3_FLOAT st2_vector[M] = {0}, st2_vector_idct[M] = {0}, sum = 0;
+    LC3_FLOAT st2_vector[M], st2_vector_idct[M], sum = 0;
 
     /* Decode first stage */
 
@@ -504,13 +503,8 @@ void process_snsQuantizesScf_Dec(LC3_INT* scf_idx, LC3_FLOAT* scf_q)
     idct_II(st2_vector, st2_vector_idct, M);
 
     /* Gain */
-    for (i = 0; i < M; i++) {
-        st2_vector_idct[i] = st2_vector_idct[i] * sns_dec_gains[submode][scf_idx[3]];
-    }
-
     /* Add stage 1 and stage 2 */
-
     for (i = 0; i < M; i++) {
-        scf_q[i] = scf_q[i] + st2_vector_idct[i];
+        scf_q[i] += st2_vector_idct[i] * sns_dec_gains[submode][scf_idx[3]];
     }
 }

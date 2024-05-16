@@ -163,6 +163,7 @@
     <ClCompile Include="..\ari_codec.c" />
     <ClCompile Include="..\attack_detector.c" />
     <ClCompile Include="..\codec_exe.c" />
+    <ClCompile Include="..\lc3plus_fft.c" />
     <ClCompile Include="..\plc_compute_stab_fac.c" />
     <ClCompile Include="..\constants.c" />
     <ClCompile Include="..\cutoff_bandwidth.c" />
@@ -173,9 +174,8 @@
     <ClCompile Include="..\enc_entropy.c" />
     <ClCompile Include="..\enc_lc3_fl.c" />
     <ClCompile Include="..\estimate_global_gain.c" />
-    <ClCompile Include="..\fft.c" />
     <ClCompile Include="..\imdct.c" />
-    <ClCompile Include="..\lc3.c" />
+    <ClCompile Include="..\lc3plus.c" />
     <ClCompile Include="..\ltpf_coder.c" />
     <ClCompile Include="..\ltpf_decoder.c" />
     <ClCompile Include="..\mdct.c" />
@@ -213,9 +213,9 @@
     <ClCompile Include="..\resamp12k8.c" />
     <ClCompile Include="..\residual_coding.c" />
     <ClCompile Include="..\residual_decoding.c" />
-    <ClCompile Include="..\setup_dec_lc3.c" />
-    <ClCompile Include="..\setup_enc_lc3.c" />
-    <ClCompile Include="..\setup_com_lc3.c" />
+    <ClCompile Include="..\setup_dec_lc3plus.c" />
+    <ClCompile Include="..\setup_enc_lc3plus.c" />
+    <ClCompile Include="..\setup_com_lc3plus.c" />
     <ClCompile Include="..\sns_compute_scf.c" />
     <ClCompile Include="..\sns_interpolate_scf.c" />
     <ClCompile Include="..\sns_quantize_scf.c" />
@@ -229,9 +229,9 @@
     <ClInclude Include="..\defines.h" />
     <ClInclude Include="..\file_io.h" />
     <ClInclude Include="..\functions.h" />
-    <ClInclude Include="..\lc3.h" />
-    <ClInclude Include="..\setup_dec_lc3.h" />
-    <ClInclude Include="..\setup_enc_lc3.h" />
+    <ClInclude Include="..\lc3plus.h" />
+    <ClInclude Include="..\setup_dec_lc3plus.h" />
+    <ClInclude Include="..\setup_enc_lc3plus.h" />
     <ClInclude Include="..\structs.h" />
     <ClInclude Include="..\tinywavein_c.h" />
     <ClInclude Include="..\tinywaveout_c.h" />

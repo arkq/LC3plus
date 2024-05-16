@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
@@ -21,6 +20,7 @@ extern RAM_ALIGN const Word16 BW_cutoff_bin_all_HR[];
 
 extern RAM_ALIGN const Word32 *const LowDelayShapes_n960_HRA_2_5ms[2];
 extern RAM_ALIGN const Word32 *const LowDelayShapes_n960_HRA_5ms[2];
+extern RAM_ALIGN const Word32 *const LowDelayShapes_n960_HRA_7_5ms[2];
 extern RAM_ALIGN const Word32 *const LowDelayShapes_n960_HRA[2];
 #endif
 
@@ -59,8 +59,27 @@ extern RAM_ALIGN const Word32 *const LowDelayShapes_n960_2_5ms[6];
 extern RAM_ALIGN const Word16 *const LowDelayShapes_n960_2_5ms[6];
 #    endif
 
+#    ifdef ENABLE_HR_MODE
+extern RAM_ALIGN const Word32 *const LowDelayShapes_n960_7_5ms[5];
+#    else
+extern RAM_ALIGN const Word16 *const LowDelayShapes_n960_7_5ms[5];
+#    endif
+
+#  ifdef ENABLE_HR_MODE
+extern RAM_ALIGN const Word16 LowDelayShapes_n960_len_7_5ms[6];
+#  else
+extern RAM_ALIGN const Word16 LowDelayShapes_n960_len_7_5ms[5];
+#  endif
+extern RAM_ALIGN const Word16 LowDelayShapes_n960_la_zeroes_7_5ms[NUM_SAMP_FREQ];
+
 extern RAM_ALIGN const Word16 NN_thresh;
 extern RAM_ALIGN const Word16 NN_thresh_exp;
+#  ifdef ENABLE_HR_MODE
+extern RAM_ALIGN const Word32 TD_HR_thresh_10ms;
+extern RAM_ALIGN const Word32 TD_HR_thresh_7_5ms;
+extern RAM_ALIGN const Word32 TD_HR_thresh_5ms;
+extern RAM_ALIGN const Word32 TD_HR_thresh_2_5ms;
+#  endif /* ENABLE_HR_MODE */
 extern RAM_ALIGN const Word32 BW_thresh_quiet[4];
 extern RAM_ALIGN const Word16 BW_thresh_quiet_exp;
 extern RAM_ALIGN const Word16 BW_thresh_brickwall[4];
@@ -83,6 +102,10 @@ extern RAM_ALIGN const Word16 BW_brickwall_dist_2_5ms[4];
 extern RAM_ALIGN const Word16 *const BW_warp_idx_start_all_2_5ms[MAX_BW_BANDS_NUMBER - 1];
 extern RAM_ALIGN const Word16 *const BW_warp_idx_stop_all_2_5ms[MAX_BW_BANDS_NUMBER - 1];
 
+extern RAM_ALIGN const Word16 BW_brickwall_dist_7_5ms[4];
+extern RAM_ALIGN const Word16 *const BW_warp_idx_start_all_7_5ms[];
+extern RAM_ALIGN const Word16 *const BW_warp_idx_stop_all_7_5ms[];
+
 extern RAM_ALIGN const Word16 *const tns_subdiv_startfreq[MAX_BW_BANDS_NUMBER];
 extern RAM_ALIGN const Word16 *const tns_subdiv_stopfreq[MAX_BW_BANDS_NUMBER];
 
@@ -104,6 +127,8 @@ extern RAM_ALIGN const Word16 *const tns_subdiv_stopfreq_5ms[MAX_BW_BANDS_NUMBER
 extern RAM_ALIGN const Word16 *const tns_subdiv_startfreq_2_5ms[MAX_BW_BANDS_NUMBER];
 extern RAM_ALIGN const Word16 *const tns_subdiv_stopfreq_2_5ms[MAX_BW_BANDS_NUMBER];
 
+extern RAM_ALIGN const Word16 *const tns_subdiv_startfreq_7_5ms[];
+extern RAM_ALIGN const Word16 *const tns_subdiv_stopfreq_7_5ms[];
 
 extern RAM_ALIGN const Word16 Tab_esc_nb[4];
 
@@ -135,6 +160,9 @@ extern RAM_ALIGN const Word16 *const lpc_lin_pre_emphasis_e_2_5ms[NUM_SAMP_FREQ]
 extern RAM_ALIGN const Word16 *const lpc_warp_dee_emphasis[NUM_SAMP_FREQ];
 extern RAM_ALIGN const Word16 *const lpc_warp_dee_emphasis_e[NUM_SAMP_FREQ];
 
+extern RAM_ALIGN const Word16 *const lpc_lin_pre_emphasis_7_5ms[NUM_SAMP_FREQ];
+extern RAM_ALIGN const Word16 *const lpc_lin_pre_emphasis_e_7_5ms[NUM_SAMP_FREQ];
+
 extern RAM_ALIGN const Word16 bands_nrg_scale[32];
 
 #  ifdef ENABLE_HR_MODE
@@ -156,6 +184,16 @@ extern RAM_ALIGN const Word16 *const bands_offset_2_5ms[6];
 extern RAM_ALIGN const Word16 bands_offset_with_one_max_2_5ms[NUM_OFFSETS];
 extern RAM_ALIGN const Word16 bands_offset_with_two_max_2_5ms[NUM_OFFSETS];
 
+extern RAM_ALIGN const Word16 bands_number_7_5ms[];
+#  ifndef GENERATE_BAND_TABLES
+extern RAM_ALIGN const Word16 *const bands_offset_7_5ms[5];
+#  endif
+#  ifdef ENABLE_HR_MODE
+extern RAM_ALIGN const Word16 bands_number_7_5ms_HR[];
+#    ifndef GENERATE_BAND_TABLES
+extern RAM_ALIGN const Word16 *const bands_offset_7_5ms_HR[2];
+#    endif
+#  endif
 
 extern RAM_ALIGN const Word16 pitch_max[5];
 extern RAM_ALIGN const Word16 plc_preemph_fac[NUM_SAMP_FREQ];
@@ -176,6 +214,12 @@ extern RAM_ALIGN const Word16 bands_offset_with_two_max_lin_5ms[NUM_SAMP_FREQ];
 extern RAM_ALIGN const Word16 *const bands_offset_lin_2_5ms[NUM_SAMP_FREQ];
 extern RAM_ALIGN const Word16 bands_offset_with_one_max_lin_2_5ms[NUM_SAMP_FREQ];
 extern RAM_ALIGN const Word16 bands_offset_with_two_max_lin_2_5ms[NUM_SAMP_FREQ];
+
+extern RAM_ALIGN const Word16 bands_offset_with_one_max_7_5ms[NUM_OFFSETS];
+extern RAM_ALIGN const Word16 bands_offset_with_two_max_7_5ms[NUM_OFFSETS];
+extern RAM_ALIGN const Word16 *const bands_offset_lin_7_5ms[NUM_SAMP_FREQ];
+extern RAM_ALIGN const Word16 bands_offset_with_one_max_lin_7_5ms[NUM_SAMP_FREQ];
+extern RAM_ALIGN const Word16 bands_offset_with_two_max_lin_7_5ms[NUM_SAMP_FREQ];
 
 extern RAM_ALIGN const Word32 inv_odft_twiddle_80_re[M];
 extern RAM_ALIGN const Word32 inv_odft_twiddle_80_im[M];
@@ -258,7 +302,6 @@ extern RAM_ALIGN const Word32 isqrt_Q31tab[1 + SQRT_EN_MAX_FX];
 
 extern RAM_ALIGN const Word16 adjust_global_gain_tables[5][NUM_SAMP_FREQ];
 
-
 extern RAM_ALIGN const Word16 sqrt_table_phecu[];
 extern RAM_ALIGN const Word16 POW_ATT_TABLE0[];
 extern RAM_ALIGN const Word16 POW_ATT_TABLE1[];
@@ -266,11 +309,15 @@ extern RAM_ALIGN const Word16 POW_ATT_TABLE1[];
 #if PLC2_FADEOUT_IN_MS == 0
 extern RAM_ALIGN const Word16 *const POW_ATT_TABLES[3];
 #else
-extern RAM_ALIGN const Word16 *const POW_ATT_TABLES[11];
+extern RAM_ALIGN const Word16 fade_scheme_tab_fx[24 / 2][3];
+extern RAM_ALIGN const Word16 *const POW_ATT_TABLES[1+24/2];
+
 #endif
 #else
 extern RAM_ALIGN const Word16 *const POW_ATT_TABLES[3];
 #endif
+
+extern RAM_ALIGN const Word16 scATHFx[7];
 
 extern RAM_ALIGN const Word16 e_tot_headroom[];
 extern RAM_ALIGN const Word16 xfp_wE_MDCT2FFTQ11[];
@@ -306,5 +353,8 @@ extern RAM_ALIGN const Word16 *const w_old[];
 extern RAM_ALIGN const Word16 COPY_LEN[];
 extern RAM_ALIGN const Word16 OLA_LEN[];
 
+extern const Word16 plc_fadeout_param_maxlen[4];
+extern const Word16 plc_fadeout_param_maxbytes[4];
+extern RAM_ALIGN const Word16 PLC_FADEOUT_TYPE_2_SELECTOR;
 
-#endif
+#endif /* CONSTANTS_H */

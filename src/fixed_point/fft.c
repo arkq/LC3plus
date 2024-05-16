@@ -1,13 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
-
+                                                                              
 #include "functions.h"
 #include "rom_basop_util.h"
 
@@ -33,6 +32,9 @@
 #define Mpy_32_xx Mpy_32_16
 #endif
 
+#define SCALEFACTOR6 4
+#define C61_32 (0x6ed9eba1)
+
 #define SCALEFACTOR10 5
 #define SCALEFACTOR16 5
 #define SCALEFACTOR20 5
@@ -55,6 +57,7 @@
 #define SCALEFACTOR384 11
 
 #ifdef ENABLE_HR_MODE
+#define SCALEFACTOR360 11
 #ifndef ENABLE_FFT_30X16
 #define SCALEFACTOR480 10
 #else
@@ -346,7 +349,115 @@ static void fft5(Word32 *re, Word32 *im, Word16 s)
  * \return   void
  */
 
+static void fft6(Word32 *re, Word32 *im, Word16 st)
+{
+    Dyn_Mem_Deluxe_In(Word32 x0, x1, x2, x3, x4, x5; Word32 r1o, r2o, i1e, i2e, i1o, i2o; Word32 t, s;);
 
+    /* process real parts */
+
+    x0 = L_shr_pos(re[0 * st], SCALEFACTOR6);
+    x1 = L_shr_pos(re[1 * st], SCALEFACTOR6);
+    x2 = L_shr_pos(re[2 * st], SCALEFACTOR6);
+    x3 = L_shr_pos(re[3 * st], SCALEFACTOR6);
+    x4 = L_shr_pos(re[4 * st], SCALEFACTOR6);
+    x5 = L_shr_pos(re[5 * st], SCALEFACTOR6);
+
+    t          = L_add(x0, L_add(x2, x4));
+    s          = L_add(x1, L_add(x3, x5));
+    re[0 * st] = L_add(t, s);
+    move32();
+    re[3 * st] = L_sub(t, s);
+    move32();
+    t = L_sub(x0, L_shr_pos(L_add(x2, x4), 1));
+
+    re[1 * st] = t;
+    move32();
+    re[2 * st] = t;
+    move32();
+    re[4 * st] = t;
+    move32();
+    re[5 * st] = t;
+    move32();
+
+    s = Mpy_32_32(L_sub(x4, x2), C61_32);
+
+    i1e = s;
+    i2e = -s;
+
+    t = L_sub(x1, L_shr_pos(L_add(x3, x5), 1));
+    s = Mpy_32_32(L_sub(x5, x3), C61_32);
+
+    r1o = r2o = t;
+    i1o       = s;
+    i2o       = -s;
+
+    x0 = L_shr_pos(im[0 * st], SCALEFACTOR6);
+    x1 = L_shr_pos(im[1 * st], SCALEFACTOR6);
+    x2 = L_shr_pos(im[2 * st], SCALEFACTOR6);
+    x3 = L_shr_pos(im[3 * st], SCALEFACTOR6);
+    x4 = L_shr_pos(im[4 * st], SCALEFACTOR6);
+    x5 = L_shr_pos(im[5 * st], SCALEFACTOR6);
+
+    t = L_add(x0, L_add(x2, x4));
+    s = L_add(x1, L_add(x3, x5));
+
+    im[0 * st] = L_add(t, s);
+    move32();
+    im[3 * st] = L_sub(t, s);
+    move32();
+
+    t = Mpy_32_32(L_sub(x2, x4), C61_32);
+    s = L_sub(x0, L_shr_pos(L_add(x2, x4), 1));
+
+    re[1 * st] = L_add(re[1 * st], t);
+    move32();
+    re[2 * st] = L_sub(re[2 * st], t);
+    move32();
+    re[4 * st] = L_add(re[4 * st], t);
+    move32();
+    re[5 * st] = L_sub(re[5 * st], t);
+    move32();
+
+    i1e = L_add(i1e, s);
+    i2e = L_add(i2e, s);
+
+    t = Mpy_32_32(L_sub(x3, x5), C61_32);
+    s = L_sub(x1, L_shr_pos(L_add(x5, x3), 1));
+
+    r1o = L_add(r1o, t);
+    r2o = L_sub(r2o, t);
+
+    i1o = L_add(i1o, s);
+    i2o = L_add(i2o, s);
+
+    t = L_add(L_shr_pos(r1o, 1), Mpy_32_32(i1o, C61_32));
+    s = L_sub(L_shr_pos(i1o, 1), Mpy_32_32(r1o, C61_32));
+
+    re[1 * st] = L_add(re[1 * st], t);
+    move32();
+    im[1 * st] = L_add(i1e, s);
+    move32();
+
+    re[4 * st] = L_sub(re[4 * st], t);
+    move32();
+    im[4 * st] = L_sub(i1e, s);
+    move32();
+
+    t = L_sub(Mpy_32_32(i2o, C61_32), L_shr_pos(r2o, 1));
+    s = L_negate(L_add(Mpy_32_32(r2o, C61_32), L_shr_pos(i2o, 1)));
+
+    re[2 * st] = L_add(re[2 * st], t);
+    move32();
+    im[2 * st] = L_add(i2e, s);
+    move32();
+
+    re[5 * st] = L_sub(re[5 * st], t);
+    move32();
+    im[5 * st] = L_sub(i2e, s);
+    move32();
+
+    Dyn_Mem_Deluxe_Out();
+}
 
 /**
  * \brief    Function performs a complex 8-point FFT
@@ -966,12 +1077,30 @@ static void fft15(Word32 *re, Word32 *im, Word16 s)
 
     Dyn_Mem_Deluxe_Out();
 }
+    
+#define STC(x) (x)
+const Word32 RotVectorReal12[] =
+{
+  STC(0x6ed9eba1), STC(0x40000000),
+  STC(0x40000000), STC(0xc0000000),
+#ifndef FFT12_UNROLLED_ENABLE
+  STC(0x00000000), STC(0x80000000),
+#endif
+};
 
-
+const Word32 RotVectorImag12[] =
+{
+  STC(0x40000000), STC(0x6ed9eba1),
+  STC(0x6ed9eba1), STC(0x6ed9eba1),
+#ifndef FFT12_UNROLLED_ENABLE
+  STC(0x7fffffff), STC(0x00000000),
+#endif
+};
+    
 static void fft12(Word32 *pInput)
 {
     Dyn_Mem_Deluxe_In(Word32 aDst[24]; Word32 * pSrc, *pDst; Counter i; Word32 r1, r2, s1, s2, pD; Word32 re, im;
-                      Word16 vre, vim;);
+                      Word32 vre, vim;);
 
     pSrc = pInput;
     move16();
@@ -1004,9 +1133,11 @@ static void fft12(Word32 *pInput)
     pDst[5] = L_sub(s1, r2);
     pSrc += 2;
     pDst += 6;
+    
+  const Word32 *pVecRe = RotVectorReal12;
+  const Word32 *pVecIm = RotVectorImag12;
 
-    vre = add(0x6eda, 0);
-    vim = add(0x4000, 0);
+
 
     FOR (i = 0; i < 2; i++)
     {
@@ -1034,15 +1165,16 @@ static void fft12(Word32 *pInput)
         /* combination */
         re = L_sub(r1, s2);
         im = L_add(s1, r2);
-        cplxMpy_32_16(&pDst[3], &pDst[2], im, re, vre, vim);
+        vre = *pVecRe++;
+        vim = *pVecIm++;
+        cplxMpy_32_32(&pDst[3], &pDst[2], im, re, vre, vim);
+        
         re  = L_add(r1, s2);
         im  = L_sub(s1, r2);
-        vre = add(0x4000, 0);
-        if (i == 1)
-            vre = negate(vre); /* 0xC000 */
-        if (i == 0)
-            vim = add(0x6eda, 0);
-        cplxMpy_32_16(&pDst[5], &pDst[4], im, re, vre, vim);
+
+        vre = *pVecRe++;
+        vim = *pVecIm++;
+        cplxMpy_32_32(&pDst[5], &pDst[4], im, re, vre, vim);
 
         pDst += 6;
         pSrc += 2;
@@ -3586,6 +3718,51 @@ static void fftN2(Word32 *re, Word32 *im,
         
         BREAK;
     }
+
+    case 6:
+    {
+        Word32 y[2 * 10];
+        FOR (j = 0; j < dim2; j++)
+        {
+            cplxMpy4_12_1(y[2 * j], y[2 * j + 1], x[2 * 0 + 2 * j * dim1], x[2 * 0 + 2 * j * dim1 + 1]);
+        }
+        fft6(&y[0], &y[1], 2);
+        FOR (j = 0; j < dim2; j++)
+        {
+            re[sx * 0 + sx * j * dim1] = y[2 * j];
+            move32();
+            im[sx * 0 + sx * j * dim1] = y[2 * j + 1];
+            move32();
+        }
+
+        FOR (i = 1; i < dim1; i++)
+        {
+            cplxMpy4_12_1(y[2 * (0 + 0)], y[2 * (0 + 0) + 1], x[2 * i + 2 * (0 + 0) * dim1],
+                          x[2 * i + 2 * (0 + 0) * dim1 + 1]);
+            cplxMpy4_12_0(y[2 * (0 + 1)], y[2 * (0 + 1) + 1], x[2 * i + 2 * (0 + 1) * dim1],
+                          x[2 * i + 2 * (0 + 1) * dim1 + 1], W[sc * i + sc * (0 + 1) * dim1 - Woff],
+                          W[sc * i + sc * (0 + 1) * dim1 + 1 - Woff]);
+            FOR (j = 2; j < dim2; j = j + 2)
+            {
+                cplxMpy4_12_0(y[2 * (j + 0)], y[2 * (j + 0) + 1], x[2 * i + 2 * (j + 0) * dim1],
+                              x[2 * i + 2 * (j + 0) * dim1 + 1], W[sc * i + sc * (j + 0) * dim1 - Woff],
+                              W[sc * i + sc * (j + 0) * dim1 + 1 - Woff]);
+                cplxMpy4_12_0(y[2 * (j + 1)], y[2 * (j + 1) + 1], x[2 * i + 2 * (j + 1) * dim1],
+                              x[2 * i + 2 * (j + 1) * dim1 + 1], W[sc * i + sc * (j + 1) * dim1 - Woff],
+                              W[sc * i + sc * (j + 1) * dim1 + 1 - Woff]);
+            }
+            fft6(&y[0], &y[1], 2);
+            FOR (j = 0; j < dim2; j++)
+            {
+                re[sx * i + sx * j * dim1] = y[2 * j];
+                move32();
+                im[sx * i + sx * j * dim1] = y[2 * j + 1];
+                move32();
+            }
+        }
+        BREAK;
+    }
+    
     case 8:
     {
         Word32 x00, x01, x02, x03, x04, x05, x06, x07, x08, x09, x10, x11, x12, x13, x14, x15;
@@ -3821,7 +3998,7 @@ void BASOP_cfft(Word32 *re, Word32 *im, Word16 length, Word16 s, Word16 *scale, 
 #else
     Word8 scratch[4068] = {0};
 #endif
-    
+
     SWITCH (length)
     {
 
@@ -3931,10 +4108,13 @@ void BASOP_cfft(Word32 *re, Word32 *im, Word16 length, Word16 s, Word16 *scale, 
     case 180:
 #ifndef ENABLE_FFT_RESCALE
         fftN2(re, im, RotVector_360, 15, 12, s, 4, 60, scratch);
-#else
-        fftN2(re, im, RotVector_360, 15, 12, s, 4, 60, scratch, NULL);
-#endif
         *scale = add(*scale, SCALEFACTOR180);
+#else
+        fftN2(re, im, RotVector_360, 15, 12, s, 4, 60, scratch, &fftN2scale);
+        *scale = add(*scale, SCALEFACTOR180);
+        *scale = sub(*scale, fftN2scale); move16();
+#endif
+
         move16();
         BREAK;
     case 192:
@@ -3976,6 +4156,11 @@ void BASOP_cfft(Word32 *re, Word32 *im, Word16 length, Word16 s, Word16 *scale, 
         move16();
         BREAK;
 #ifdef ENABLE_HR_MODE
+    case 360:
+        fftN2(re, im, RotVector_720, 30, 12, s, 2, 60, scratch, &fftN2scale);
+        *scale = add(*scale, SCALEFACTOR360); move16();
+        *scale = sub(*scale, fftN2scale); move16();
+        BREAK;
     case 480:
 #ifndef ENABLE_FFT_RESCALE
 #ifndef ENABLE_FFT_30X16

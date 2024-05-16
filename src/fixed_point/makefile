@@ -1,3 +1,12 @@
+#******************************************************************************
+#                        ETSI TS 103 634 V1.5.1                               *
+#              Low Complexity Communication Codec Plus (LC3plus)              *
+#                                                                             *
+# Copyright licence is solely granted through ETSI Intellectual Property      *
+# Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
+# estoppel or otherwise.                                                      *
+#*****************************************************************************/
+
 # Options
 AFL                      = 0
 GCOV                     = 0
@@ -6,6 +15,8 @@ OPTIM                    = 0
 SUBSET                   = ALL
 WMOPS                    = 1
 HR                       = 1
+CLANG                    = 0
+SHORT_PLC_FADEOUT        = 0
 
 # Paths
 VPATH  = . basic_op
@@ -42,6 +53,34 @@ endif
 
 ifeq "$(HR)" "0"
 CFLAGS   += -DDISABLE_HR_MODE
+endif
+
+ifeq "$(SHORT_PLC_FADEOUT)" "1"
+CFLAGS   += -DPLC_TUNING_SHORT_FADEOUT
+endif
+
+# memory sanitizer, find use of uninitialized memory
+ifeq "$(CLANG)" "1"
+    CC        = clang
+    CFLAGS   += -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
+    LDFLAGS  += -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
+    OPTIM     = 2
+endif
+
+# address sanitizer, find buffer overflows
+ifeq "$(CLANG)" "2"
+    CC        = clang
+    CFLAGS   += -fsanitize=address -fno-omit-frame-pointer
+    LDFLAGS  += -fsanitize=address -fno-omit-frame-pointer
+    OPTIM     = 2
+endif
+
+# undefined behavior sanitizer, find bugs like integer overflows
+ifeq "$(CLANG)" "3"
+    CC       = clang
+    CFLAGS  += -fsanitize=undefined
+    LDFLAGS += -fsanitize=undefined
+    OPTIM    = 2
 endif
 
 LDFLAGS += -lm
@@ -105,6 +144,7 @@ help:
 	@echo '    OPTIM                    $(OPTIM) [0-3]'
 	@echo '    SUBSET                   $(SUBSET) [NB,WB,SSWB,SWB,FB,UB,ALL]'
 	@echo '    WMOPS                    $(WMOPS) [0,1]'
+	@echo '    SHORT_PLC_FADEOUT        $(SHORT_PLC_FADEOUT) [0,1]'
 	@echo 'Debug options:'
 	@echo '    AFL                      $(AFL) [0,1]'
 	@echo '    CLANG                    $(CLANG) [0-3]'

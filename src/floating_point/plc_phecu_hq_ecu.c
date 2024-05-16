@@ -1,16 +1,14 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "defines.h"
 #include "functions.h"
-
 
 void plc_phEcu_hq_ecu(
     LC3_FLOAT *f0binPtr, LC3_FLOAT *f0ltpGainPtr, LC3_FLOAT *xfp,
@@ -23,7 +21,10 @@ void plc_phEcu_hq_ecu(
     LC3_FLOAT *xsubst_dbg, Complex *X_out_m_dbg,
     LC3_INT32 *seed_dbg, LC3_FLOAT *mag_chg_dbg, LC3_INT32 *tr_dec_dbg, LC3_FLOAT *gpc_dbg, LC3_FLOAT *X_i_new_re_dbg, LC3_FLOAT *X_i_new_im_dbg,
     LC3_FLOAT *corr_phase_dbg,
-    Fft *PhEcu_Fft, Fft *PhEcu_Ifft)
+    Fft *PhEcu_Fft, Fft *PhEcu_Ifft    
+    , LC3_UINT8 plc_fadeout_type, LC3_INT16 *nonpure_tone_flag_ptr   /* nonpure tone flag */
+    
+    )
 {
    LC3_INT32 i;
    LC3_INT32 fs_idx, L, Lprot, n_grp, Lecu, LXsav, Lxfp_inuse;
@@ -47,6 +48,8 @@ void plc_phEcu_hq_ecu(
        Lxfp_inuse = (LC3_INT32)(L*(3.75/10.0));
     }
 
+      
+
     UNUSED(env_stabPtr);
     UNUSED(xsubst_dbg);
     UNUSED(X_out_m_dbg);
@@ -68,12 +71,14 @@ void plc_phEcu_hq_ecu(
              xfp_local_rnd[i] = 0.0;
           }
        }
+	    *nonpure_tone_flag_ptr = -1;  /* set  nonpure tone flag for new analysis */
        
-
         *time_offs = 0;
         burst_len = (*time_offs / L + 1);
         plc_phEcu_trans_burst_ana_sub(fs_idx, burst_len, n_grp, oold_grp_shape, oold_EwPtr , old_grp_shape,  old_EwPtr, st_beta_mute,
-                                      st_mag_chg_1st, st_Xavg, alpha, beta, mag_chg, NULL, NULL);
+                                      st_mag_chg_1st, st_Xavg, alpha, beta, mag_chg, NULL, NULL
+                                      , plc_fadeout_type                                               
+              );
  
         plc_phEcu_spec_ana(xfp_local_rnd, Lprot, winWhr, pfind_sensPtr, plocs, n_plocs, f0est, X_sav_m, &LXsav, f0binPtr, f0ltpGainPtr, fs_idx, PhEcu_Fft);
     }
@@ -84,7 +89,9 @@ void plc_phEcu_hq_ecu(
         burst_len = ((*time_offs / L) + 1);
 
         plc_phEcu_trans_burst_ana_sub(fs_idx, burst_len, n_grp, oold_grp_shape, oold_EwPtr, old_grp_shape, old_EwPtr, st_beta_mute,
-                                      st_mag_chg_1st, st_Xavg, alpha, beta, mag_chg, NULL, NULL);
+                                      st_mag_chg_1st, st_Xavg, alpha, beta, mag_chg, NULL, NULL                                    
+                                      , plc_fadeout_type                                          
+                                      );
 
     }
 
@@ -99,6 +106,10 @@ void plc_phEcu_hq_ecu(
 
     /* inplace X_out_m update */
     plc_phEcu_subst_spec(plocs, *n_plocs, f0est, *time_offs, X_out_m, LXsav, mag_chg, &seed, alpha, beta, st_Xavg, t_adv, Lprot, delta_corr,
+                         plc_fadeout_type,
+                         nonpure_tone_flag_ptr,  /*  nonpure_tone_flag   , a state  updated here  */
+    
+    
                          NULL, NULL, NULL);
   
 

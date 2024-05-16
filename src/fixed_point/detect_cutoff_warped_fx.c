@@ -1,13 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
-
 
 #include "functions.h"
 #include "rom_basop_util.h"
@@ -41,6 +39,11 @@ void processDetectCutoffWarped_fx(Word16 *bw_idx, Word32 *d2_fx, Word16 d2_fx_ex
         warp_idx_start = BW_warp_idx_start_all_5ms[fs_idx - 1]; move16();
         warp_idx_stop  = BW_warp_idx_stop_all_5ms[fs_idx - 1];  move16();
         bw_brickwall_dist = BW_brickwall_dist_5ms;
+        BREAK;
+    case 75:
+        warp_idx_start = BW_warp_idx_start_all_7_5ms[fs_idx - 1]; move16();
+        warp_idx_stop  = BW_warp_idx_stop_all_7_5ms[fs_idx - 1];  move16();
+        bw_brickwall_dist = BW_brickwall_dist_7_5ms;
         BREAK;
     default:                                                /* 100 */
         warp_idx_start = BW_warp_idx_start_all[fs_idx - 1]; move16();

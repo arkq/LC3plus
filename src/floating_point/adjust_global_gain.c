@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
 
@@ -14,11 +13,10 @@ void processAdjustGlobalGain_fl(LC3_INT* gg_idx, LC3_INT gg_idx_min, LC3_INT gg_
     , LC3_INT16 hrmode, LC3_INT16 frame_dms
     )
 {
-    LC3_FLOAT delta  = 0;
-    LC3_INT   delta2 = 0;
+    LC3_FLOAT delta;
+    LC3_INT   delta2;
     LC3_INT   gg_idx_inc;
-    LC3_INT   factor;
-
+    LC3_FLOAT factor;
 
     if (frame_dms == 25)
     {
@@ -31,7 +29,12 @@ void processAdjustGlobalGain_fl(LC3_INT* gg_idx, LC3_INT gg_idx_min, LC3_INT gg_
     } else if (frame_dms == 50)
     {
         factor = 2;
-    } else
+    }
+    else if (frame_dms == 75)
+    {
+        factor = 1.2;
+    }
+    else
     {
         factor = 1;
     }
@@ -59,7 +62,7 @@ void processAdjustGlobalGain_fl(LC3_INT* gg_idx, LC3_INT gg_idx_min, LC3_INT gg_
         if (hrmode)
         {
             if (nBits > target) {
-                gg_idx_inc = (int) factor * (((nBits - target)/ delta) + 1);
+                gg_idx_inc = (int) (factor * (((nBits - target)/ delta) + 1));
                 gg_idx_inc = MIN(gg_idx_inc, 10 * factor);
                 
                 *gg_idx += gg_idx_inc;

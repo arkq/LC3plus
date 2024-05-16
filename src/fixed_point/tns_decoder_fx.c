@@ -1,16 +1,13 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
-
 
 #include "functions.h"
-
 
 static Word32 IIRLattice(Word16 order, const Word16 *parCoeff, Word32 *state, Word32 x);
 
@@ -55,6 +52,10 @@ void processTnsDecoder_fx(Word16 rc_idx[], Word32 x[], Word16 xLen, Word16 order
     case 50:
         startfreq[0] = 6; move16();
         BW_stopband  = shr_pos(BW_stopband, 1);
+        BREAK;
+    case 75:
+        startfreq[0] = 9; move16();
+        BW_stopband = add(shr_pos(BW_stopband, 2), add(shr_pos(BW_stopband, 2), shr_pos(BW_stopband, 2)));
         BREAK;
     case 100: startfreq[0] = 12; BREAK;
     }

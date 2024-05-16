@@ -1,18 +1,20 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
-
 
 #include "functions.h"
-#include "lc3.h"
+#include "lc3plus.h"
 #include "tinywavein_c.h"
 #include "tinywaveout_c.h"
+
+#ifdef WMOPS
+#include "wmc_auto.h"
+#endif
 
 #include <assert.h>
 #include <stdint.h>
@@ -105,7 +107,11 @@ static const char *const USAGE_MESSAGE =
     "  -dc NUM                 0: Don't use delay compensation\n"
     "                          1: Compensate delay in decoder (default)\n"
     "                          2: Split delay equally between encoder and decoder\n"
-    "  -frame_ms               NUM Frame length in ms. NUM must be 10 (default), 5 or 2.5.\n"
+#ifdef WMOPS
+    "  -frame_ms               NUM Frame length in ms. Must match hard-coded frame size of WMC tool (see above).\n"
+#else
+    "  -frame_ms               NUM Frame length in ms. NUM must be 10 (default), 7.5, 5 or 2.5.\n"
+#endif
     "  -bandwidth NUM|FILE     Select audio bandwidth limitation via value in Hz or switching file.\n"
     "                          NUM can be any integer value describing the bandwidth; max NUM=20000 Hz\n"
     "  -q                      Disable frame counter printout\n"
@@ -167,13 +173,12 @@ static const char* ERROR_MESSAGE[] = {
     "Invalid bandwidth frequency!"                                          /* LC3PLUS_BW_WARNING          */
 };
 
-
 int main(int ac, char **av)
 {
     Arguments arg;
     uint32_t  nSamples = 0, nSamplesRead = 0, nSamplesFile = 0xffffffff, sampleRate = 0;
     short     nChannels = 0, bipsIn = 0;
-    int       nBytes = 0, real_bitrate = 0, frame = 1, delay = 0;
+	int       nBytes = 0, real_bitrate = 0, frame = 1, delay = 0;
     int       encoder_size = 0, decoder_size = 0;
     int scratch_size = 0;
     int       bfi_ext = 0;
@@ -191,8 +196,16 @@ int main(int ac, char **av)
     int16_t* sample_buf_short = (int16_t*)(void*)sample_buf_int;
     int i;
 
+#ifdef WMOPS
+    reset_wmops();
+    reset_mem( USE_BYTES );
+#endif
+
     /* Parse Command-line */
     printf(LICENSE, LC3PLUS_VERSION >> 16, (LC3PLUS_VERSION >> 8) & 255, LC3PLUS_VERSION & 255);
+#ifdef WMOPS
+    printf("!!! Instrumented with WMC tool. Measuring complexity with hard-coded frame size of %.1f ms !!!\n\n", 1000 / FRAMES_PER_SECOND);
+#endif
     parseCmdl(ac, av, &arg);
 
     /* exit handler to clean up resources */
@@ -347,9 +360,22 @@ int main(int ac, char **av)
         ReadWavInt(input_wav, sample_buf, nChannels * delay, &nSamplesRead);
     }
 
+#ifdef WMOPS
+    reset_stack();
+    reset_wmops();
+#endif
+
     /* Encoder + Decoder loop */
     while (1)
     {
+        if (!arg.hide_counter)
+        {
+            if ((frame >= arg.startFrame && frame <= arg.stopFrame && arg.stopFrame != 0) || (arg.stopFrame == 0 && arg.startFrame == 0))
+            {
+                printf("\rProcessing frame %i", frame);
+                fflush(stdout);
+            }
+        }
         if (!arg.decoder_only)
         {
             /* Encoder */
@@ -483,14 +509,19 @@ int main(int ac, char **av)
 
             /* Run Decoder */
             if (arg.bipsOut == 24) {
-                err = lc3plus_dec24(decoder, bytes, nBytes, output24,
-                 scratch,
-                 bfi_ext);
+                if (bfi_ext == 1)
+                {
+                    err = lc3plus_dec24(decoder, NULL, 0, output24, scratch, bfi_ext);
+                } else {
+                    err = lc3plus_dec24(decoder, bytes, nBytes, output24, scratch, bfi_ext);
+                }
             } else {
-
-                err = lc3plus_dec16(decoder, bytes, nBytes, output16,
-                 scratch,
-                 bfi_ext);
+                if (bfi_ext == 1)
+                {
+                    err = lc3plus_dec16(decoder, NULL, 0, output16, scratch, bfi_ext);
+                } else {
+                    err = lc3plus_dec16(decoder, bytes, nBytes, output16, scratch, bfi_ext);
+                }
             }
             exit_if(err && err != LC3PLUS_DECODE_ERROR, ERROR_MESSAGE[err]);
 
@@ -536,15 +567,12 @@ int main(int ac, char **av)
         }
 
  while_end:
-        if (!arg.hide_counter)
-        {
-            if ((frame >= arg.startFrame && frame <= arg.stopFrame && arg.stopFrame != 0) || (arg.stopFrame == 0 && arg.startFrame == 0))
-            {
-                printf("\rProcessing frame %i", frame);
-                fflush(stdout);
-            }
-        }
         frame++;
+
+#ifdef WMOPS
+        update_mem();
+        update_wmops();
+#endif
 
         if (frame > arg.stopFrame && arg.stopFrame != 0)
         {
@@ -571,6 +599,11 @@ int main(int ac, char **av)
     free(encoder);
     free(decoder);
 	free(scratch);
+
+#ifdef WMOPS
+    print_wmops();
+    print_mem( NULL );
+#endif
 
     return 0;
 }
@@ -615,7 +648,12 @@ static void parseCmdl(int ac, char** av, Arguments* arg)
     int pos = 1;
     memset(arg, 0, sizeof(*arg));
     arg->bipsOut  = 16;
+#ifdef WMOPS
+    // Frame size is a compile-time constant when the code is instrumented with the WMC tool
+    arg->frame_ms = 1000 / FRAMES_PER_SECOND;
+#else
     arg->frame_ms = 10;
+#endif
     arg->dc       = 1;
 #ifdef ENABLE_HR_MODE_FL_FLAG
     arg->hrmode = 0;
@@ -707,6 +745,9 @@ static void parseCmdl(int ac, char** av, Arguments* arg)
         if (!strcmp(av[pos], "-frame_ms") && pos + 1 < ac)
         {
             arg->frame_ms = (float)atof(av[++pos]);
+#ifdef WMOPS
+            exit_if(arg->frame_ms != 1000 / FRAMES_PER_SECOND, "Requested frame size doesn't match the hard-coded frame size of WMC tool!");
+#endif
         }
 
             /* lfe mode */
@@ -1049,15 +1090,52 @@ static int read_bitstream_frame(FILE *bitstream_file, uint8_t *bytes, int size, 
 /* read value from file and rewind if end is reached */
 static int16_t loopy_read16(FILE *f)
 {
+#ifdef READ_G192_FER_BYTE
+    int8_t tmp8 = -8;
+#endif
     int16_t tmp = 0;
 #ifdef READ_G192FER
     static int16_t format_start_check = -1;
 #endif
+#ifdef READ_G192_FER_BYTE
+    if (format_start_check == -1) {
+        /* first time always read an int16  (two bytes) */
+        if (fread(&tmp, sizeof(tmp), 1, f) != 1) {
+            printf("\n Warning !!!   loopy_read16 requires at least two initial bytes (one  int16) in FER file  \n ");
+            fflush(stdout);
+        }
+
+        if (tmp == 0x2021 || tmp == 0x2020 || tmp == 0x2120 || tmp == 0x2121)
+        {   /* G192  BYTE format determined on  the first two bytes    */
+            format_start_check = 8;
+        }
+      
+        fseek(f, 0, SEEK_SET); /* rewind */
+    }
+
+    /* restart loopy read with knowledge of G192_byte  ( or int16_t )  */
+    if (format_start_check == 8)
+    {
+        if (fread(&tmp8, sizeof(tmp8), 1, f) != 1) {
+            fseek(f, 0, SEEK_SET); /* rewind */
+             fread(&tmp8, sizeof(tmp8), 1, f);
+        }
+    }
+    else
+    {
+        if (fread(&tmp, sizeof(tmp), 1, f) != 1)
+        {
+            fseek(f, 0, SEEK_SET);
+             fread(&tmp, sizeof(tmp), 1, f);
+        }
+    }
+#else 
     if (fread(&tmp, sizeof(tmp), 1, f) != 1)
     {
         fseek(f, 0, SEEK_SET);
         fread(&tmp, sizeof(tmp), 1, f);
     }
+#endif
 
 #ifdef READ_G192FER
     if (format_start_check < 0)
@@ -1089,6 +1167,19 @@ static int16_t loopy_read16(FILE *f)
             tmp = (G192_GOOD_FRAME - tmp); /* convert g192 synch word to   1 and 0 , note PC byte order assumed */
         }
     }
+
+#ifdef READ_G192_FER_BYTE
+    if (format_start_check == 8)
+    {   /* G192  BYTE format reading   */
+        if ((tmp8 != 0x21 && tmp8 != 0x20))
+        {
+            printf("\n Warning !!! assumed g.192 byte  [0x21, 0x20,] , strange byte FER file values %d  %d \n ", format_start_check, tmp8);
+            fflush(stdout);
+        }
+        tmp = (int16_t)(0x21 - tmp8); /*convert to   bfi (0 ==good, 1 = bad)*/
+    }
+#endif 
+
     assert(tmp == 1 || tmp == 0);
 #endif
 

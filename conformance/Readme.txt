@@ -1,9 +1,5 @@
-=================================
-LC3plus Conformance script V1.2.3
-=================================
-
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -11,8 +7,18 @@ LC3plus Conformance script V1.2.3
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
 
+=================================
+LC3plus Conformance script V1.2.6
+=================================
+
 Changelog
 ==============
+    - V1.2.6 2024-03-13
+        - Added BFI-check for SQAM tests
+    - V1.2.5 2023-09-15
+        - Changed order of preprocess/item generation step
+    - V1.2.4 2023-05-03
+        - added 7.5ms highres conformance tests
     - V1.2.3 2022-11-10
         - added plc test with 10% burst pattern
     - V1.2.2 2021-10-01
@@ -49,18 +55,15 @@ Changelog
 Pre-requisites
 ==============
 
+ - Unix based operating system
  - python3
  - python numpy module
  - SoX (http://sox.sourceforge.net), Windows binary, downloaded automatically
  - An ITU-BS.1387 (PEAQ - advanced) implementation
- - On non-Windows platforms: Wine; Win32 is the reference platform to ensure
-   bit exact behavior
- - On Windows: Cygwin and the following packages installed through Cygwin:
-   -python3
-   -numpy
-   -curl
-   -gcc
-   -make
+ - Wine; Win32 is the reference platform to ensure bit exact behavior
+ - curl
+ - gcc
+ - make
 
 To-Do's on first time usage
 ============================

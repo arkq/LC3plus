@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #ifndef UTIL_H
 #define UTIL_H
@@ -51,18 +50,50 @@ static inline LC3_FLOAT sqrf(LC3_FLOAT x) { return x * x; }
 
 /* convenience wrappers around memmove */
 static inline void move_float(LC3_FLOAT *dst, const LC3_FLOAT *src, LC3_INT len) {
+#ifdef WMOPS
+    LC3_INT i;
+    for (i = 0; i < len; i++)
+    {
+        dst[i] = src[i];
+    }
+#else
   memmove(dst, src, len * sizeof(LC3_FLOAT));
+#endif
 }
 static inline void move_int(LC3_INT *dst, const LC3_INT *src, LC3_INT len) {
+#ifdef WMOPS
+    LC3_INT i;
+    for (i = 0; i < len; i++)
+    {
+        dst[i] = src[i];
+    }
+#else
   memmove(dst, src, len * sizeof(LC3_INT));
+#endif
 }
 
 /* convenience wrappers around memset */
 static inline void zero_float(LC3_FLOAT *x, LC3_INT len) {
+#ifdef WMOPS
+    LC3_INT i;
+    for (i = 0; i < len; i++)
+    {
+        x[i] = 0;
+    }
+#else
   memset(x, 0, len * sizeof(LC3_FLOAT));
+#endif
 }
 static inline void zero_int(LC3_INT *x, LC3_INT len) {
+#ifdef WMOPS
+    LC3_INT i;
+    for (i = 0; i < len; i++)
+    {
+        x[i] = 0;
+    }
+#else
   memset(x, 0, len * sizeof(LC3_INT));
+#endif
 }
 
 /* multiply float vectors element by element, in-place */

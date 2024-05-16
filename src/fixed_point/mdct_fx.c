@@ -1,16 +1,13 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
-
-
 
 /* Union holding buffers to conserve stack memory. */
 
@@ -21,6 +18,9 @@ void processMdct_fx(
     Word16 x[],             /* i:   time input signal */
 #endif
     Word16 x_exp, Word16 N, /* i:   block size N */
+#  ifdef ENABLE_HR_MODE
+    Word16       hrmode,    /* i:   indicate high precision */
+#  endif
 #ifdef ENABLE_HR_MODE
     const Word32 w[],       /* i:   window coefficients including normalization of sqrt(2/N) and scaled by 2^4 */
 #else
@@ -80,34 +80,59 @@ void processMdct_fx(
 
     basop_memmove(mem, &x[N - memLen], memLen * sizeof(Word16));
 #endif
+    
+#  ifdef ENABLE_HR_MODE
+    if (hrmode) 
+    {
+        FOR (i = 0; i < m; i++)
+        {
+            y[m + i] = Msu_32_32_0(Mpy_32_32_0(w[i], buf[i]), w[2 * m - 1 - i], buf[2 * m - 1 - i]); move32();
+        }
 
+        FOR (i = 0; i < z; i++)
+        {
+            y[m - 1 - i] = Mpy_32_32_0(w[2 * m + i], x[2 * m - memLen + i]); move32();
+        }
+    
+        FOR (i = i; i < m; i++)
+        {
+            y[m - 1 - i] = Mac_32_32_0(Mpy_32_32_0(w[2 * m + i], x[2 * m - memLen + i]), w[4 * m - 1 - i], x[4 * m - memLen - 1 - i]); move32();
+        }
+    } else {
+        FOR (i = 0; i < m; i++)
+        {
+            y[m + i] = L_msu0(L_mult0(round_fx_sat(buf[i]), round_fx(w[i])), round_fx_sat(buf[2 * m - 1 - i]), round_fx(w[2 * m - 1 - i])); move32();
+        }
+
+        FOR (i = 0; i < z; i++)
+        {
+            y[m - 1 - i] = L_mult0(round_fx_sat(x[2 * m - memLen + i]), round_fx(w[2 * m + i])); move32();
+        }
+    
+        FOR (i = i; i < m; i++)
+        {
+            y[m - 1 - i] = L_mac0(L_mult0(round_fx_sat(x[2 * m - memLen + i]), round_fx(w[2 * m + i])), round_fx_sat(x[4 * m - memLen - 1 - i]),
+                              round_fx(w[4 * m - 1 - i])); move32();
+        }
+    }
+#  else
+    /* regular resolution only */
     FOR (i = 0; i < m; i++)
     {
-#ifdef ENABLE_HR_MODE
-        y[m + i] = Msu_32_32_0(Mpy_32_32_0(w[i], buf[i]), w[2 * m - 1 - i], buf[2 * m - 1 - i]); move32();
-#else
         y[m + i] = L_msu0(L_mult0(buf[i], w[i]), buf[2 * m - 1 - i], w[2 * m - 1 - i]); move32();
-#endif
     }
 
     FOR (i = 0; i < z; i++)
     {
-#ifdef ENABLE_HR_MODE
-        y[m - 1 - i] = Mpy_32_32_0(w[2 * m + i], x[2 * m - memLen + i]); move32();
-#else
         y[m - 1 - i] = L_mult0(x[2 * m - memLen + i], w[2 * m + i]); move32();
-#endif
     }
     
     FOR (i = i; i < m; i++)
     {
-#ifdef ENABLE_HR_MODE
-        y[m - 1 - i] = Mac_32_32_0(Mpy_32_32_0(w[2 * m + i], x[2 * m - memLen + i]), w[4 * m - 1 - i], x[4 * m - memLen - 1 - i]); move32();
-#else
         y[m - 1 - i] = L_mac0(L_mult0(x[2 * m - memLen + i], w[2 * m + i]), x[4 * m - memLen - 1 - i],
                               w[4 * m - 1 - i]); move32();
-#endif
     }
+#  endif
 
     s = s_max(0, getScaleFactor32(y, N));
     FOR (i = 0; i < N; i++)
@@ -127,8 +152,13 @@ void processMdct_fx(
     {
         *y_e = add(*y_e, 1);
     }
-
+#ifdef ENABLE_HR_MODE
+    dct_IV(y, y_e, N, 
+           hrmode, 
+           workBuffer);
+#else
     dct_IV(y, y_e, N, workBuffer);
+#endif
 
 #ifdef DYNMEM_COUNT
     Dyn_Mem_Out();

@@ -1,11 +1,11 @@
-# /******************************************************************************
-# *                        ETSI TS 103 634 V1.4.1                               *
-# *              Low Complexity Communication Codec Plus (LC3plus)              *
-# *                                                                             *
-# * Copyright licence is solely granted through ETSI Intellectual Property      *
-# * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
-# * estoppel or otherwise.                                                      *
-# ******************************************************************************/
+#******************************************************************************
+#                        ETSI TS 103 634 V1.5.1                               *
+#              Low Complexity Communication Codec Plus (LC3plus)              *
+#                                                                             *
+# Copyright licence is solely granted through ETSI Intellectual Property      *
+# Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
+# estoppel or otherwise.                                                      *
+#*****************************************************************************/
 
 import math as m
 import numpy as np
@@ -33,7 +33,7 @@ def _get_notch_iir(alpha, r):
 
     return A, B
 
-def thd_plus_n(x, x2, freq, fs):
+def thd_plus_n(x, freq, fs):
     """thd_plus_n calculates the total harmonic distortion plus noise added in decibel
 
     x      :   distorted sinusoidal signal
@@ -60,7 +60,7 @@ def thd_plus_n(x, x2, freq, fs):
             - B[1]*ymem[0] - B[2]*ymem[1]
 
         if i > n0:
-            sig_energy += x2[i]**2
+            sig_energy += x[i]**2
             noise_energy += y**2
 
         ymem[1] = ymem[0]

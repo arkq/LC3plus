@@ -1,19 +1,16 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "defines.h"
 #include "functions.h"
 
-
 #define PEAK_LOCATOR_RES_FX    1  /*  fixed point resolution minimum value  */
-
 
 static LC3_INT16  plc_phEcu_find_ind_fx(                        /* o  : output maximum  indx 0.. len-1    */
     const LC3_INT16 *inp,      /* i  : vector     */
@@ -135,13 +132,13 @@ void plc_phEcu_spec_ana(LC3_FLOAT* xfp,
         
         if (max_xfp_abs >= 0.5)
         {  
-           PLC2_Q_flt = (LC3_FLOAT)LC3_FLOOR(LC3_LOG2(32768 / 2 / 2 / max_xfp_abs));
+           PLC2_Q_flt = (LC3_FLOAT)LC3_FLOOR(LC3_LOGTWO(32768 / 2 / 2 / max_xfp_abs));
            Q_scale_flt = LC3_POW(2.0, PLC2_Q_flt) / fx_fft_scale / fft_fs_scale; /* basop way using xfp scale */
 
            /*   C-Float additional safety limit/verification of  the integer xfp based scaling using the available  C-float Xabs max value inp_high as well */
            {
               LC3_FLOAT tmp_scale;
-              tmp_scale = LC3_POW(2.0, LC3_FLOOR(LC3_LOG2(32768 / 2 / 2 / inp_high)));
+              tmp_scale = LC3_POW(2.0, LC3_FLOOR(LC3_LOGTWO(32768 / 2 / 2 / inp_high)));
               if (Q_scale_flt > tmp_scale) {
                  Q_scale_flt = tmp_scale;              
               }

@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "defines.h"
 #include "functions.h"
@@ -168,9 +167,9 @@ Word32 winEnCalc(                          /* o:  output summed energy Ltot */
 #endif
 
 
-    BASOP_sub_sub_start("PhECU::GF::winEnCalc");
+    BASOP_sub_sub_start("PhECU::winEnCalc");
 
-    L_tot = INT_MAX; move32(); /*acc is on negative side , but as all accumulatio is positive, we make use of one extra bit   */
+    L_tot = INT_MAX; move32(); /*acc is on negative side , but as all accumulation is positive, we make use of one extra bit   */
     pX   = x;
     pW   = win;
    

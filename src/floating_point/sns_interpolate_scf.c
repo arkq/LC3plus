@@ -1,34 +1,33 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
 
 void processSnsInterpolateScf_fl(LC3_FLOAT* gains, LC3_INT encoder_side, LC3_INT bands_number, LC3_FLOAT* gains_int)
 {
-    LC3_INT   i = 0, n = 0, d = 0, n4 = 0;
-    LC3_FLOAT tmp[MAX_BANDS_NUMBER_PLC] = {0}, ratio = 0;
+    LC3_INT   i, n, d, n4;
+    LC3_FLOAT tmp[MAX_BANDS_NUMBER_PLC], ratio;
 
     /* Interpolation */
 
     gains_int[0] = gains[0];
     gains_int[1] = gains[0];
 
-    for (n = 0; n <= 14; n++) {
-        gains_int[n * 4 + 2] = gains[n] + (gains[n + 1] - gains[n]) / 8.0;
-        gains_int[n * 4 + 3] = gains[n] + 3.0 * (gains[n + 1] - gains[n]) / 8.0;
-        gains_int[n * 4 + 4] = gains[n] + 5.0 * (gains[n + 1] - gains[n]) / 8.0;
-        gains_int[n * 4 + 5] = gains[n] + 7.0 * (gains[n + 1] - gains[n]) / 8.0;
+       for (n = 0; n <= 14; n++) {
+        gains_int[n * 4 + 2] = gains[n] + (gains[n + 1] - gains[n]) * 0.125;
+        gains_int[n * 4 + 3] = gains[n] + (gains[n + 1] - gains[n]) * 0.375;
+        gains_int[n * 4 + 4] = gains[n] + (gains[n + 1] - gains[n]) * 0.625;
+        gains_int[n * 4 + 5] = gains[n] + (gains[n + 1] - gains[n]) * 0.875;
     }
 
-    gains_int[62] = gains[15] + (gains[15] - gains[14]) / 8.0;
-    gains_int[63] = gains[15] + 3.0 * (gains[15] - gains[14]) / 8.0;
+    gains_int[62] = gains[15] + (gains[15] - gains[14]) * 0.125;
+    gains_int[63] = gains[15] + (gains[15] - gains[14]) * 0.375;
 
     /* For 5ms */
 
@@ -52,7 +51,8 @@ void processSnsInterpolateScf_fl(LC3_FLOAT* gains, LC3_INT encoder_side, LC3_INT
             }
 
             move_float(gains_int, tmp, d);
-        } else if (ceil(64.0 / (LC3_FLOAT) bands_number) == 4)
+        }
+        else if (bands_number < 32)
         {
             ratio = LC3_FABS((LC3_FLOAT) ((LC3_FLOAT)1.0 - (LC3_FLOAT)32.0 / (LC3_FLOAT) bands_number));
             n4 = LC3_ROUND(ratio * (LC3_FLOAT)bands_number);

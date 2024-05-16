@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 /***************************************************************************\
  *   contents/description: Main function for Time domain concealment
@@ -14,7 +13,7 @@
 
 #include <string.h>
 #include "functions.h"
-
+#include "constants.h"
 
 static LC3_INT16 TDC_random_short(LC3_INT16 *seed);
 static LC3_FLOAT TDC_get_gainp(const LC3_FLOAT x[], const LC3_FLOAT y[], LC3_INT32 n);
@@ -31,7 +30,7 @@ const LC3_FLOAT TDC_high_32_harm[TDC_L_FIR_HP]  = {-0.0053f, -0.0037f, -0.0140f,
 static void TDC_levinson(LC3_FLOAT *acf, LC3_INT32 len, LC3_FLOAT *out);
 static void TDC_copyFLOAT(const LC3_FLOAT * X, LC3_FLOAT * Z, LC3_INT32 n);
 static LC3_FLOAT TDC_dotFLOAT(const LC3_FLOAT * X, const LC3_FLOAT * Y, LC3_INT32 n);
-
+static LC3_FLOAT type_2_alpha_long(LC3_INT32 nbLostFramesInRow, LC3_INT32 frame_dms);
 const LC3_INT32 beforeNextIncArray[4][4] = {{0,0,0,1},
                                           {0,1,0,1},
                                           {0,1,1,1},
@@ -60,6 +59,8 @@ void processTdcApply_fl(const LC3_INT32    pitch_int,
                         LC3_FLOAT*       gain_c,
                         LC3_FLOAT*       alpha,
                         LC3_FLOAT*       synth
+                        , LC3_UINT8       plc_fadeout_type
+                        , LC3_FLOAT*      alpha_type_2_table
                         )
 {    
           LC3_FLOAT step, step_n;
@@ -76,6 +77,7 @@ void processTdcApply_fl(const LC3_INT32    pitch_int,
           LC3_FLOAT alphaPrev;
           LC3_FLOAT throttle;
           LC3_INT32   frame_dms_idx, nbLostFramesInRow_mod;
+          LC3_INT32 plc_fadeout_len = 0;
         
   memset(synth_mem, 0, M * sizeof(LC3_FLOAT));
   memset(scratchSpace, 0, (MAX_LEN_PCM_PLC  + MDCT_MEM_LEN_MAX + MAX_LEN_PCM_PLC + 1 + M) * sizeof(LC3_FLOAT));
@@ -88,9 +90,16 @@ void processTdcApply_fl(const LC3_INT32    pitch_int,
   nbLostFramesInRow_mod = (nbLostFramesInRow - 1) % 4;
 
   beforeNextInc         = beforeNextIncArray[frame_dms_idx][nbLostFramesInRow_mod];
-  nextInc               = nextIncArray      [frame_dms_idx][nbLostFramesInRow_mod];
+  nextInc               = nextIncArray      [frame_dms_idx][nbLostFramesInRow_mod]; 
 
-  if (nbLostCmpt_loc > PLC_FADEOUT_IN_MS/10)
+  if (plc_fadeout_type >= 1){
+    plc_fadeout_len = PLC_FADEOUT_TYPE_1_IN_MS;
+  }
+  else{
+    plc_fadeout_len = PLC_FADEOUT_IN_MS;
+  }
+
+  if (nbLostCmpt_loc > plc_fadeout_len/10)
   {
       gain_p = 0;
       *gain_c = 0;
@@ -197,7 +206,12 @@ void processTdcApply_fl(const LC3_INT32    pitch_int,
   {
       alphaPrev = *alpha;
   }
-  
+
+  if (plc_fadeout_type == 2){
+    *alpha = alpha_type_2_table[nbLostFramesInRow];
+  }
+  else{
+
   if (nextInc != 0)
   {
     switch (nbLostCmpt_loc)
@@ -230,7 +244,8 @@ void processTdcApply_fl(const LC3_INT32    pitch_int,
       switch (frame_dms)
       {
       case  25: *alpha *= PLC34_ATTEN_FAC_025; break;
-      case  50: *alpha *= PLC34_ATTEN_FAC_050; break;
+      case  50: *alpha *= PLC34_ATTEN_FAC_025; break;
+      case  75: *alpha *= PLC34_ATTEN_FAC_075; break;
       case 100: *alpha *= PLC34_ATTEN_FAC_100; break;
       }
   }
@@ -239,7 +254,7 @@ void processTdcApply_fl(const LC3_INT32    pitch_int,
   {
       gain_p = *alpha;
   }
-
+  }
   /*---------------------------------------------------------------*
    * Construct the harmonic part                                   *
    *  Last pitch cycle of the previous frame is repeatedly copied. *
@@ -376,7 +391,7 @@ void processTdcApply_fl(const LC3_INT32    pitch_int,
    *----------------------------------------------------------*/
   if (beforeNextInc != 0)
   {
-    if (nbLostCmpt_loc == PLC_FADEOUT_IN_MS/10)
+    if (nbLostCmpt_loc == plc_fadeout_len/10)
     {
       gain_h = 1;
       step = 1.0f/(LC3_FLOAT)N;
@@ -424,13 +439,13 @@ void processTdcInverseOdft_fl(LC3_FLOAT *in, LC3_INT32 n_bands, LC3_FLOAT *out, 
         res.r = 0, res.i = 0;
         for (k = 0; k < n_bands; k++)
         {
-            res = cexpi((2 * M_PI  * (LC3_FLOAT) (j * k)) / (LC3_FLOAT) n_bands);
+            res = cexpi((2 * M_PI_LC3PLUS  * (LC3_FLOAT) (j * k)) / (LC3_FLOAT) n_bands);
             res.r = res.r * buf[k];
             res.i = res.i * buf[k];
             sum = cadd(sum, res);
         }
 
-        res = cexpi((LC3_FLOAT) j * M_PI / (2.0 * (LC3_FLOAT) n_bands));
+        res = cexpi((LC3_FLOAT) j * M_PI_LC3PLUS / (2.0 * (LC3_FLOAT) n_bands));
         out[j] = (sum.r * res.r - sum.i * res.i);
     }
 
@@ -448,7 +463,7 @@ void processTdcPreemphasis_fl(LC3_FLOAT *in, LC3_FLOAT *pre_emph_factor, LC3_INT
 
     for (i = 0; i < n_bands; i++)
     {
-        in[i] = in[i] * (1.0 - 2.0 * (*pre_emph_factor) * LC3_COS(2.0 * M_PI * (0.5 + (LC3_FLOAT) i) / (2.0 * (LC3_FLOAT) n_bands)) + (*pre_emph_factor) * (*pre_emph_factor));
+        in[i] = in[i] * (1.0 - 2.0 * (*pre_emph_factor) * LC3_COS(2.0 * M_PI_LC3PLUS * (0.5 + (LC3_FLOAT) i) / (2.0 * (LC3_FLOAT) n_bands)) + (*pre_emph_factor) * (*pre_emph_factor));
     }
 }
 
@@ -760,3 +775,24 @@ static void TDC_levinson(LC3_FLOAT *acf, LC3_INT32 len, LC3_FLOAT *out)
     }
 }
 
+static LC3_FLOAT type_2_alpha_long(LC3_INT32 nbLostFramesInRow, LC3_INT32 frame_dms)
+{   
+    if (nbLostFramesInRow <= 3*100.0/frame_dms){
+       return LC3_POW(0.95,(nbLostFramesInRow + (100.0/frame_dms) - 1) * frame_dms/100.0);
+    }
+    else {
+      LC3_INT32 n_shift = (nbLostFramesInRow - 3*100.0/frame_dms) * 50/frame_dms;
+      return LC3_POW(0.7,(n_shift + 100.0/frame_dms - 1) * frame_dms/100.0);
+    }
+}
+
+LC3_FLOAT type_2_fadeout(LC3_INT32 nbLostFramesInRow, LC3_INT32 frame_dms)
+{   
+    LC3_FLOAT selector = PLC_FADEOUT_TYPE_2_SELECTOR * 2 * 100/frame_dms;
+    if (selector >= nbLostFramesInRow){
+      return type_2_alpha_long(nbLostFramesInRow, frame_dms);
+    }
+    else {
+      return LC3_POW(0.5,(nbLostFramesInRow + (100.0/frame_dms) - 1) * frame_dms/100.0);
+    } 
+}

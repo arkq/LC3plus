@@ -1,13 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
-
 
 #include "functions.h"
 #include "rom_basop_util.h"
@@ -16,7 +14,11 @@
 void dct_IV(Word32 *pDat,       /* i/o: pointer to data buffer */
             Word16 *pDat_e,     /* i/o: pointer to data exponent */
             Word16  L,          /* i  : length of block */
+#  ifdef ENABLE_HR_MODE
+            Word16  hrmode,     /* indicate high precision usage */
+#  endif
             Word32 *workBuffer) /* : size of L */
+            
 {
     Word16 sin_step;
     Word16 idx;
@@ -99,8 +101,13 @@ void dct_IV(Word32 *pDat,       /* i/o: pointer to data buffer */
     FOR (i = 0; i < M2; i += 2)
     {
 #ifdef ENABLE_HR_MODE
+      if (hrmode) {
         cplxMpy32_32_32_2(accu1, accu2, pDat_1[1], pDat_0[0], twiddle[i].v.re, twiddle[i].v.im);
         cplxMpy32_32_32_2(accu3, accu4, pDat_1[0], pDat_0[1], twiddle[i + 1].v.re, twiddle[i + 1].v.im);
+      } else {
+        cplxMpy32_32_16_2(accu1, accu2, pDat_1[1], pDat_0[0], round_fx_sat(twiddle[i].v.re), round_fx_sat(twiddle[i].v.im));
+        cplxMpy32_32_16_2(accu3, accu4, pDat_1[0], pDat_0[1], round_fx_sat(twiddle[i + 1].v.re), round_fx_sat(twiddle[i + 1].v.im));
+      }
 #else
         cplxMpy32_32_16_2(accu1, accu2, pDat_1[1], pDat_0[0], twiddle[i].v.re, twiddle[i].v.im);
         cplxMpy32_32_16_2(accu3, accu4, pDat_1[0], pDat_0[1], twiddle[i + 1].v.re, twiddle[i + 1].v.im);
@@ -116,14 +123,18 @@ void dct_IV(Word32 *pDat,       /* i/o: pointer to data buffer */
     }
 
 #ifdef ENABLE_DCTIV_RESCALE
-    scale = s_max(getScaleFactor32(pDat, L), 0); move16();
- 
-    FOR (i = 0; i < L; i++)
+    if (hrmode) 
     {
-        pDat[i] = L_shl_pos(pDat[i], scale); move32();
-    }
+        
+        scale = s_max(getScaleFactor32(pDat, L), 0); move16();
+    
+        FOR (i = 0; i < L; i++)
+        {
+            pDat[i] = L_shl_pos(pDat[i], scale); move32();
+        }
 
-    *pDat_e = sub(*pDat_e, scale); move16();
+        *pDat_e = sub(*pDat_e, scale); move16();
+    }
 #endif
 
     BASOP_cfft(&pDat[0], &pDat[1], M_var, 2, pDat_e, workBuffer);

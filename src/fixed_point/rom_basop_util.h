@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #ifndef __BASOP_UTIL_ROM_H__
 #define __BASOP_UTIL_ROM_H__
@@ -126,6 +125,7 @@ extern const Word16 RotVector_480[2 * (480 - 30)];
 #endif
 
 #ifdef ENABLE_HR_MODE
+extern const Word32 RotVector_720[2 * (720 - 30)];
 extern const Word32 RotVector_960[2 * (480 - 60)];
 #else
 extern const Word16 RotVector_960[2 * (480 - 60)];

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-#
-# /******************************************************************************
-# *                        ETSI TS 103 634 V1.4.1                               *
-# *              Low Complexity Communication Codec Plus (LC3plus)              *
-# *                                                                             *
-# * Copyright licence is solely granted through ETSI Intellectual Property      *
-# * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
-# * estoppel or otherwise.                                                      *
-# ******************************************************************************/
-#
-# Version 1.2.3
+
+# Version 1.2.6
+
+#******************************************************************************
+#                        ETSI TS 103 634 V1.5.1                               *
+#              Low Complexity Communication Codec Plus (LC3plus)              *
+#                                                                             *
+# Copyright licence is solely granted through ETSI Intellectual Property      *
+# Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
+# estoppel or otherwise.                                                      *
+#*****************************************************************************/
 
 
 import argparse
@@ -54,8 +54,9 @@ WavInfo  = collections.namedtuple('WavInfo', 'ch rate frames')
 MAX_DELAY = 322
 MAX_SAMPLES_PER_FRAME = 480
 SAMPLERATES = [8000, 16000, 24000, 32000, 44100, 48000, 96000]
-FRAME_SIZES = [2.5, 5.0, 10.0]
-SQAM_URL    = 'https://tech.ebu.ch/docs/testmaterial/SQAM_FLAC.zip'
+FRAME_SIZES = [2.5, 5.0, 7.5, 10.0]
+CHANNELS = [1, 2]
+SQAM_URL    = 'https://qc.ebu.io/testmaterial/523/1/download/'
 SQAM_SHA256 = '7d6fcd0fc42354637291792534b61bf129612f221f8efef97b62e8942a8686aa'
 SOX_URL     = 'https://sourceforge.net/projects/sox/files/sox/14.4.2/sox-14.4.2-win32.zip'
 SOX_SHA256  = '8072cc147cf1a3b3713b8b97d6844bb9389e211ab9e1101e432193fad6ae6662'
@@ -65,7 +66,33 @@ INF         = float('inf')
 PC_BER_FILES = {
   2.5  : "etc/pc_ber_2.5ms.dat",
   5.0  : "etc/pc_ber_5ms.dat",
+  7.5  : "etc/pc_ber_10ms.dat",
   10.0 : "etc/pc_ber_10ms.dat"
+}
+
+PLC_BURST_FILES = {
+  2.5  : "etc/plc_bfer_2.5ms_eid.dat",
+  5.0  : "etc/plc_bfer_5ms_eid.dat",
+  7.5  : "etc/plc_bfer_7.5ms_eid.dat",
+  10.0 : "etc/plc_bfer_10ms_eid.dat"
+}
+
+PLC_RANDOM_FILES = {
+  2.5  : "etc/plc_fer_2.5ms_eid.dat",
+  5.0  : "etc/plc_fer_5ms_eid.dat",
+  7.5  : "etc/plc_fer_7.5ms_eid.dat",
+  10.0 : "etc/plc_fer_10ms_eid.dat"
+}
+
+MIN_HRMODE_BYTES = {# (frame_size, sampling_rate): min_bytes_per_frame
+    (10,48000): 156,
+    (10,96000): 187,
+    (7.5,48000): 117,
+    (7.5,96000): 140,
+    (5,48000): 93,
+    (5,96000): 109,
+    (2.5,48000): 54,
+    (2.5,96000): 62,
 }
 
 # test items
@@ -200,6 +227,7 @@ LABEL = {
 HEADER_ALL = ['Mode', 'Item', 'Frame Size', 'Samplerate', 'Bitrate']
 HEADER_EP  = ['EP Mode']
 HEADER_EPD = ['BFI', 'EPMR', 'ER']
+HEADER_EPD_BFI = ['BFI']
 HEADER_BL  = ['Bandwidth']
 HEADER_METRIC = {
     'rms': ['Max. Abs. Diff', 'RMS [dB]', 'RMS Reached [bits]'],
@@ -234,7 +262,7 @@ def removedir(path):
 # Run command and return output. cmd can be string or list. Commands with .exe suffix are automatically
 # called with wine unless wine=False. Set unicode=False to get binary output. Set hard_fail=False to
 # to ignore nonzero return codes.
-def call(cmd, wine=True, unicode=True, hard_fail=True, log_output=True, opid='', opid_log={}):
+def call(cmd, wine=True, unicode=True, hard_fail=True, log_output=True, opid='', opid_log={}, wine_error_counter=0):
     if isinstance(cmd, str):
         cmd = [x for x in shlex.split(cmd) if x]
     if sys.platform != 'cygwin' and wine and cmd[0].lower().endswith('.exe'):
@@ -249,6 +277,13 @@ def call(cmd, wine=True, unicode=True, hard_fail=True, log_output=True, opid='',
         opid_log[opid] += '[CMD] ' + quoted_cmd + '\n\n' + out + '\n\n'
     if unicode and log_output:
         logging.debug(out) 
+        # check if wine error occured and repeat call 3 times
+        if 'client error' in out or 'Connection reset by peer' in out or 'wine: chdir to' in out or 'wine: created' in out:
+            if wine_error_counter < 3:
+                print('WINE ERROR OCCURRED ' + str(wine_error_counter+1) + ' times')
+                print('[CMD]: ' + quoted_cmd + '\n[OUT]: ' + out )
+                return call(cmd, wine=wine, unicode=unicode, hard_fail=hard_fail, log_output=log_output, opid=opid, opid_log=opid_log, wine_error_counter=wine_error_counter+1)
+
     if hard_fail and p.returncode != 0:
         raise OSError(quoted_cmd + ' failed!')
     return out
@@ -340,10 +375,13 @@ def convert_bps(input, output, bps, lazy=False):
     sox(input, '-b', bps, output, lazy=lazy)
 
 
-def trim(input, output, start, end, lazy=False):
+def trim(input, output, start, end, nChannels, lazy=False):
     if not (lazy and is_file(output)):
         tmp = output.parent / uuid_file('trim_', '.wav')
-        sox(input, tmp, 'trim', start, end)
+        if nChannels == 1:
+            sox(input, tmp, 'trim', start, end, 'remix -')
+        else:
+            sox(input, tmp, 'trim', start, end)
         wi = wav_info(tmp)
         sox(tmp, output, 'fade', 0.5, wi.frames / wi.rate, 0.7)
         tmp.unlink()
@@ -372,7 +410,7 @@ def generate_switching_file2(env, fs, *values):
     p=p*8*fps
     p=p.astype('int32') 
     p.tofile(str(path))
-    return path
+    return path, min(values)
 
 # generate switching file with unique name, returns path
 def generate_switching_file(env, *values):
@@ -432,28 +470,32 @@ def prepare_items(workers):
     # trim items
     with Executor(workers) as ex:
         for item, (st, fr, flac) in ITEMS.items():
-            infile  = sqam_dir / flac
-            outfile = item_dir / (item + '.wav')
-            ex.submit(trim, infile, outfile, st, fr, lazy=True)
+            for ch in CHANNELS:
+                infile  = sqam_dir / flac
+                outfile = item_dir / (item + '_{}ch.wav').format(ch)
+                ex.submit(trim, infile, outfile, st, fr, ch, lazy=True)
     # resample items
     with Executor(workers) as ex:
         for item, sr in itertools.product(ITEMS, SAMPLERATES):
-            infile  = item_dir / (item + '.wav')
-            outfile = item_dir / '{}_{}_2ch.wav'.format(item, sr)
-            ex.submit(resample, infile, outfile, sr, lazy=True)
+            for ch in CHANNELS:
+                infile  = item_dir / (item + '_{}ch.wav').format(ch)
+                outfile = item_dir / '{}_{}_{}ch.wav'.format(item, sr, ch)
+                ex.submit(resample, infile, outfile, sr, lazy=True)
     with Executor(workers) as ex:
         # 20 kHz lowpass
         for item, sr in itertools.product(ITEMS, SAMPLERATES):
             if sr >= 44100:
-                infile  = item_dir / '{}_{}_2ch.wav'.format(item, sr)
-                outfile = item_dir / '{}_{}_2ch_lp20.wav'.format(item, sr)
-                ex.submit(low_pass, infile, outfile, 20000, lazy=True)
+                for ch in CHANNELS:
+                    infile  = item_dir / '{}_{}_{}ch.wav'.format(item, sr, ch)
+                    outfile = item_dir / '{}_{}_{}ch_lp20.wav'.format(item, sr, ch)
+                    ex.submit(low_pass, infile, outfile, 20000, lazy=True)
         # band limit
         for sr, (bws, _) in BAND_LIMITS.items():
             for bw in bws:
-                infile  = item_dir / '{}_{}_2ch.wav'.format(ITEM_BAND_LIMIT, sr)
-                outfile = item_dir / '{}_{}_2ch_bw{}.wav'.format(ITEM_BAND_LIMIT, sr, bw)
-                ex.submit(low_pass, infile, outfile, bw, lazy=True)
+                for ch in CHANNELS:
+                    infile  = item_dir / '{}_{}_{}ch.wav'.format(ITEM_BAND_LIMIT, sr, ch)
+                    outfile = item_dir / '{}_{}_{}ch_bw{}.wav'.format(ITEM_BAND_LIMIT, sr, ch, bw)
+                    ex.submit(low_pass, infile, outfile, bw, lazy=True)
         # LP20 item with 4 seconds of white noise above 20kHz
         outfile = item_dir / (ITEM_LOW_PASS + '_48000_1ch.wav')
         synth   = 'synth 4 white fir etc/hp_fir_coef.txt'
@@ -470,13 +512,13 @@ def prepare_items(workers):
                     time.sleep(0.01)
                 ex.submit(low_pass, outfile, outfile2, 20000, lazy=True)
 
-    # create 1ch items
-    with Executor(workers) as ex:
-        for path in os.listdir(str(item_dir)):
-            if '_2ch' in path:
-                infile  = item_dir / path
-                outfile = item_dir / path.replace('_2ch', '_1ch')
-                ex.submit(sox, infile, outfile, 'remix -', lazy=True)
+#    # create 1ch items
+#    with Executor(workers) as ex:
+#        for path in os.listdir(str(item_dir)):
+#            if '_2ch' in path:
+#                infile  = item_dir / path
+#                outfile = item_dir / path.replace('_2ch', '_1ch')
+#                ex.submit(sox, infile, outfile, 'remix -', lazy=True)
     # create 24bit items
     with Executor(workers) as ex:
         for path in os.listdir(str(item_dir)):
@@ -659,7 +701,58 @@ def energy(env, test):
         return eng
 
 
-def get_delta_threshold(sr, odg_ref, delta_odg_thresh):
+def get_payload_size(epmode, pcmode, slotbytes):
+    n_codewords = math.ceil(2*slotbytes/15)
+    payloadsize = slotbytes
+
+    if epmode > 0:
+        # RS redundancy
+        if epmode == 1:
+            payloadsize = payloadsize - 1
+        else:
+            payloadsize = payloadsize - n_codewords*(epmode - 1)
+
+        # CRC1
+        if slotbytes == 40:
+            if epmode == 1:
+                payloadsize = payloadsize - 3
+            else:
+                payloadsize = payloadsize - 2
+        else:
+            payloadsize = payloadsize - 3
+
+        # CRC2
+        if pcmode > 0 and epmode > 2 and slotbytes >= 80:
+            payloadsize = payloadsize - 2
+
+    return payloadsize
+
+
+def bps_to_bpf(bitrate, frame_size):
+    return math.floor(float(bitrate)/8 * frame_size/1000)
+
+
+def bpf_to_bps(bytes, frame_size):
+    return math.ceil(bytes * 8 * 1000 / frame_size)
+
+
+def get_net_bytes(bitrate, frame_size, epmode):
+    gross_bytes = bps_to_bpf(bitrate, frame_size)
+    net_bytes = get_payload_size(epmode, 1, gross_bytes)
+    return net_bytes
+
+
+# calculate threshold depending on ODG of reference and for hrmode on net bytes per frame
+# higher ref ODG correlate with higher delta ODG
+def get_delta_threshold(hr_info, sr, odg_ref, delta_odg_thresh):
+    if hr_info['hrmode']:
+        # for ep_mode switching calculate the net bytes with ep mode 4 (highest)
+        if isinstance(hr_info['ep_mode'], pathlib.PosixPath):
+            hr_info['ep_mode'] = 4
+        real_bytes = get_net_bytes(hr_info['bitrate'], hr_info['frame_size'], hr_info['ep_mode'])
+        if real_bytes < MIN_HRMODE_BYTES[(hr_info['frame_size'], sr)]:
+            hr_info['hrmode'] = 0
+            return get_delta_threshold(hr_info, sr, odg_ref, [0.06, 0.08, 0.12])
     if sr == 8000:
         return 0.15
     if type(delta_odg_thresh).__name__ != 'list':
@@ -673,7 +766,7 @@ def get_delta_threshold(sr, odg_ref, delta_odg_thresh):
 
 
 # compare output wavs by metric rms, odg, mld, eng
-def compare_wav(env, mode, sr, infile, file_ref, file_tst):
+def compare_wav(env, hr_info, mode, sr, infile, file_ref, file_tst):
     mkey   = '{}_{}_metric'.format(env.test, mode)
     metric = env.config[mkey]
     tkey   = '{}_{}_{}_threshold'.format(env.test, mode, metric)
@@ -704,7 +797,7 @@ def compare_wav(env, mode, sr, infile, file_ref, file_tst):
         odg_ref  = run_peaq(env, infile_copy, ref_al)
         odg_tst  = run_peaq(env, infile_copy, tst_al)
         odg_diff = abs(odg_ref - odg_tst)
-        thresh = get_delta_threshold(sr, odg_ref, thresh)
+        thresh = get_delta_threshold(hr_info, sr, odg_ref, thresh)
         ok       = odg_diff <= thresh
         values   = [(odg_ref, '', None),
                     (odg_diff, ('fail', 'pass')[ok], thresh)]
@@ -719,14 +812,40 @@ def compare_wav(env, mode, sr, infile, file_ref, file_tst):
 
     return ok, values
 
+def check_bfi_file(file, opid='', opid_log={}):
+    logging.debug('check_bfi_file: %s', file)
+    opid_log[opid] += 'check_bfi_file: {}\n\n'.format(file)
+    with open(file, 'rb') as file:
+        while True:
+            chunk = file.read(4)
+            if not chunk:
+                break
+
+            index = chunk.find(b'\x01')
+            if index != -1:
+                return False
+            
+            index = chunk.find(b'\x02')
+            if index != -1:
+                return False
+            
+    return True
 
 # compare outout files of ep debug flag
 def compare_errors(env, file_ref, file_tst):
     ok_all, values = True, []
-    for ext in ['.bfi', '.epmr', '.error_report']:
-        ok = compare_bin(str(file_ref) + ext, str(file_tst) + ext, opid=env.opid, opid_log=env.opid_log)
-        values += [(('bad', 'ok')[ok], ('fail', 'pass')[ok], None)]
+    if env.test == 'sqam':
+        ok = check_bfi_file(str(file_ref) + '.bfi', opid=env.opid, opid_log=env.opid_log)
         ok_all = ok_all and ok
+        ok = check_bfi_file(str(file_tst) + '.bfi', opid=env.opid, opid_log=env.opid_log)
+        ok_all = ok_all and ok
+        values += [('bad', 'ok')[ok_all]]
+    else:
+        for ext in ['.bfi', '.epmr', '.error_report']:
+            ok = compare_bin(str(file_ref) + ext, str(file_tst) + ext, opid=env.opid, opid_log=env.opid_log)
+            values += [(('bad', 'ok')[ok], ('fail', 'pass')[ok], None)]
+            ok_all = ok_all and ok
+            
     return ok_all, values
 
 
@@ -770,8 +889,7 @@ def decode_reference(env, input, output, error_file=None):
     check_io_files(input, output)
     cmd = env.config['ref_decoder']
     opt = []
-    if error_file:
-        opt += ['-ep_dbg', error_file]
+    opt += ['-ep_dbg', error_file]
     options = ' '.join(map(str, opt))
     call(cmd.format(input=input, output=output, options=options), opid=env.opid, opid_log=env.opid_log)
 
@@ -780,8 +898,7 @@ def decode_test(env, input, output, error_file=None):
     check_io_files(input, output)
     cmd = env.config['tst_decoder']
     opt = []
-    if error_file:
-        opt += [env.config['option_ep_debug'].format(arg=error_file)]
+    opt += [env.config['option_ep_debug'].format(arg=error_file)]
     options = ' '.join(map(str, opt))
     call(cmd.format(input=input, output=output, options=options), opid=env.opid, opid_log=env.opid_log)
 
@@ -867,13 +984,14 @@ def process_item(env, mode, item, fs, sr, br, infile, bandwidth=None, ep_mode=0,
     ref_bin, tst_bin, ref_err, tst_err, ref_wav, tst_wav, ref_dbg, tst_dbg = file_tuple
     # evaluate channel coder output only for decode_ep_* tests
     if not (env.test.startswith('ep_') and mode == 'decode'):
-        err_ok, err_val, ref_dbg, tst_dbg = True, [], None, None
+        err_ok, err_val= True, []
 
     try:
         # generate bitratre switching file if needed
+        sw_min_bitrate = 0
         if type(br) in (list, tuple):
             #br = generate_switching_file(env, *br)
-            br = generate_switching_file2(env, fs, *br)
+            br, sw_min_bitrate = generate_switching_file2(env, fs, *br)
         # encode
         encode_reference(env, infile, ref_bin, fs, br, bandwidth=bandwidth, ep_mode=ep_mode, lfe=lfe)
         if not cmp_only:
@@ -909,12 +1027,14 @@ def process_item(env, mode, item, fs, sr, br, infile, bandwidth=None, ep_mode=0,
         else:
             if cmp_only:
                 tst_wav = pathlib.Path(str(tst_wav).replace(tst_wav.parts[0], cmp_only_dir))
-            ok, val = compare_wav(env, mode, sr, infile, ref_wav, tst_wav)
+            hr_info = {'frame_size':fs, 'ep_mode':ep_mode, 'hrmode':int(env.config['hrmode']), 'bitrate':sw_min_bitrate if sw_min_bitrate else br}
+            ok, val = compare_wav(env, hr_info, mode, sr, infile, ref_wav, tst_wav)
             if ref_dbg and tst_dbg:
                 if cmp_only:
                     dest_path = pathlib.Path(str(tst_wav).replace(tst_wav.parts[0], cmp_only_dir))
                     tst_dbg = str(dest_path.parent) + '/' + str(tst_dbg.parts[-1])
-                err_ok, err_val = compare_errors(env, ref_dbg, tst_dbg)
+                if (mode == 'decode' or mode == 'encdec') and (env.test == 'sqam' or env.test.startswith('ep_')):
+                    err_ok, err_val = compare_errors(env, ref_dbg, tst_dbg)
         return ok and err_ok, err_val + val, opid
 
     except (OSError, FileNotFoundError, FileExistsError, KeyError) as e:
@@ -1016,7 +1136,7 @@ def test_bandwidth_switching(env):
 def test_plc(env):
     print('Testing packet loss concealment ...')
     def func(mode, item, fs, sr, br, infile):
-        pattern = 'etc/plc_fer_eid.dat'
+        pattern = PLC_RANDOM_FILES[fs]
         ok, values, opid = process_item(env, mode, item, fs, sr, br, infile, None, 0, 'fer', pattern)
         return [ok, mode, item, fs, sr, br] + values + [opid]
 
@@ -1027,7 +1147,7 @@ def test_plc(env):
 def test_plc_burst(env):
     print('Testing packet loss concealment ...')
     def func(mode, item, fs, sr, br, infile):
-        pattern = 'etc/plc_bfer_eid.dat'
+        pattern = PLC_BURST_FILES[fs]
         ok, values, opid = process_item(env, mode, item, fs, sr, br, infile, None, 0, 'fer', pattern)
         return [ok, mode, item, fs, sr, br] + values + [opid]
 
@@ -1049,8 +1169,8 @@ def test_pc(env):
 def test_ep_correctable(env):
     print('Testing channel coder for correctable frames ...')
     def func(mode, item, fs, sr, br, infile, ep_mode):
-        pattern = (ep_mode - 1, 50)
-        ok, values, opid = process_item(env, mode, item, fs, sr, br, infile, None, ep_mode, 'flip', pattern)
+        pattern = 'etc/ep_{}bit_{}ms_{}epm_{}cor_{}cmb.dat'.format(int(br), fs, int(ep_mode),1,0) # correctable 1, combined 0)
+        ok, values, opid = process_item(env, mode, item, fs, sr, br, infile, None, ep_mode, 'fer', pattern)
         return [ok, mode, item, fs, sr, br, ep_mode] + values + [opid]
 
     tests = []
@@ -1063,8 +1183,8 @@ def test_ep_correctable(env):
 def test_ep_non_correctable(env):
     print('Testing channel coder for non-correctable frames ...')
     def func(mode, item, fs, sr, br, infile, ep_mode):
-        pattern = (int(br * ep_mode * fs / 24000), 50)
-        ok, values, opid = process_item(env, mode, item, fs, sr, br, infile, None, ep_mode, 'flip', pattern)
+        pattern = 'etc/ep_{}bit_{}ms_{}epm_{}cor_{}cmb.dat'.format(int(br), fs, int(ep_mode),0,0) # correctable 0, combined 0)
+        ok, values, opid = process_item(env, mode, item, fs, sr, br, infile, None, ep_mode, 'fer', pattern)
         return [ok, mode, item, fs, sr, br, ep_mode] + values + [opid]
 
     tests = []
@@ -1088,8 +1208,8 @@ def test_ep_mode_switching(env):
 def test_ep_combined(env):
     print('Testing combined channel coder for correctable frames ...')
     def func(mode, item, fs, sr, br, infile, ep_mode):
-        pattern = (ep_mode - 1, 50)
-        ok, values, opid = process_item(env, mode, item, fs, sr, br, infile, None, ep_mode, 'flip', pattern)
+        pattern = 'etc/ep_{}bit_{}ms_{}epm_{}cor_{}cmb.dat'.format(int(br), fs, int(ep_mode),1,1) # correctable 1, combined 1)
+        ok, values, opid = process_item(env, mode, item, fs, sr, br, infile, None, ep_mode, 'fer', pattern)
         return [ok, mode, item, fs, sr, br, ep_mode] + values + [opid]
 
     tests = []
@@ -1098,6 +1218,7 @@ def test_ep_combined(env):
         # Combined channel coder works for bitrates up to 128 kbps; 160 = 128000 / 800
         if bytes_per_frame <= 160:
             for ep_mode in [1, 2, 3, 4]:
+                #print('pattern: {},{},{},{}'.format(br,fs,ep_mode, '1','1'))
                 tests.append((mode, item, fs, sr, br, infile, ep_mode))
 
     return test_executor(env, func, tests)
@@ -1106,8 +1227,8 @@ def test_ep_combined(env):
 def test_ep_combined_nc(env):
     print('Testing combined channel coder for non-correctable frames ...')
     def func(mode, item, fs, sr, br, infile, ep_mode):
-        pattern = (int(br * ep_mode * fs / 24000), 50)
-        ok, values, opid = process_item(env, mode, item, fs, sr, br, infile, None, ep_mode, 'flip', pattern)
+        pattern = 'etc/ep_{}bit_{}ms_{}epm_{}cor_{}cmb.dat'.format(int(br), fs, int(ep_mode),0,1) # correctable 0, combined 1)
+        ok, values, opid = process_item(env, mode, item, fs, sr, br, infile, None, ep_mode, 'fer', pattern)
         return [ok, mode, item, fs, sr, br, ep_mode] + values + [opid]
 
     tests = []
@@ -1115,6 +1236,7 @@ def test_ep_combined_nc(env):
         bytes_per_frame = (br / 800) / (10 / fs)
         if bytes_per_frame <= 160:
             for ep_mode in [1, 2, 3, 4]:
+                #print('pattern: {},{},{},{}'.format(br,fs,ep_mode, '0','1'))
                 tests.append((mode, item, fs, sr, br, infile, ep_mode))
     return test_executor(env, func, tests)
 
@@ -1145,6 +1267,8 @@ def gen_table(test, mode, config, results):
     header = HEADER_ALL.copy()
     if test == 'band_limiting':
         header += HEADER_BL
+    if test == 'sqam' and (mode == 'decode' or mode == 'encdec'):
+        header += HEADER_EPD_BFI
     if test.startswith('ep_'):
         header += HEADER_EP
         if mode == 'decode':
@@ -1295,7 +1419,7 @@ if __name__ == '__main__':
     if args.bit_exact:
         for test, mode in itertools.product(TESTS, TEST_MODES):
             DEFAULTS_TEST['{}_{}_mld_threshold'.format(test, mode)] = 0
-            DEFAULTS_TEST['{}_{}_odg_threshold'.format(test, mode)] = 0
+            DEFAULTS_TEST['{}_{}_odg_threshold'.format(test, mode)] = [0,0,0]
             DEFAULTS_TEST['{}_{}_rms_threshold'.format(test, mode)] = 16
             DEFAULTS_TEST['{}_{}_mad_threshold'.format(test, mode)] = 0
     if args.cmp_only and args.wav_only:

@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #ifndef FUNCTIONS_H
 #define FUNCTIONS_H
@@ -14,9 +13,9 @@
 #include "clib.h"
 #include "defines.h"
 #include "float.h"
-#include "lc3.h"
-#include "setup_dec_lc3.h"
-#include "setup_enc_lc3.h"
+#include "lc3plus.h"
+#include "setup_dec_lc3plus.h"
+#include "setup_enc_lc3plus.h"
 #include "structs.h"
 #include "util.h"
 
@@ -106,8 +105,9 @@ void processNoiseFactor_fl(LC3_INT* fac_ns_idx, LC3_FLOAT x[], LC3_INT xq[], LC3
 
 void processNoiseFilling_fl(LC3_FLOAT xq[], LC3_INT nfseed, LC3_INT fac_ns_idx, LC3_INT bw_stopband, LC3_INT frame_dms, LC3_FLOAT fac_ns_pc, LC3_INT spec_inv_idx);
 
-void processOlpa_fl(LC3_FLOAT* s_12k8, LC3_FLOAT* mem_s12k8, LC3_FLOAT* mem_s6k4, LC3_INT* mem_old_T0, LC3_INT* T0_out,
-                    LC3_FLOAT* normcorr_out, LC3_INT len, LC3_INT frame_dms);
+void processOlpa_fl(LC3_FLOAT* s_12k8, LC3_FLOAT* mem_s12k8, LC3_FLOAT* mem_s6k4, LC3_INT* mem_old_T0, 
+                    LC3_INT* pitch_flag, 
+                    LC3_INT* T0_out,LC3_FLOAT* normcorr_out, LC3_INT len, LC3_INT frame_dms);
 
 void processTnsCoder_fl(LC3_FLOAT* x, LC3_INT bw_cutoff_idx, LC3_INT bw_fcbin, LC3_INT fs, LC3_INT N, LC3_INT frame_dms, LC3_INT nBits,
                         LC3_INT* order_out, LC3_INT* rc_idx, LC3_INT* tns_numfilters, LC3_INT* bits_out
@@ -117,14 +117,14 @@ void levinsonDurbin(LC3_FLOAT* r, LC3_FLOAT* out_lev, LC3_FLOAT* rc_unq, LC3_FLO
 
 void processTnsDecoder_fl(LC3_FLOAT* x, LC3_INT* rc_idx, LC3_INT* order, LC3_INT numfilters, LC3_INT bw_fcbin, LC3_INT N, LC3_INT fs);
 
-void processSnsComputeScf_fl(LC3_FLOAT* x, LC3_INT tilt, LC3_INT xLen, LC3_FLOAT* gains, LC3_INT smooth, LC3_FLOAT sns_damping, LC3_FLOAT attdec_damping_factor);
+void processSnsComputeScf_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_FLOAT* gains, LC3_INT smooth, LC3_FLOAT sns_damping, LC3_FLOAT attdec_damping_factor, LC3_INT fs_idx);
 
 void processSnsInterpolateScf_fl(LC3_FLOAT* gains, LC3_INT encoder_side, LC3_INT bands_number, LC3_FLOAT* gains_LC3_INT);
 
 void processDetectCutoffWarped_fl(LC3_FLOAT* d2, LC3_INT fs_idx, LC3_INT frame_dms, LC3_INT* bw_idx);
 void processNearNyquistdetector_fl(LC3_INT16* near_nyquist_flag, const LC3_INT fs_idx, const LC3_INT near_nyquist_index,
-                                   const LC3_INT bands_number, const LC3_FLOAT* ener);
-
+                                   const LC3_INT bands_number, const LC3_FLOAT* ener                               
+                                   , const LC3_INT16 frame_dms, const LC3_INT16 hrmode );                                                                    
 void processPerBandEnergy_fl(LC3_INT bands_number, const LC3_INT* acc_coeff_per_band, LC3_INT16 hrmode, LC3_INT16 frame_dms, LC3_FLOAT* d2, LC3_FLOAT* d);
 
 void ProcessingIMDCT_fl(LC3_FLOAT* y, LC3_INT yLen, const LC3_FLOAT* win, LC3_INT winLen, LC3_INT last_zeros, LC3_FLOAT* mem, LC3_FLOAT* x,
@@ -134,12 +134,15 @@ void ProcessingITDA_WIN_OLA_fl(LC3_FLOAT* x_tda, LC3_INT32 yLen, const LC3_FLOAT
 
 void process_ltpf_coder_fl(LC3_FLOAT* xin, LC3_INT xLen, LC3_INT ltpf_enable, LC3_INT pitch_ol, LC3_FLOAT pitch_ol_norm_corr, LC3_INT frame_dms,
                            LC3_FLOAT* mem_old_x, LC3_INT memLen, LC3_FLOAT* mem_norm_corr_past, LC3_INT* mem_on, LC3_FLOAT* mem_pitch,
-                           LC3_INT* param, LC3_FLOAT* mem_norm_corr_past_past, LC3_INT* bits);
+                           LC3_INT* param, LC3_FLOAT* mem_norm_corr_past_past, LC3_INT* bits
+                          , LC3_INT16 hrmode
+);
 
 void process_ltpf_decoder_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_FLOAT* y, LC3_INT fs, LC3_FLOAT* mem_old_x, LC3_FLOAT* mem_old_y,
                              LC3_INT* mem_pitch_LC3_INT, LC3_INT* mem_pitch_fr, LC3_FLOAT* mem_gain, LC3_INT* mem_beta_idx, LC3_INT bfi,
                              LC3_INT* param, LC3_INT* mem_param, LC3_INT conf_beta_idx, LC3_FLOAT conf_beta, LC3_INT concealMethod, LC3_FLOAT damping
                              , LC3_INT *mem_ltpf_active
+                             , LC3_FLOAT *rel_pitch_change, LC3_INT hrmode, LC3_INT frame_dms
 );
 
 void process_resamp12k8_fl(LC3_FLOAT x[], LC3_INT x_len, LC3_FLOAT mem_in[], LC3_INT mem_in_len, LC3_FLOAT mem_50[], LC3_FLOAT mem_out[],
@@ -225,10 +228,15 @@ void processPlcDampingScramblingMain_fl(LC3_INT32 *ns_seed,
                                         LC3_INT32 ns_nbLostCmpt, LC3_FLOAT *stabFac, LC3_FLOAT *cum_fading_slow, LC3_FLOAT *cum_fading_fast,
                                         LC3_FLOAT *spec_prev, LC3_FLOAT *spec, LC3_INT32 spec_inv_idx, LC3_INT32 yLen, LC3_INT32 bfi,
                                         LC3_INT32 frame_dms, LC3_INT32 concealMethod, LC3_INT32 pitch_present_bfi1, LC3_INT32 pitch_present_bfi2,
-                                        LC3_FLOAT *cum_fflcAtten);
+                                        LC3_FLOAT *cum_fflcAtten
+                                        , LC3_UINT8 plc_fadeout_type
+                                        );
+
 void processPlcDampingScrambling_fl(LC3_FLOAT *spec, LC3_INT32 yLen, LC3_INT32 nbLostCmpt, LC3_FLOAT *stabFac, LC3_INT32 processDampScramb,
                                     LC3_FLOAT *cum_fflcAtten, LC3_INT32 pitch_present, LC3_INT32 frame_dms, LC3_FLOAT *cum_fading_slow,
-                                    LC3_FLOAT *cum_fading_fast, LC3_INT32 *seed, LC3_INT32 spec_inv_idx);
+                                    LC3_FLOAT *cum_fading_fast, LC3_INT32 *seed, LC3_INT32 spec_inv_idx
+                                    , LC3_UINT8 plc_fadeout_type
+                                    );
 
 void plc_phEcu_F0_refine_first(LC3_INT32 *plocs, LC3_INT32 n_plocs, LC3_FLOAT *f0est, const LC3_INT32 Xabs_len,
                                 LC3_FLOAT *f0binPtr, LC3_FLOAT *f0gainPtr, const LC3_INT32 nSubm);
@@ -253,7 +261,10 @@ void      plc_phEcu_spec_ana(LC3_FLOAT* xfp, LC3_INT32 xfp_len, const LC3_FLOAT*
               LC3_FLOAT* f0hzLtpBinPtr, LC3_FLOAT* f0gainLtpPtr, LC3_INT32 bw_idx, Fft* PhEcu_Fft);
 void      plc_phEcu_subst_spec(LC3_INT32* plocs, LC3_INT32 n_plocs, LC3_FLOAT* f0est, LC3_INT32 time_offs, Complex* X, LC3_INT32 X_len,
                           LC3_FLOAT* mag_chg_gr, LC3_INT32 *seed, LC3_FLOAT* alpha, LC3_FLOAT* beta, LC3_FLOAT* Xavg,
-                          LC3_INT32 t_adv_in, LC3_INT32 Lprot, LC3_INT32 delta_corr, LC3_FLOAT *corr_phase_dbg,
+                          LC3_INT32 t_adv_in, LC3_INT32 Lprot, LC3_INT32 delta_corr,
+                          LC3_INT16    fadeout,             /* needed for DC muting */
+	     	              LC3_INT16* nonpure_tone_flag_ptr, /*  i/o: flag  */
+                          LC3_FLOAT *corr_phase_dbg,
                           LC3_FLOAT *X_i_new_re_dbg, LC3_FLOAT *X_i_new_im_dbg);
 void plc_phEcu_rec_frame(Complex *X_in, LC3_INT32 xfp_len, LC3_INT32 Lecu, const LC3_FLOAT *whr, const LC3_FLOAT *winMDCT, LC3_INT32 Lprot,
                LC3_FLOAT *xfp, LC3_INT32 time_offs, LC3_FLOAT *x_out,
@@ -268,12 +279,17 @@ void plc_phEcu_tba_per_band_gain(LC3_INT32 n_grp, LC3_FLOAT *gr_pow_left, LC3_FL
 void plc_phEcu_tba_trans_dect_gains(LC3_INT32 burst_len, LC3_INT32 n_grp, LC3_FLOAT *grp_pow_change,                   
                           LC3_FLOAT *stPhECU_beta_mute, LC3_FLOAT *stPhECU_mag_chg_1st,
                           LC3_FLOAT *alpha, LC3_FLOAT *beta, LC3_FLOAT *mag_chg, LC3_FLOAT *ph_dith, LC3_INT32 *tr_dec,
-                          LC3_FLOAT *att_val, LC3_INT32 *attDegreeFrames, LC3_FLOAT *thresh_dbg);
+                          LC3_FLOAT *att_val, LC3_INT32 *attDegreeFrames,                           
+                          LC3_FLOAT *thresh_dbg
+                          , LC3_UINT8 plc_fadeout_type                   
+                          );
 void plc_phEcu_trans_burst_ana_sub(LC3_INT32 fs_idx, LC3_INT32 burst_len, LC3_INT32 n_grp, LC3_FLOAT *oold_spect_shape, 
                          LC3_FLOAT *oold_EwPtr,      LC3_FLOAT *old_spect_shape, 
                          LC3_FLOAT *old_EwPtr, LC3_FLOAT *stPhECU_beta_mute, 
                          LC3_FLOAT *stPhECU_mag_chg_1st, LC3_FLOAT *stPhECU_Xavg, LC3_FLOAT *alpha, LC3_FLOAT *beta, LC3_FLOAT *mag_chg,
-                         LC3_INT32 *tr_dec_dbg, LC3_FLOAT *gpc_dbg);
+                         LC3_INT32 *tr_dec_dbg, LC3_FLOAT *gpc_dbg
+                          , LC3_UINT8 plc_fadeout_type                   
+                         );
 void plc_phEcu_hq_ecu(
     LC3_FLOAT *f0binPtr, LC3_FLOAT *f0ltpGainPtr, 
     LC3_FLOAT *xfp, LC3_INT16 prev_bfi, LC3_INT32 *short_flag_prev, 
@@ -287,6 +303,8 @@ void plc_phEcu_hq_ecu(
     LC3_FLOAT *st_beta_mute, LC3_FLOAT *st_mag_chg_1st, LC3_FLOAT *st_Xavg, LC3_INT32 LA_ZEROS, LC3_FLOAT *x_tda, LC3_FLOAT *xsubst_dbg, Complex *X_out_m_dbg,
     LC3_INT32 *seed_dbg, LC3_FLOAT *mag_chg_dbg, LC3_INT32 *tr_dec_dbg, LC3_FLOAT *gpc_dbg, LC3_FLOAT *X_i_new_re_dbg, LC3_FLOAT *X_i_new_im_dbg, LC3_FLOAT *corr_phase_dbg
      ,Fft* PhEcu_Fft,Fft* PhEcu_Ifft
+    , LC3_UINT8  plc_fadeout_type,                   
+	LC3_INT16 *nonpure_tone_flag_ptr   
 );
 
 void processTdcPreemphasis_fl(LC3_FLOAT *in, LC3_FLOAT *pre_emph_factor, LC3_INT32 n_bands);
@@ -296,9 +314,12 @@ void processTdcInverseOdft_fl(LC3_FLOAT *in, LC3_INT32 n_bands, LC3_FLOAT *out, 
 
 void processTdcApply_fl(const LC3_INT32 pitch_LC3_INT, const LC3_FLOAT *preemphFac, const LC3_FLOAT* A, const LC3_INT32 lpc_order, const LC3_FLOAT* pcmbufHist, const LC3_INT32 max_len_pcm_plc, const LC3_INT32 N, const LC3_INT32 frame_dms,
                                      const LC3_INT32 SampRate, const LC3_INT32 nbLostCmpt, const LC3_INT32 overlap, const LC3_FLOAT *stabFac, LC3_FLOAT harmonicBuf[MAX_PITCH], LC3_FLOAT synthHist[M],
-                                     LC3_INT32* fract, LC3_INT16* seed, LC3_FLOAT* gain_c, LC3_FLOAT* alpha, LC3_FLOAT* synth);
+                                     LC3_INT32* fract, LC3_INT16* seed, LC3_FLOAT* gain_c, LC3_FLOAT* alpha, LC3_FLOAT* synth
+                        ,LC3_UINT8       plc_fadeout_type
+                        ,LC3_FLOAT*      alpha_type_2_table
+);
 void* balloc(void* base, size_t* base_size, size_t size);
 
-
+LC3_FLOAT type_2_fadeout(LC3_INT32 nbLostFramesInRow, LC3_INT32 frame_dms);
 
 #endif

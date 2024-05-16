@@ -1,16 +1,13 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
-
 
 #include "functions.h"
-
 
 void idct16_fx(const Word16 *in, Word16 *out)
 {
@@ -131,8 +128,8 @@ void dct32_fx(const Word32 *in, Word32 *out)
     b2  = L_add(a5, a2);
     b3  = L_add(a4, a3);
     b4  = L_sub(a3, a4);
-    b5  = L_sub(a2, a5);
-    b6  = L_sub(a1, a6);
+    b5 = L_sub_sat(a2, a5);
+    b6 = L_sub_sat(a1, a6);
     b7  = L_sub(a0, a7);
     b8  = L_sub(in[7], in[8]);
     b9  = L_sub(in[6], in[9]);

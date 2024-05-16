@@ -1,38 +1,30 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
 
 void attack_detector_fl(LC3_FLOAT* in, LC3_INT frame_size, LC3_INT fs, LC3_INT* lastAttackPosition, LC3_FLOAT* accNrg, LC3_INT* attackFlag,
                         LC3_FLOAT* attdec_filter_mem, LC3_INT attackHandlingOn, LC3_INT attdec_nblocks, LC3_INT attdec_hangover_threshold)
 {
-    LC3_FLOAT f_sig[160] = {0}, block_nrg[4] = {0}, sum = 0, tmpEne = 0, *ptr = NULL, tmp[162] = {0};
-    LC3_INT   i = 0, j = 0, attackPosition = 0;
-    LC3_FLOAT mval = 0;
-    LC3_INT frame_size_16k = attdec_nblocks * 40;
-
-
-    ptr = &tmp[2];
-
-
+    LC3_FLOAT f_sig[160], block_nrg[4], sum, tmpEne, *ptr, tmp[162];
+    LC3_INT   i, j, attackPosition;
+    LC3_FLOAT mval;
+    LC3_INT frame_size_16k;
 
     if (attackHandlingOn) {
-        /* Decimate 96, 48 and 32 kHz signals to 16 kHz */
-        if (fs == 96000) {
-            for (i = 0; i < frame_size;) {
-                ptr[j] = in[i] + in[i + 1] + in[i + 2] + in[i + 3] + in[i + 4] + in[i + 5];
-                i      = i + 6;
-                j++;
-            }
-            mval = 1e-5;
-        } else if (fs == 48000) {
+
+        mval = 0; j = 0;
+        frame_size_16k = attdec_nblocks * 40;
+        ptr = &tmp[2];
+        
+        /* Decimate 48 and 32 kHz signals to 16 kHz */
+        if (fs == 48000) {
             j = 0;
             for (i = 0; i < frame_size;) {
                 ptr[j] = (in[i] + in[i + 1] + in[i + 2]);
@@ -44,13 +36,6 @@ void attack_detector_fl(LC3_FLOAT* in, LC3_INT frame_size, LC3_INT fs, LC3_INT* 
             for (i = 0; i < frame_size;) {
                 ptr[j] = (in[i] + in[i + 1]);
                 i      = i + 2;
-                j++;
-            }
-        } else if (fs == 24000) {
-            j = 0;
-            for (i = 0; i < frame_size;) {
-                ptr[j] = (in[i] + (in[i + 1] + in[i + 2]) / 2.0);
-                i      = i + 3;
                 j++;
             }
         }

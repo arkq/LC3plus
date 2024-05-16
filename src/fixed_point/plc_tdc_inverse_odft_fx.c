@@ -1,15 +1,13 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "defines.h"
-
 #include "functions.h"
 
 void processInverseODFT_fx(Word32 *r_fx, Word16 *r_fx_exp, Word32 *d2_fx, Word16 d2_fx_exp, Word16 n_bands,

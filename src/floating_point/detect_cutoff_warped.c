@@ -1,21 +1,20 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
 
 void processDetectCutoffWarped_fl(LC3_FLOAT* d2, LC3_INT fs_idx, LC3_INT frame_dms, LC3_INT* bw_idx)
 {
-    const LC3_INT *warp_idx_start = NULL, *warp_idx_stop = NULL;
-    LC3_INT        counter = 0, brickwall = 0, i = 0, stop = 0, dist = 0;
-    LC3_FLOAT      d2_mean = 0, d2_sum = 0, e_diff = 0, thr = 0;
-    const LC3_INT *bw_dist = NULL;
+    const LC3_INT *warp_idx_start, *warp_idx_stop;
+    LC3_INT        counter, brickwall = 0, i, stop, dist;
+    LC3_FLOAT      d2_mean, d2_sum, e_diff, thr;
+    const LC3_INT *bw_dist;
 
     warp_idx_start = BW_warp_idx_start_all[fs_idx - 1];
     warp_idx_stop  = BW_warp_idx_stop_all[fs_idx - 1];
@@ -31,6 +30,11 @@ void processDetectCutoffWarped_fl(LC3_FLOAT* d2, LC3_INT fs_idx, LC3_INT frame_d
             warp_idx_start = BW_warp_idx_start_all_5ms[fs_idx - 1];
             warp_idx_stop  = BW_warp_idx_stop_all_5ms[fs_idx - 1];
             bw_dist        = brickwall_dist;
+            break;
+        case 75:
+            warp_idx_start = BW_warp_idx_start_all_7_5ms[fs_idx - 1];
+            warp_idx_stop  = BW_warp_idx_stop_all_7_5ms[fs_idx - 1];
+            bw_dist        = brickwall_dist_7_5ms;
             break;
         case 100:
             warp_idx_start = BW_warp_idx_start_all[fs_idx - 1];
@@ -68,7 +72,7 @@ void processDetectCutoffWarped_fl(LC3_FLOAT* d2, LC3_INT fs_idx, LC3_INT frame_d
         dist = bw_dist[counter];
 
         for (i = stop; i >= stop - dist; i--) {
-            e_diff = 10.0 * LC3_LOG10(d2[i - dist + 1] + FLT_EPSILON) - 10.0 * LC3_LOG10(d2[i + 1] + FLT_EPSILON);
+            e_diff = 10.0 * LC3_LOGTEN(d2[i - dist + 1] + FLT_EPSILON) - 10.0 * LC3_LOGTEN(d2[i + 1] + FLT_EPSILON);
 
             if (e_diff > thr) {
                 brickwall = 1;

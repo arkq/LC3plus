@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
 
@@ -32,7 +31,7 @@ void processAdjustGlobalGain_fx(Word16 *gg_idx, Word16 gg_idx_min, Word16 gg_idx
     Word16 gg_idx_inc;
     Word16 gg_idx_inc_max;
     Word16 gg_idx_inc_s;
-    Word16 factor;
+    Word32 factor;
 #endif
 
 #ifdef DYNMEM_COUNT
@@ -69,6 +68,11 @@ void processAdjustGlobalGain_fx(Word16 *gg_idx, Word16 gg_idx_min, Word16 gg_idx
     {
         factor = 2; move16();
         gg_idx_inc_max = 20; move16();
+    }
+    ELSE IF (sub(frame_dms, 75) == 0)
+    {
+        factor = 40265318; move16(); // factor = 1.2 * 2^25
+        gg_idx_inc_max = 12 ; move16();
     }
     ELSE
     {
@@ -112,12 +116,22 @@ void processAdjustGlobalGain_fx(Word16 *gg_idx, Word16 gg_idx_min, Word16 gg_idx
             IF (sub(nBits, target) > 0)
             {
                 gg_idx_inc = sub(nBits, target);
-                gg_idx_inc = extract_l(L_mult0(gg_idx_inc, factor));
-                gg_idx_inc = BASOP_Util_Divide1616_Scale(gg_idx_inc, delta, &gg_idx_inc_s);
-                gg_idx_inc = shr_sat(gg_idx_inc, sub(15, gg_idx_inc_s));
-                gg_idx_inc = add(gg_idx_inc, factor);
+                IF (sub(frame_dms, 75) == 0)
+                {
+                    gg_idx_inc = extract_l(L_shr_pos(Mpy_32_16(factor, gg_idx_inc), 10)); // Mpy_32_16(1.2*2^25, gg_idx_inc), 25 - 15)
+                    gg_idx_inc = BASOP_Util_Divide1616_Scale(gg_idx_inc, delta, &gg_idx_inc_s);
+                    gg_idx_inc = shr_sat(gg_idx_inc, sub(15, gg_idx_inc_s));
+                    gg_idx_inc = add(gg_idx_inc, 1); // adding 1 instead of 1.2
+                }
+                ELSE
+                {
+                    gg_idx_inc = extract_l(L_mult0(gg_idx_inc, factor));
+                    gg_idx_inc = BASOP_Util_Divide1616_Scale(gg_idx_inc, delta, &gg_idx_inc_s);
+                    gg_idx_inc = shr_sat(gg_idx_inc, sub(15, gg_idx_inc_s));
+                    gg_idx_inc = add(gg_idx_inc, factor);
+                }
                 gg_idx_inc = s_min(gg_idx_inc, gg_idx_inc_max);
-
+                
                 *gg_idx = add(*gg_idx, gg_idx_inc); move16();
             }
 

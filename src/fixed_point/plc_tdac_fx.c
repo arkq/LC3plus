@@ -1,16 +1,14 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "defines.h"
 #include "functions.h"
-
 
 /*
  * processTdac_fx
@@ -97,7 +95,7 @@ void processTdac_fx(Word16 *ola_mem, Word16 *ola_mem_exp, const Word16 *synth_in
 
     /* inverse normalization of sqrt(2/N) inside window */
 #ifdef ENABLE_HR_MODE
-    IF (sub(frame_len, 960) == 0)
+    IF ((sub(frame_len, 960) == 0) || (sub(frame_len, 720) == 0))
     {
         INV_NORM   = negate(shl_pos(frame_len, (15 - 10)));
         INV_NORM_E = 3; move16();

@@ -1,13 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
-
 
 #include <assert.h>
 #include <string.h> /* for mmove */
@@ -59,7 +57,9 @@ IIS_FFT_ERROR LC3_iisfft_plan(Iisfft* handle, LC3_INT length, LC3_INT sign)
 {
     memset(handle, 0, sizeof(Iisfft));
     if (length < 2)
+    {
         return IIS_FFT_LENGTH_ERROR;
+    }
     handle->length = length;
     handle->sign   = sign;
     if (need_scratch(length)) {
@@ -67,7 +67,9 @@ IIS_FFT_ERROR LC3_iisfft_plan(Iisfft* handle, LC3_INT length, LC3_INT sign)
         LC3_INT i                    = 0;
         LC3_INT lengthOfPrimeScratch = BORDER_FOR_SECOND_SCRATCH;
         if (!factorize(length, &handle->num_factors, handle->factors, handle->isPrime))
+        {
             return IIS_FFT_LENGTH_ERROR;
+        }
         /* create additional scratch for primeFFT() */
         for (i = 0; i < handle->num_factors; i++) {
             if (handle->isPrime[i] == 1 && handle->factors[i] > lengthOfPrimeScratch) {
@@ -77,7 +79,9 @@ IIS_FFT_ERROR LC3_iisfft_plan(Iisfft* handle, LC3_INT length, LC3_INT sign)
         if (lengthOfPrimeScratch > BORDER_FOR_SECOND_SCRATCH) {
             handle->scratch2 = (LC3_INT*)malloc(sizeof(LC3_INT) * lengthOfPrimeScratch);
             if (!handle->scratch2)
+            {
                 return IIS_FFT_MEMORY_ERROR;
+            }
         }
     }
 
@@ -88,7 +92,9 @@ void LC3_iisfft_free(Iisfft* handle)
 {
     handle->length = 0;
     if (handle->scratch2)
+    {
         free(handle->scratch2);
+    }
 }
 
 

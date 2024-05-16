@@ -1,13 +1,12 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
-
+                                                                            
 #include "functions.h"
 
 static void Enc_LC3PLUS_Channel_fl(LC3PLUS_Enc* encoder, int channel, int32_t* s_in, uint8_t* bytes, int bps
@@ -61,14 +60,18 @@ static void Enc_LC3PLUS_Channel_fl(LC3PLUS_Enc* encoder, int channel, int32_t* s
 
     /* Pitch estimation */
     processOlpa_fl(h_EncSetup->s_12k8, h_EncSetup->olpa_mem_s12k8, h_EncSetup->olpa_mem_s6k4,
-                   &h_EncSetup->olpa_mem_pitch, &T0_out, &normcorr, s_12k8_len, encoder->frame_dms);
+                   &h_EncSetup->olpa_mem_pitch, 
+                   &h_EncSetup->pitch_flag, 
+                   &T0_out, &normcorr, s_12k8_len, encoder->frame_dms);
 
     /* LTPF encoder */
     process_ltpf_coder_fl(h_EncSetup->s_12k8, s_12k8_len + 1, h_EncSetup->ltpf_enable, T0_out, normcorr,
                           encoder->frame_dms, h_EncSetup->ltpf_mem_in, encoder->ltpf_mem_in_len,
                           &h_EncSetup->ltpf_mem_normcorr, &h_EncSetup->ltpf_mem_ltpf_on,
                           &h_EncSetup->ltpf_mem_pitch, h_EncSetup->ltpf_param, &h_EncSetup->ltpf_mem_mem_normcorr,
-                          &ltpfBits);
+                          &ltpfBits
+                          , encoder->hrmode
+);
 
     /* Attack detector */
     attack_detector_fl(h_EncSetup->s_in_scaled, encoder->frame_length, encoder->fs, &h_EncSetup->attdec_position,
@@ -78,8 +81,8 @@ static void Enc_LC3PLUS_Channel_fl(LC3PLUS_Enc* encoder, int channel, int32_t* s
     /* Per-band energy */
     processPerBandEnergy_fl(encoder->bands_number, encoder->bands_offset, encoder->hrmode, encoder->frame_dms, h_EncSetup->ener, d_fl);
     /* Near Nyquist detector */
-    processNearNyquistdetector_fl(&encoder->near_nyquist_flag, encoder->fs_idx, encoder->near_nyquist_index, encoder->bands_number, h_EncSetup->ener);
-
+    processNearNyquistdetector_fl(&encoder->near_nyquist_flag, encoder->fs_idx, encoder->near_nyquist_index, encoder->bands_number, h_EncSetup->ener                              
+                                 , encoder->frame_dms, encoder->hrmode );                            
     /* Disable LTPF if nyquist detector triggers or -lfe mode is active*/
     if (encoder->near_nyquist_flag != 0 || h_EncSetup->lfe == 1)
     {
@@ -99,8 +102,8 @@ static void Enc_LC3PLUS_Channel_fl(LC3PLUS_Enc* encoder, int channel, int32_t* s
         BW_cutoff_idx = 0;
     }
 
-    processSnsComputeScf_fl(h_EncSetup->ener, encoder->tilt, encoder->bands_number, h_EncSetup->scf,
-                            h_EncSetup->attdec_detected, encoder->sns_damping, encoder->attdec_damping);
+    processSnsComputeScf_fl(h_EncSetup->ener, encoder->bands_number, h_EncSetup->scf,
+                            h_EncSetup->attdec_detected, encoder->sns_damping, encoder->attdec_damping, encoder->fs_idx);
 
     /* SNS Quantizer */
     process_snsQuantizesScf_Enc(h_EncSetup->scf, h_EncSetup->L_scf_idx, h_EncSetup->scf_q, h_EncSetup->dct2StructSNS);

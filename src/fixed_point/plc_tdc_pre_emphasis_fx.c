@@ -1,17 +1,14 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "defines.h"
-
 #include "functions.h"
-
 
 void processPreEmphasis_fx(Word32 *d2_fx, Word16 *d2_fx_exp, Word16 fs_idx, Word16 n_bands, Word16 frame_dms, Word8 *scratchBuffer)
 {
@@ -48,6 +45,10 @@ void processPreEmphasis_fx(Word32 *d2_fx, Word16 *d2_fx_exp, Word16 fs_idx, Word
         case 50:
             pre_emph   = lpc_lin_pre_emphasis_5ms[fs_idx];
             pre_emph_e = lpc_lin_pre_emphasis_e_5ms[fs_idx];
+            BREAK;
+        case 75:
+            pre_emph   = lpc_lin_pre_emphasis_7_5ms[fs_idx];
+            pre_emph_e = lpc_lin_pre_emphasis_e_7_5ms[fs_idx];
             BREAK;
     }
     

@@ -1,21 +1,21 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "defines.h"
 #include "functions.h"
 
-
 void plc_phEcu_trans_burst_ana_sub(LC3_INT32 fs_idx, LC3_INT32 burst_len, LC3_INT32 n_grp, LC3_FLOAT *oold_spect_shape, 
                                    LC3_FLOAT *oold_EwPtr, LC3_FLOAT *old_spect_shape, 
                                    LC3_FLOAT *old_EwPtr,   LC3_FLOAT *stPhECU_beta_mute,
-                                   LC3_FLOAT *stPhECU_mag_chg_1st, LC3_FLOAT *stPhECU_Xavg,  LC3_FLOAT *alpha, LC3_FLOAT *beta, LC3_FLOAT *mag_chg, LC3_INT32 *tr_dec_dbg, LC3_FLOAT *gpc_dbg) 
+                                   LC3_FLOAT *stPhECU_mag_chg_1st, LC3_FLOAT *stPhECU_Xavg,  LC3_FLOAT *alpha, LC3_FLOAT *beta, LC3_FLOAT *mag_chg, LC3_INT32 *tr_dec_dbg, LC3_FLOAT *gpc_dbg
+								   , LC3_UINT8 plc_fadeout_type
+) 
 {
    LC3_FLOAT gr_pow_left[MAX_LGW];
    LC3_FLOAT gr_pow_right[MAX_LGW];
@@ -39,8 +39,11 @@ void plc_phEcu_trans_burst_ana_sub(LC3_INT32 fs_idx, LC3_INT32 burst_len, LC3_IN
 
     }
 
-    
-    plc_phEcu_tba_trans_dect_gains(burst_len, n_grp, grp_pow_change, stPhECU_beta_mute, stPhECU_mag_chg_1st, alpha, beta, mag_chg, ph_dith, tr_dec, att_val, &attDegreeFrames, &thresh_dbg);
+    plc_phEcu_tba_trans_dect_gains(burst_len, n_grp, grp_pow_change, stPhECU_beta_mute, stPhECU_mag_chg_1st, alpha, beta, mag_chg, ph_dith, tr_dec, att_val, &attDegreeFrames, &thresh_dbg
+		                           , plc_fadeout_type
+	);
+
+
 
     return;
 }

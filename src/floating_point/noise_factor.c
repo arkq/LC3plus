@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
 
@@ -14,94 +13,109 @@ void processNoiseFactor_fl(LC3_INT* fac_ns_idx, LC3_FLOAT x[], LC3_INT xq[], LC3
                            LC3_INT target_bytes
 )
 {
-    LC3_INT sumZeroLines = 0, kZeroLines = 0, startOffset = 0, nTransWidth = 0, end = 0, start = 0, i = 0, j = 0, k = 0,
-        allZeros = 0, m = 0;
-    LC3_FLOAT fac_ns_unq = 0, mean = 0, idx = 0, nsf1 = 0, nsf2 = 0;
-    LC3_INT   zeroLines[MAX_LEN] = {0}, zL1[MAX_LEN] = {0}, zL2[MAX_LEN] = {0};
+    LC3_INT sumZeroLines = 0, kZeroLines = 0, startOffset = 0, nTransWidth = 0, i = 0, j = 0, k = 0, m = 0, nzeros = 0;
+    LC3_FLOAT fac_ns_unq = 0, idx = 0, nsf1 = 0, nsf2 = 0;
+    LC3_INT   zeroLines[MAX_LEN];
 
     switch (frame_dms)
     {
         case 25:
-            nTransWidth = 4;
+            nTransWidth = 1;
             startOffset = 6;
             break;
         case 50:
-            nTransWidth = 4;
+            nTransWidth = 1;
             startOffset = 12;
             break;
+        case 75:
+            nTransWidth = 2;
+            startOffset = 18;
+            break;
         case 100:
-            nTransWidth = 8;
+            nTransWidth = 3;
             startOffset = 24;
             break;
     }
 
-    for (k = startOffset; k < BW_cutoff_idx; k++) {
-        allZeros = 1;
-
-        start = k - (nTransWidth - 2) / 2;
-        end   = MIN(BW_cutoff_idx - 1, k + (nTransWidth - 2) / 2);
-
-        for (i = start; i <= end; i++) {
-            if (xq[i] != 0) {
-                allZeros = 0;
-            }
+    for (k = startOffset - nTransWidth; k < startOffset + nTransWidth; k++)
+    {
+        if (xq[k] != 0)
+        {
+            nzeros = -2 * nTransWidth - 1;
         }
-
-        if (allZeros == 1) {
-            zeroLines[j] = k + 1;
-            kZeroLines++;
-            j++;
+        if (xq[k] == 0)
+        {
+            nzeros ++;
+        }
+    }
+    for (k = startOffset; k < BW_cutoff_idx - nTransWidth; k++)
+    {
+        if (xq[k + nTransWidth] != 0)
+        {
+            nzeros = -2 * nTransWidth - 1;
+        }
+        if (xq[k + nTransWidth] == 0)
+        {
+            nzeros ++;
+        }
+        if (nzeros >= 0)
+        {
+            zeroLines[j++] = k;
         }
     }
 
-    for (i = 0; i < kZeroLines; i++) {
-        sumZeroLines += zeroLines[i];
+    for (k = BW_cutoff_idx - nTransWidth; k < BW_cutoff_idx; k++)
+    {
+        nzeros ++;
+        if (nzeros >= 0)
+        {
+            zeroLines[j++] = k;
+        }
     }
 
-    if (sumZeroLines > 0) {
-        for (j = 0; j < kZeroLines; j++) {
-            mean += LC3_FABS(x[zeroLines[j] - 1]);
-        }
-
-        fac_ns_unq = mean / (gg * kZeroLines);
-    } else {
+    if (j == 0) {
         fac_ns_unq = 0;
     }
-
-    if (kZeroLines > 0)
+    else
     {
-        if (target_bytes <= 20 && frame_dms == 100) {
-            j = 0, k = 0;
+        kZeroLines = j;
+
+        fac_ns_unq = 0;
+        for (j = 0; j < kZeroLines; j++) {
+            fac_ns_unq += LC3_FABS(x[zeroLines[j]]);
+        }
+
+        fac_ns_unq /= (gg) * kZeroLines;
+
+
+
+        if (kZeroLines > 1 && target_bytes <= 20 && frame_dms == 100) {
+
+            j = 0, k = 0, nsf1 = 0, nsf2 = 0, sumZeroLines = 0;
+
+            for (i = 0; i < kZeroLines; i++) {
+                sumZeroLines += zeroLines[i];
+            }
+
             m = floor(sumZeroLines / kZeroLines);
 
             for (i = 0; i < kZeroLines; i++) {
                 if (zeroLines[i] <= m) {
-                    zL1[j] = zeroLines[i];
                     j++;
+                    nsf1 += LC3_FABS(x[zeroLines[i]]);
                 }
-
-                if (zeroLines[i] > m) {
-                    zL2[k] = zeroLines[i];
+                else {
+                    nsf2 += LC3_FABS(x[zeroLines[i]]);
                     k++;
                 }
             }
 
-            mean = 0;
-            for (i = 0; i < j; i++) {
-                mean += LC3_FABS(x[zL1[i] - 1]) / gg;
-            }
-
-            nsf1 = mean / j;
-
-            mean = 0;
-            for (i = 0; i < k; i++) {
-                mean += LC3_FABS(x[zL2[i] - 1]) / gg;
-            }
-
-            nsf2 = mean / k;
+            nsf1 /= (gg) * j;
+            nsf2 /= (gg) * k; 
 
             fac_ns_unq = MIN(nsf1, nsf2);
         }
+
     }
 
     idx = round(8 - 16 * fac_ns_unq);

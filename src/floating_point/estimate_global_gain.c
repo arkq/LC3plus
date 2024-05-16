@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
 
@@ -18,9 +17,9 @@ void processEstimateGlobalGain_fl(LC3_FLOAT x[], LC3_INT lg, LC3_INT nbitsSQ, LC
 )
 {
 
-    LC3_INT   i = 0, N = 0, offset = 0, j = 0, iszero = 0;
-    LC3_FLOAT g_min = 0, x_max = 0, tmp = 0, ind = 0, ind_min = 0, target = 0, fac = 0, ener = 0;
-    LC3_FLOAT en[MAX_LEN / 4] = {0};
+    LC3_INT   i, N, offset, j, iszero, fac;
+    LC3_FLOAT g_min, x_max, tmp, ind, ind_min, target, ener;
+    LC3_FLOAT en[MAX_LEN / 4];
     LC3_FLOAT reg_val = 4.656612873077393e-10;
 
     if (*old_targetBits < 0) {
@@ -61,7 +60,7 @@ void processEstimateGlobalGain_fl(LC3_FLOAT x[], LC3_INT lg, LC3_INT nbitsSQ, LC
             g_min = x_max / (32767 - 0.375);
         }
         /* Prevent positive rounding errors from LC3_LOG10 function */
-        ind_min = 28.0 * LC3_LOG10(g_min);
+        ind_min = 28.0 * LC3_LOGTEN(g_min);
 
         ind_min = ceil(ind_min + LC3_FABS(ind_min) * LC3_EPS);
         
@@ -76,7 +75,7 @@ void processEstimateGlobalGain_fl(LC3_FLOAT x[], LC3_INT lg, LC3_INT nbitsSQ, LC
             tmp += x[i + 1] * x[i + 1];
             tmp += x[i + 2] * x[i + 2];
             tmp += x[i + 3] * x[i + 3];
-            en[j] = (28.0 / 20.0) * (7 + 10.0 * LC3_LOG10(tmp + reg_val));
+            en[j] = (28.0 / 20.0) * (7 + 10.0 * LC3_LOGTEN(tmp + reg_val));
             j++;
         }
 
@@ -84,8 +83,9 @@ void processEstimateGlobalGain_fl(LC3_FLOAT x[], LC3_INT lg, LC3_INT nbitsSQ, LC
         fac    = 256;
         offset = 255 + quantizedGainOff;
 
-        for (i = 0; i < 8; i++) {
-            fac    = fac * 0.5;
+        for (i = 0; i < 8; i++)
+        {
+            fac    = fac >> 1;
             offset = offset - fac;
             ener   = 0;
             iszero = 1;

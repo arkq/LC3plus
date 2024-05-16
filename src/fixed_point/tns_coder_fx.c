@@ -1,16 +1,13 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
-
 
 #include "functions.h"
-
 
 static void   Parcor2Index(const Word16 parCoeff[] /*Q15*/, Word16 index[], Word16 order);
 static void   Index2Parcor(const Word16 index[], Word16 parCoeff[], Word16 order);
@@ -114,6 +111,17 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
         xLen     = shr_pos(xLen, 1);
         maxOrder = 4;
         BREAK;
+    case 75:
+        startfreq[0] = 9;
+        move16();
+        subdiv_startfreq = tns_subdiv_startfreq_7_5ms[BW_cutoff_idx];
+        move16();
+        subdiv_stopfreq = tns_subdiv_stopfreq_7_5ms[BW_cutoff_idx];
+        move16();
+        tmp      = shr_pos(xLen, 2);
+        xLen     = add(tmp, add(tmp, tmp));
+        maxOrder = 8;
+        BREAK;
     default: /* 100 */
         startfreq[0] = 12;
         move16();
@@ -187,6 +195,7 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
             {
             case 25: facs_e = add(facs_e, 1); BREAK;
             case 50: facs_e = add(facs_e, 1); BREAK;
+            case 75: BREAK;
             case 100: BREAK;
             }
 

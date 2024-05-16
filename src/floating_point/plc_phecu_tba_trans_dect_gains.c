@@ -1,28 +1,20 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "defines.h"
 #include "functions.h"
 
-
 #define BETA_MUTE_FAC 0.5                            /*  % attenuation factor per additional bad frame, FX uses 0.5 (shift right with 1 bit) */
 #define BETA_MUTE_FAC_INI 0.5
-
-
 #define OFF_FRAMES_LIMIT 30                          /*   300 ms for LC3 10 ms   */
-
-
-
 #define LGW32k 7
 #define LGW16k 5
-
 
 /*  Tables for attentuation of mag_chg, copied from FX */
 /*  Tables are in Q15 */
@@ -39,11 +31,20 @@ const LC3_INT32 POW_ATT_TABLE0[OFF_FRAMES_LIMIT + 1] = { 32767, 31293, 29885, 28
 
 #ifdef PLC2_FADEOUT_IN_MS 
 #if PLC2_FADEOUT_IN_MS == 0
-/*  default setting only requieres two tables */
-const Word16* const POW_ATT_TABLES[1 + 2] =
-{ NULL,  POW_ATT_TABLE1/*1 0.3dB steps */  , POW_ATT_TABLE0/*2 0.4 dB steps*/,
-};
 #else 
+
+const LC3_INT32 POW_ATT_TABLE_p3x9_14_7[OFF_FRAMES_LIMIT + 1] = {
+ 32767,
+ 31656,  30581,  29543,  28540,  27571,  26635,  25731,  24857,   24013,  /* 9 times .3dB steps , 14  6 dB steps, 7 muted steps */
+  12007,   6003,    3002,    1501,    750,    375,     188,     94,     47,      23, 12, 6,      3,      1,
+  0,      0,      0,      0,      0,      0,  0 };
+
+const LC3_INT32 POW_ATT_TABLE_p4x9_14_7[OFF_FRAMES_LIMIT + 1] =
+{ 32767,
+  31293, 29885, 28540, 27255, 26029, 24857, 23738, 22670, 21650,  /* 9 times .4dB steps  , 14  6 dB steps, 7 muted steps */
+  10825, 5413,  2706,  1353,  677,   338,  169,  85,  42, 21, 11, 5, 3, 1,
+   0, 0,0,0,0,0,0 };
+
 const LC3_INT32 POW_ATT_TABLE_p3x8_6[] = {
  32767,  31656,  30581,  29543,  28540,  27571,  26635,  25731,  12865,   6433,
   3216,   1608,    804,    402,    201,    101,     50,     25,     13,      6,
@@ -80,22 +81,26 @@ const LC3_INT32  POW_ATT_TABLE_p4x1_6[OFF_FRAMES_LIMIT + 1] = {
     32,     16,      8,      4,      2,      1,      1,      0,      0,      0,
      0,      0,      0,      0,      0,      0,      0,      0,      0,      0,     0 };
 
-
-const LC3_INT32* const POW_ATT_TABLES[1 + 10] =
+const LC3_INT32 *const POW_ATT_TABLES[1 + 12] =
 { NULL,
-  POW_ATT_TABLE1  , POW_ATT_TABLE0,            /* .3dB x16,16 6dB  steps */ /* .4dB x16, 16 6dB  steps */ /*original/default */
-  POW_ATT_TABLE_p3x8_6, POW_ATT_TABLE_p4x8_6,  /* .3dB x8, 24 6dB  steps */ /* .4dB x8, 24 6dB  steps */
-  POW_ATT_TABLE_p3x4_6, POW_ATT_TABLE_p4x4_6,  /* .3dB x4, 28 6dB  steps */ /* .4dB x4, 28 6dB  steps */
-  POW_ATT_TABLE_p3x2_6, POW_ATT_TABLE_p4x2_6,  /* .3dB x2, 30 6dB  steps */ /* .4dB x2, 30 6dB  steps */
-  POW_ATT_TABLE_p3x1_6, POW_ATT_TABLE_p4x1_6   /* .3dB x1, 30 6dB  steps */ /* .4dB x1, 30 6dB  steps */
+/*0.3dB col      ,      0.4dB col */
+/* 1*/POW_ATT_TABLE_p3x1_6, POW_ATT_TABLE_p4x1_6,       /* 0 0.3dB,  16 6dB, 14mute   */ /*  0.4dB version */  /* old short mute tabs  */
+/* 3*/POW_ATT_TABLE_p3x2_6, POW_ATT_TABLE_p4x2_6,       /* 1 0.3dB,  15 6dB ,14mute   */ /* 0.4dB version  */
+/* 5*/POW_ATT_TABLE_p3x4_6, POW_ATT_TABLE_p4x4_6,       /* 3 0.3dB,  15 6dB , 12 mute */ /* 0.4dB version  */
+/* 7*/POW_ATT_TABLE_p3x8_6, POW_ATT_TABLE_p4x8_6,       /* 7 0.3dB,  15 6dB , 8 mute  */ /* 0.4dB version  */
+/* 9*/POW_ATT_TABLE_p3x9_14_7, POW_ATT_TABLE_p4x9_14_7, /* 9 0.3dB,  14 6dB , 7 mute  */ /* 0.4dB version  */   /* opt 120 ms */
+/*11*/POW_ATT_TABLE1,       POW_ATT_TABLE0,             /* 15 0.3dB, 14 6dB , 1 mute */  /* 0.4dB version  */   /*  original   curves */
 };
+
 #endif
 #endif
 
 void plc_phEcu_tba_trans_dect_gains(LC3_INT32 burst_len, LC3_INT32 n_grp, LC3_FLOAT *grp_pow_change,  
                           LC3_FLOAT *stPhECU_beta_mute, LC3_FLOAT *stPhECU_mag_chg_1st,
                           LC3_FLOAT *alpha, LC3_FLOAT *beta, LC3_FLOAT *mag_chg, LC3_FLOAT *ph_dith, LC3_INT32 *tr_dec,
-                          LC3_FLOAT *att_val, LC3_INT32 *attDegreeFrames_dbg, LC3_FLOAT *thresh_dbg) 
+                          LC3_FLOAT *att_val, LC3_INT32 *attDegreeFrames_dbg, LC3_FLOAT *thresh_dbg                         
+	                      , LC3_UINT8 plc_fadeout_type
+                          ) 
 {
 
     LC3_INT32 i;
@@ -107,14 +112,8 @@ void plc_phEcu_tba_trans_dect_gains(LC3_INT32 burst_len, LC3_INT32 n_grp, LC3_FL
     LC3_INT32 burst_att_thresh;
     LC3_INT32 att_per_frame_idx;
     LC3_INT32 att_always,   attDegreeFrames;
-
-    LC3_INT32 FADEOUT_IN_MS, PLC_P800_SPEECH_FADEOUT_IN_FRAMES,
-        PLC2_FADEOUT_IN_FRAMES, BURST_ATT_THRESH_PRE;
     const LC3_INT32 *TABLEQ15;
-    LC3_INT32 BURST_ATT_THRESH;                          /* start attenuate with <burst_att_thresh> losses in a row, also starts FADE2AVG actions */
-    LC3_INT32 ATT_PER_FRAME;                              /* initial msuic attenuation table  ptr, actually implemented in table lookup! */                                            
-    LC3_INT32 BETA_MUTE_THR;                             /* time threshold in 10 ms frames  to start beta - noise attenuation */
-    
+    LC3_INT32 beta_mute_thr;                             /* time threshold in 10 ms frames  to start beta - noise attenuation */
     UNUSED(attDegreeFrames_dbg);
 
     /* constants setup */
@@ -122,45 +121,24 @@ void plc_phEcu_tba_trans_dect_gains(LC3_INT32 burst_len, LC3_INT32 n_grp, LC3_FL
 
     XavgFadeinFactor = -1.0;
 
-    if (PLC2_FADEOUT_IN_MS != 0)
-    {
-        if (PLC2_FADEOUT_IN_MS < 0)
-        {
-            FADEOUT_IN_MS = PLC_FADEOUT_IN_MS;  /* % use TDC - SETTING as input */
-        }
-        else
-        {
-            FADEOUT_IN_MS = PLC2_FADEOUT_IN_MS; /* % use a PLC2  individual settinsg */
-        }
-
-        PLC_P800_SPEECH_FADEOUT_IN_FRAMES = (LC3_INT32) LC3_FLOOR((LC3_FLOAT)FADEOUT_IN_MS / (LC3_FLOAT)10.0);   /* % nominal svaleu for speech */
-
-        PLC2_FADEOUT_IN_FRAMES = MIN(OFF_FRAMES_LIMIT, MAX(6, 3 * PLC_P800_SPEECH_FADEOUT_IN_FRAMES));  /* for PLC2 we typically maintain energy 3x longer */
-
-        BURST_ATT_THRESH_PRE = MIN(5, MAX(1,   (1 * PLC2_FADEOUT_IN_FRAMES) / 6));   /* nominal 20-40 ms to start  actual  muting, will be thresh +1 fot assumed music */
-
-        ATT_PER_FRAME = MIN(10, MAX(2, 2 * (6 - BURST_ATT_THRESH_PRE)));  /* %  we let the BURST_ATT_thresh control the initial table selection */
-        BURST_ATT_THRESH = MIN(BURST_ATT_THRESH_PRE, 4);
-        BETA_MUTE_THR = MIN(4 +  (OFF_FRAMES_LIMIT / 2) + 1, MAX(4, BURST_ATT_THRESH + 1 + (LC3_INT32)LC3_POW((LC3_FLOAT)2.0,BURST_ATT_THRESH_PRE - (LC3_FLOAT)1)));  /* nominal time  to start mandatory decrease of Xavg */
-    }
-
-
-    /* Initialize in the same way as done in trans_burst_ana_fx(), even though this is not really needed */
-    burst_att_thresh = BURST_ATT_THRESH;
-    att_per_frame_idx = ATT_PER_FRAME;
-
-
     /* 10ms constants */
     thresh_tr_dB = 10.0;            /*    dB threshold kept same as for 20ms, even though transient analysis frame size was shortened */
     max_increase_grp_pow = 0;      /*     maximum amplification(dB)  in case of onset transients, offset always deacy */
 
     max_increase_grp_pow_lin = (LC3_FLOAT)1.0*LC3_POW((LC3_FLOAT)10.0, max_increase_grp_pow / (LC3_FLOAT)10.0)*(LC3_FLOAT)(32767.0 / 32768.0);
 
+    if (plc_fadeout_type != 0)
+    {
+        i = (PLC2_FADEOUT_LONG_IN_MS - PLC2_FADEOUT_IN_MS_MIN) / PLC2_FADEOUT_RES;   /*a long fading table entry in fade_scheme_tab  */
+    } else {
+        i = (PLC2_FADEOUT_IN_MS - PLC2_FADEOUT_IN_MS_MIN) / PLC2_FADEOUT_RES;   /* a shorter  fading entry in  fade_scheme_tab  */
+    }
+    assert(i >= 0 && i <= ((PLC2_FADEOUT_IN_MS_MAX - PLC2_FADEOUT_IN_MS_MIN) / PLC2_FADEOUT_RES) && "fade_scheme_tab index error");
 
-    /* envelope setting */
-    burst_att_thresh = BURST_ATT_THRESH + 1;
-    att_per_frame_idx = ATT_PER_FRAME - 1;
-
+    att_per_frame_idx = fade_scheme_tab[i][0];
+    burst_att_thresh  = fade_scheme_tab[i][1];           /* number of 1.0 frames before  muting/mixing phase */
+    /* band gain muting may can take place earlier due to a band transient */
+    beta_mute_thr = fade_scheme_tab[i][2];          /*   muting of Xavg contribution  start when slow fadeout is over */
  
     attDegreeFrames = 0;
     if (burst_len > burst_att_thresh)
@@ -202,7 +180,6 @@ void plc_phEcu_tba_trans_dect_gains(LC3_INT32 burst_len, LC3_INT32 n_grp, LC3_FL
             /*  transient processing */
             /*   transients may be both rise and decay transients !! */
 
-
             if(LC3_FABS(grp_pow_change[i]) >= thresh_tr_dB)
             {
  
@@ -232,26 +209,12 @@ void plc_phEcu_tba_trans_dect_gains(LC3_INT32 burst_len, LC3_INT32 n_grp, LC3_FL
             assert(burst_len >= 2);      /*  states used here */
             tr_dec[i] = 0;
 
-            if (PLC_FADEOUT_IN_MS > 0)
             {
-                assert(att_per_frame_idx >= 1 && att_per_frame_idx <= 10);
+                assert(att_per_frame_idx >= 1 && att_per_frame_idx <= (10+2));
                 TABLEQ15 = POW_ATT_TABLES[att_per_frame_idx]; 
                 att_val[i] = (LC3_FLOAT)1.0 * ( (LC3_FLOAT) TABLEQ15[MIN(OFF_FRAMES_LIMIT, attDegreeFrames )]  / (LC3_FLOAT)32768.0);  /* Table idx 0...N-1 therefore no + 1 */
                 att_val[i] = att_val[i];
             }
-            else
-            {
-
-                if (att_per_frame_idx == ATT_PER_FRAME)
-                {
-                    att_val[i] = (LC3_FLOAT)1.0 * ( (LC3_FLOAT)POW_ATT_TABLE0[MIN(OFF_FRAMES_LIMIT, attDegreeFrames)] / (LC3_FLOAT)32768.0);
-                }
-                else
-                {
-                    att_val[i] = (LC3_FLOAT)1.0 * ( (LC3_FLOAT)POW_ATT_TABLE1[MIN(OFF_FRAMES_LIMIT, attDegreeFrames)] / (LC3_FLOAT)32768.0);
-                }
-            }
- 
                         
             if ( (att_val[i] != 0) && (att_val[i] * (LC3_FLOAT)32768.0 < (LC3_FLOAT)0.5) )
             {
@@ -268,9 +231,8 @@ void plc_phEcu_tba_trans_dect_gains(LC3_INT32 burst_len, LC3_INT32 n_grp, LC3_FL
                 mag_chg[i] = 0;             /*   for SNR measurments match in  float lowest possible level to BASOP representation */
             }
 
-
-
-            if(burst_len > BETA_MUTE_THR)
+            /* note beta_mute decreased once per frame,  not once per band  */
+            if (i == 0 && burst_len > beta_mute_thr)
             {
                     *stPhECU_beta_mute = *stPhECU_beta_mute * (LC3_FLOAT)BETA_MUTE_FAC;
             }

@@ -1,16 +1,14 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "defines.h"
 #include "functions.h"
-
 
 void plc_phEcu_rec_frame(Complex *X_in,
    LC3_INT32 L,
@@ -50,7 +48,8 @@ void plc_phEcu_rec_frame(Complex *X_in,
    UNUSED(ifft_out_dbg);
    UNUSED(xsubst_dbg);
    UNUSED(xsubst_LL);
-   fs_idx = FRAME2FS_IDX(L);
+
+   fs_idx = FRAME2FS_IDX_10MS(L);
    hannOla = hannOla_wins[fs_idx];
 
    X_in[0].i = X_in[Lprot / 2].r; /* move fs/2 real to imag part of X_in[0]*/

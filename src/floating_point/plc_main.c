@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
 
@@ -23,6 +22,12 @@ void processPlcMain_fl(LC3_FLOAT *q_d_fl_c, LC3_FLOAT *syntM_fl_c, LC3PLUS_Dec* 
     LC3_INT16 prev_bfi_plc2;
     LC3_FLOAT  phEcu_env_stab_local[1];
     LC3_FLOAT  phEcu_pfind_sens[1];
+    
+    LC3_INT16 consecutiveLostThreshold = 0;
+
+    LC3_INT16 thresh_tdc_cnt;
+    LC3_INT16 thresh_ns_cnt;
+    LC3_INT16 thresh_tdc_ns_cnt;
 
     prev_bfi_plc2 = 1;
     if (PlcSetup->nbLostCmpt == 0)
@@ -38,12 +43,6 @@ void processPlcMain_fl(LC3_FLOAT *q_d_fl_c, LC3_FLOAT *syntM_fl_c, LC3PLUS_Dec* 
     }
 
     pitch_classifier = ltpf_pitch_int;
-#ifdef NONBE_PLC_CLASSIFER_LAG_FIX
-    if (ltpf_pitch_fr > 2)
-    {
-        pitch_classifier++;
-    }
-#endif
 
     processPlcClassify_fl(plcMeth, &h_DecSetup->concealMethod, &PlcSetup->nbLostCmpt, bfi, &xcorr,
                           decoder->frame_length, decoder->frame_dms, pitch_classifier, decoder->fs,
@@ -52,24 +51,85 @@ void processPlcMain_fl(LC3_FLOAT *q_d_fl_c, LC3_FLOAT *syntM_fl_c, LC3PLUS_Dec* 
 
     if (bfi == 1)
     {
+        switch(decoder->frame_dms)
+        {
+                case 25: 
+                    consecutiveLostThreshold  = 16;
+                    thresh_tdc_cnt = THRESH_025_DMS_TDC_CNT;
+                    thresh_ns_cnt = THRESH_025_DMS_NS_CNT;
+                    thresh_tdc_ns_cnt =  THRESH_025_DMS_TDC_NS_CNT;                  
+                    break;
+                case 50: consecutiveLostThreshold  = 8;  
+                    thresh_tdc_cnt = THRESH_050_DMS_TDC_CNT;
+                    thresh_ns_cnt = THRESH_050_DMS_NS_CNT;
+                    thresh_tdc_ns_cnt =  THRESH_050_DMS_TDC_NS_CNT;                  
+                    break;
+                case 75: consecutiveLostThreshold  = 6;
+                    thresh_tdc_cnt = THRESH_075_DMS_TDC_CNT;
+                    thresh_ns_cnt = THRESH_075_DMS_NS_CNT;
+                    thresh_tdc_ns_cnt =  THRESH_075_DMS_TDC_NS_CNT;                   
+                    break;
+                case 100: consecutiveLostThreshold = 4;  
+                    thresh_tdc_cnt = THRESH_100_DMS_TDC_CNT;
+                    thresh_ns_cnt = THRESH_100_DMS_NS_CNT;
+                    thresh_tdc_ns_cnt =  THRESH_100_DMS_TDC_NS_CNT;
+                    break;
+            default: assert(0);
+        }
+        
+            if (decoder->fs_idx == 2 || decoder->fs_idx >= 4)
+            {
+                if (PlcAdvSetup->longterm_counter_plcTdc < thresh_tdc_cnt){
+                    PlcAdvSetup->plc_fadeout_type = 1;
+                }
+                else if (PlcAdvSetup->longterm_counter_plcNsAdv < thresh_ns_cnt){
+                    PlcAdvSetup->plc_fadeout_type = 1;
+                }
+                else if (PlcAdvSetup->longterm_counter_plcTdc + PlcAdvSetup->longterm_counter_plcNsAdv < thresh_tdc_ns_cnt){
+                    PlcAdvSetup->plc_fadeout_type = 1;
+                }
+                else {
+                    PlcAdvSetup->plc_fadeout_type = 0;
+                    }
+                
+                if ((PlcAdvSetup->overall_counter - (int)(PLC_LONGTERM_ANALYSIS_STARTUP_FILL * PlcAdvSetup->longterm_analysis_counter_max)) < 0)
+                {
+                    PlcAdvSetup->plc_fadeout_type = 0;
+                }
+            if (h_DecSetup->rel_pitch_change > REL_PITCH_THRESH && hrmode == 1 && (decoder->frame_dms == 50 || decoder->frame_dms == 25) ){
+                PlcAdvSetup->plc_fadeout_type = 2;
+            } else 
+                if ( h_DecSetup->concealMethod != 2 ) {
+                    /* not PhECU */
+                    if (PlcSetup->nbLostCmpt < consecutiveLostThreshold )
+                    {
+                        PlcAdvSetup->plc_fadeout_type = 0; 
+                    }
+                }
+            } else {
+                PlcAdvSetup->plc_fadeout_type = 0;
+            }
+
         switch (h_DecSetup->concealMethod)
         {
         case 2:
         {
+            LC3_FLOAT pitch_fl_c;
+            
             assert(decoder->fs_idx == floor(decoder->fs / 10000));
-            // phaseECU supports only 10ms framing
+            /* phaseECU supports only 10ms framing*/
             assert(PlcSetup->nbLostCmpt != 0 || decoder->frame_dms == 100);
             
             if (decoder->frame_dms != 100)
             {
-                // muting, if frame size changed during phaseECU concealment
+                /* muting, if frame size changed during phaseECU concealment */
                 memset(q_d_fl_c, 0, sizeof(LC3_FLOAT) * decoder->frame_length);
                 h_DecSetup->alpha = 0;
                 break;
             }
 
             /*  call phaseEcu  */
-            LC3_FLOAT pitch_fl_c = (LC3_FLOAT)ltpf_pitch_int + (LC3_FLOAT)ltpf_pitch_fr / 4.0; /* use non-rounded pitch indeces  */
+            pitch_fl_c = (LC3_FLOAT)ltpf_pitch_int + (LC3_FLOAT)ltpf_pitch_fr / 4.0; /* use non-rounded pitch indeces  */
 
 
             if (prev_bfi_plc2 == 0)
@@ -152,6 +212,8 @@ void processPlcMain_fl(LC3_FLOAT *q_d_fl_c, LC3_FLOAT *syntM_fl_c, LC3PLUS_Dec* 
                                  ,
                                  &(PlcAdvSetup->PlcPhEcuSetup.PhEcu_Fft),
                                  &(PlcAdvSetup->PlcPhEcuSetup.PhEcu_Ifft)
+                                 ,PlcAdvSetup->plc_fadeout_type,                   
+					             &(PlcAdvSetup->PlcPhEcuSetup.PhECU_nonpure_tone_flag)  /* nonpure tone flag */
                  );
 
 
@@ -159,8 +221,7 @@ void processPlcMain_fl(LC3_FLOAT *q_d_fl_c, LC3_FLOAT *syntM_fl_c, LC3PLUS_Dec* 
                                           h_DecSetup->imdct_mem, synth);
                 move_float(syntM_fl_c, synth, decoder->frame_length);
 
-                 
-
+            
             }
         }
         break;
@@ -177,7 +238,10 @@ void processPlcMain_fl(LC3_FLOAT *q_d_fl_c, LC3_FLOAT *syntM_fl_c, LC3PLUS_Dec* 
             processTdcApply_fl(ltpf_pitch_int, &PlcAdvSetup->PlcTdcSetup.preemphFac, A, PlcAdvSetup->PlcTdcSetup.lpcorder, PlcAdvSetup->pcmbufHist, PlcAdvSetup->max_len_pcm_plc, decoder->frame_length,
                                decoder->frame_dms, decoder->fs, PlcSetup->nbLostCmpt, decoder->frame_length - decoder->la_zeroes, &PlcAdvSetup->stabFac, PlcAdvSetup->PlcTdcSetup.harmonicBuf,
                                PlcAdvSetup->PlcTdcSetup.synthHist, &PlcAdvSetup->PlcTdcSetup.fract, &PlcAdvSetup->PlcTdcSetup.seed, &PlcAdvSetup->PlcTdcSetup.gain_c,
-                               &h_DecSetup->alpha, synth);
+                               &h_DecSetup->alpha, synth
+                               , PlcAdvSetup->plc_fadeout_type
+                               , decoder->alpha_type_2_table
+);
 
             processTdcTdac_fl(synth, decoder->imdct_win, decoder->frame_length, decoder->la_zeroes, h_DecSetup->imdct_mem);
             memmove(syntM_fl_c, synth, sizeof(LC3_FLOAT) * decoder->frame_length);

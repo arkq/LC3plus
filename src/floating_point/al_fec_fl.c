@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "stdint.h"
 #include <assert.h>
@@ -713,7 +712,6 @@ LC3_INT32 fec_decoder(LC3_UINT8 *iobuf, LC3_INT16 slot_bytes, LC3_INT32 *data_by
 
     if (*bfi == 1)
     {
-         
         return ERROR_REPORT_BEC_MASK;
     }
 
@@ -1010,8 +1008,8 @@ FEC_STATIC LC3_INT32 rs16_detect_and_correct(LC3_UINT8 *iobuf, LC3_INT32 n_symb,
         LC3_UINT8        blacklist[FEC_N_MODES];
         LC3_INT32          rop;
 
-    rop = 0;
     void (*syndr_calc[3])(LC3_UINT8 *, LC3_UINT8 *, LC3_INT32);
+    rop = 0;
 
     /* initialization */
     blacklist[0]        = 0;

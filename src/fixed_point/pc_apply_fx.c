@@ -1,18 +1,15 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "defines.h"
-
 #include "constants.h"
 #include "functions.h"
-
 
 #ifdef ENABLE_HR_MODE
 static Word16 getScaleFactor32_withNegativeScaling(Word32 *data32, Word16 dataLen);

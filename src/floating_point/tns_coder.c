@@ -1,47 +1,33 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
 
 static void xcorr(LC3_FLOAT* in, LC3_FLOAT* out, LC3_INT lag, LC3_INT inLen);
 static void levdown(LC3_FLOAT* anxt, LC3_FLOAT* out_a, LC3_INT* len);
 static void poly2rc(LC3_FLOAT* a, LC3_FLOAT* out, LC3_INT len);
-static LC3_INT  findRC_idx(const LC3_FLOAT* in1, const LC3_FLOAT* in2, LC3_FLOAT checkValue);
 
 void xcorr(LC3_FLOAT* in, LC3_FLOAT* out, LC3_INT lag, LC3_INT inLen)
 {
-    LC3_INT   i = 0, m = 0;
-    LC3_FLOAT sum = 0, tmp_buf[MAX_LEN] = {0};
+	LC3_INT32   m;
 
-    for (m = -lag; m <= lag; m++) {
-        /* Append zeros and input vector */
 
-        zero_float(tmp_buf, abs(m));
-
-        move_float(&tmp_buf[abs(m)], in, inLen - abs(m));
-
-        /* Calculate sum */
-        sum = 0;
-
-        for (i = 0; i < inLen; i++) {
-            sum += in[i] * tmp_buf[i];
-        }
-
-        out[m + lag] = sum;
+    for (m = 0; m <= lag; m++) {
+        /* Calculate correlation */
+        out[m] = mac_loop(in, &in[m], (inLen - m));
     }
 }
 
 void levinsonDurbin(LC3_FLOAT* r, LC3_FLOAT* out_lev, LC3_FLOAT* rc_unq, LC3_FLOAT* error, LC3_INT len)
 {
-    LC3_INT   t = 0, i = 0, j = 0;
-    LC3_FLOAT g = 0, v = 0, sum = 0, buf_tmp[MAX_LEN] = {0};
+    LC3_INT   t, i, j;
+    LC3_FLOAT g, v, sum, buf_tmp[10];
 
     g          = r[1] / r[0];
     out_lev[0] = g;
@@ -50,7 +36,6 @@ void levinsonDurbin(LC3_FLOAT* r, LC3_FLOAT* out_lev, LC3_FLOAT* rc_unq, LC3_FLO
     rc_unq[0] = -g;
 
     for (t = 1; t < len; t++) {
-        zero_float(buf_tmp, len + 1);
 
         sum = 0;
         for (i = 1; i <= t; i++) {
@@ -90,33 +75,33 @@ void levinsonDurbin(LC3_FLOAT* r, LC3_FLOAT* out_lev, LC3_FLOAT* rc_unq, LC3_FLO
 
 void levdown(LC3_FLOAT* anxt, LC3_FLOAT* out_a, LC3_INT* len)
 {
-    LC3_INT   i = 0, j = 0;
-    LC3_FLOAT tmp_buf[8] = {0}, tmp_buf1[8] = {0}, tmp_buf2[8] = {0}, knxt = 0;
+    LC3_INT32   i, j;
+    LC3_FLOAT tmp_buf[8], knxt;
+    LC3_FLOAT norm;
 
+	memset(tmp_buf, 0, 8 * sizeof(LC3_FLOAT));
     /* Initial length = 9 */
 
     /* Drop the leading 1 */
 
-    move_float(&tmp_buf[0], &anxt[1], (*len - 1));
-
     *len = *len - 1; /* Lenght = 8 */
 
     /* Last coefficient */
-    knxt = tmp_buf[*len - 1]; /* At [7] */
+    knxt = anxt[*len]; /* At [7] */
 
     *len = *len - 1; /* Lenght = 7 */
 
-    move_float(tmp_buf1, tmp_buf, *len);
-
     j = 0;
     for (i = *len - 1; i >= 0; i--) {
-        tmp_buf2[j] = knxt * tmp_buf[i];
+        tmp_buf[j] = knxt * anxt[i + 1];
         j++;
     }
+    
+    norm = 1.0 / (1.0 - (LC3_FABS(knxt)) * (LC3_FABS(knxt)));
 
     out_a[0] = 1;
     for (i = 0; i < *len; i++) {
-        out_a[i + 1] = (tmp_buf1[i] - tmp_buf2[i]) / (1.0 - (LC3_FABS(knxt)) * (LC3_FABS(knxt)));
+        out_a[i + 1] = (anxt[i + 1] - tmp_buf[i]) * norm;
     }
 
     *len = *len + 1; /* Length = 8 */
@@ -124,8 +109,8 @@ void levdown(LC3_FLOAT* anxt, LC3_FLOAT* out_a, LC3_INT* len)
 
 void poly2rc(LC3_FLOAT* a, LC3_FLOAT* out, LC3_INT len)
 {
-    LC3_INT   k = 0, i = 0, len_old = 0;
-    LC3_FLOAT buf[9] = {0};
+    LC3_INT   k, i, len_old;
+    LC3_FLOAT buf[9];
 
     len_old = len;
 
@@ -154,30 +139,21 @@ void poly2rc(LC3_FLOAT* a, LC3_FLOAT* out, LC3_INT len)
     }
 }
 
-LC3_INT findRC_idx(const LC3_FLOAT* in1, const LC3_FLOAT* in2, LC3_FLOAT checkValue)
-{
-    LC3_INT i = 0, ret = 0;
-
-    for (i = 0; i < 17; i++) {
-        if (checkValue <= in1[i] && checkValue > in2[i]) {
-            ret = i;
-        }
-    }
-
-    return ret;
-}
 
 void processTnsCoder_fl(LC3_FLOAT* x, LC3_INT bw_cutoff_idx, LC3_INT bw_fcbin, LC3_INT fs, LC3_INT N, LC3_INT frame_dms, LC3_INT nBits,
                         LC3_INT* order_out, LC3_INT* rc_idx, LC3_INT* tns_numfilters, LC3_INT* bits_out
                         , LC3_INT16 near_nyquist_flag
 )
 {
-    LC3_INT i = 0, stopfreq[2] = {0}, startfreq[2] = {0}, f = 0, numfilters = 0, maxOrder = 0, bits = 0, sub = 0,
-        subdiv_startfreq = 0, subdiv_stopfreq = 0, j = 0, rc_idx_tmp[8] = {0}, order_tmp[8] = {0}, tmp = 0, tns = 0;
-    LC3_FLOAT minPGfac = 0, minPredictionGain = 0, maxPG = 0, xcorr_out[MAX_LEN] = {0}, buf_tmp[MAX_LEN] = {0}, sum = 0,
-          subdiv_len = 0, nSubdivisions = 0, r[9] = {0}, out_lev[9] = {0}, rc_unq[9] = {0}, error_lev = 0, predGain = 0,
-          alpha = 0, rc[8] = {0}, st[9] = {0}, s = 0, tmpSave = 0, tmp_fl = 0;
+    LC3_INT i, stopfreq[2], startfreq[2], f, numfilters, maxOrder, bits, sub,
+        subdiv_startfreq, subdiv_stopfreq, j, rc_idx_tmp[MAXLAG], order_tmp, tmp, tns;
+    LC3_FLOAT minPGfac, minPredictionGain, maxPG, xcorr_out[MAXLAG + 1], sum,
+          subdiv_len, nSubdivisions, r[MAXLAG + 1], rc_unq[MAXLAG + 1], error_lev, predGain,
+          alpha, rc[MAXLAG], st[MAXLAG + 1] = {0}, s, tmpSave, tmp_fl;
     const LC3_INT* order;
+    LC3_FLOAT inv_sum, x_val;
+    LC3_FLOAT alpha_loc;
+    LC3_INT32 iIndex;
 
     /* Init */
 
@@ -187,8 +163,10 @@ void processTnsCoder_fl(LC3_FLOAT* x, LC3_INT bw_cutoff_idx, LC3_INT bw_fcbin, L
         numfilters = 1;
     }
 
-    if (N > 40 * ((LC3_FLOAT) (frame_dms) / 10.0)) {
-        N  = 40 * ((LC3_FLOAT) (frame_dms) / 10.0);
+    /* 40 * frame_dms / 10 = 4 * frame_dms */
+    if (N > 4 * frame_dms)
+    {
+        N = 4 * frame_dms;
         fs = 40000;
     }
 
@@ -212,21 +190,19 @@ void processTnsCoder_fl(LC3_FLOAT* x, LC3_INT bw_cutoff_idx, LC3_INT bw_fcbin, L
             maxOrder      = 4;
             nSubdivisions = 2.0;
             break;
+        case 75:
+            maxOrder      = 8;
+            nSubdivisions = 3;
+            break;
         case 100:
             maxOrder      = 8;
             nSubdivisions = 3.0;
             break;
     }
 
-    minPGfac          = 0.85;
-    maxPG             = 2;
     minPredictionGain = 1.5;
 
-    if ((frame_dms >= 50 && nBits >= 48 * ((LC3_FLOAT) frame_dms / 10.0)) || frame_dms == 25) {
-        maxPG = minPredictionGain;
-    }
-
-    if ((frame_dms >= 50 && nBits >= 48 * ((LC3_FLOAT) frame_dms / 10.0)) || frame_dms == 25) {
+    if (nBits >= 4.8 * frame_dms) {
         order = order1_tns;
     } else {
         order = order2_tns;
@@ -248,32 +224,51 @@ void processTnsCoder_fl(LC3_FLOAT* x, LC3_INT bw_cutoff_idx, LC3_INT bw_fcbin, L
     for (f = 0; f < numfilters; f++) {
         subdiv_len = ((LC3_FLOAT)stopfreq[f] + 1.0 - (LC3_FLOAT)startfreq[f]) / nSubdivisions;
 
-        zero_float(r, 9);
+        zero_float(r, MAXLAG+1);
 
         for (sub = 1; sub <= nSubdivisions; sub++) {
             subdiv_startfreq = floor(subdiv_len * (sub - 1)) + startfreq[f] - 1;
             subdiv_stopfreq  = floor(subdiv_len * sub) + startfreq[f] - 1;
+            
+            if (fs == 32000 && frame_dms == 75)
+            {
+                if (subdiv_startfreq == 83)
+                {
+                    subdiv_startfreq = 82;
+                }
+                
+                if (subdiv_stopfreq == 83)
+                {
+                    subdiv_stopfreq = 82;
+                }
+                
+                if (subdiv_startfreq == 160)
+                {
+                    subdiv_startfreq = 159;
+                }
+                
+                if (subdiv_stopfreq == 160)
+                {
+                    subdiv_stopfreq = 159;
+                }
+            }
 
             sum = 0;
             for (i = subdiv_startfreq; i < subdiv_stopfreq; i++) {
                 sum += x[i] * x[i];
             }
 
-            if (sum < LC3_EPS)
-            {
-                zero_float(r, 9);
+            if (sum < LC3_EPS) {
+                zero_float(r, MAXLAG+1);
                 r[0] = 1;
                 break;
             }
 
-            move_float(buf_tmp, &x[subdiv_startfreq], subdiv_stopfreq - subdiv_startfreq);
+            xcorr(&x[subdiv_startfreq], xcorr_out, maxOrder, subdiv_stopfreq - subdiv_startfreq);
 
-            xcorr(buf_tmp, xcorr_out, maxOrder, subdiv_stopfreq - subdiv_startfreq);
-
-            j = 0;
-            for (i = maxOrder; i >= 0; i--) {
-                r[j] = r[j] + xcorr_out[i] / sum;
-                j++;
+            inv_sum = 1.0 / sum;
+            for (i = 0; i <= maxOrder; i++) {
+                r[i] = r[i] + xcorr_out[i] * inv_sum;
             }
         }
 
@@ -281,7 +276,7 @@ void processTnsCoder_fl(LC3_FLOAT* x, LC3_INT bw_cutoff_idx, LC3_INT bw_fcbin, L
             r[i] = r[i] * lagw_tns[i];
         }
 
-        levinsonDurbin(r, out_lev, rc_unq, &error_lev, maxOrder);
+        levinsonDurbin(r, xcorr_out, rc_unq, &error_lev, maxOrder);
 
         predGain = r[0] / error_lev;
 
@@ -294,34 +289,50 @@ void processTnsCoder_fl(LC3_FLOAT* x, LC3_INT bw_cutoff_idx, LC3_INT bw_fcbin, L
         bits++;
 
         if (tns == 1) {
+            minPGfac = 0.85;
+            maxPG    = 2;
+            if (nBits >= 4.8 * frame_dms) {
+                maxPG = minPredictionGain;
+            }
+
             /* LPC weighting */
             if (predGain < maxPG) {
                 alpha = (maxPG - predGain) * (minPGfac - 1.0) / (maxPG - minPredictionGain) + 1.0;
 
+                alpha_loc = 1;
                 for (i = 0; i <= maxOrder; i++) {
-                    out_lev[i] = out_lev[i] * LC3_POW(alpha, i);
+                    xcorr_out[i] = xcorr_out[i] * alpha_loc;
+                    alpha_loc *= alpha;
                 }
 
-                poly2rc(out_lev, rc_unq, maxOrder + 1);
+                poly2rc(xcorr_out, rc_unq, maxOrder + 1);
             }
 
             /* PARCOR Quantization */
-            for (i = 0; i < maxOrder; i++) {
-                rc_idx_tmp[i] = findRC_idx(&quants_thr_tns[1], &quants_thr_tns[0], rc_unq[i]);
+            for (i = 0; i < maxOrder; i++)
+            {
+                iIndex = 1;
+                x_val  = rc_unq[i];
+
+                while ((iIndex < 17) && (x_val > quants_thr_tns[iIndex - 1]))
+                {
+                    iIndex = (iIndex + 1);
+                }
+                rc_idx_tmp[i] = (iIndex - 2);
             }
             
             /* Filter Order */
-            j = 0;
+            order_tmp = 0;
             for (i = 0; i < maxOrder; i++) {
                 rc[i] = quants_pts_tns[rc_idx_tmp[i]];
 
                 if (rc[i] != 0) {
-                    order_tmp[j] = i + 1;
-                    j++;
+                    order_tmp = i + 1;
                 }
             }
 
-            order_out[f] = order_tmp[j - 1];
+            order_out[f] = order_tmp;
+
             // Disable TNS if order is 0:
             if (order_out[f] == 0) {
                 tns = 0;
@@ -343,6 +354,9 @@ void processTnsCoder_fl(LC3_FLOAT* x, LC3_INT bw_cutoff_idx, LC3_INT bw_fcbin, L
                 rc_idx[i] = rc_idx_tmp[j];
                 j++;
             }
+        } else {
+tns_disabled:
+            order_out[f] = 0;
         }
 
         /* Filtering */
@@ -366,7 +380,6 @@ void processTnsCoder_fl(LC3_FLOAT* x, LC3_INT bw_cutoff_idx, LC3_INT bw_fcbin, L
             }
         }
     }
-tns_disabled:
 
     *tns_numfilters = numfilters;
     *bits_out       = bits;

@@ -1,3 +1,11 @@
+#******************************************************************************
+#                        ETSI TS 103 634 V1.5.1                               *
+#              Low Complexity Communication Codec Plus (LC3plus)              *
+#                                                                             *
+# Copyright licence is solely granted through ETSI Intellectual Property      *
+# Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
+# estoppel or otherwise.                                                      *
+#*****************************************************************************/
 # GNU Makefile
 
 # Options
@@ -6,6 +14,7 @@ CLANG                    = 0
 GCOV                     = 0
 NO_POST_REL_CHANGES_TEST = 0
 OPTIM                    = 0
+SHORT_PLC_FADEOUT        = 0
 
 # Paths
 VPATH  = .
@@ -48,6 +57,10 @@ CFLAGS   += $(foreach DIR,$(SRC_DIRS),-I$(DIR))
 
 ifeq "$(NO_POST_REL_CHANGES_TEST)" "1"
 CFLAGS   += -DNO_POST_REL_CHANGES
+endif
+
+ifeq "$(SHORT_PLC_FADEOUT)" "1"
+CFLAGS   += -DPLC_TUNING_SHORT_FADEOUT
 endif
 
 # memory sanitizer, find use of uninitialized memory
@@ -112,6 +125,7 @@ help:
 	@echo 'Build options:'
 	@echo '    NO_POST_REL_CHANGES_TEST $(NO_POST_REL_CHANGES_TEST) [0,1]'
 	@echo '    OPTIM                    $(OPTIM) [0-3]'
+	@echo '    SHORT_PLC_FADEOUT        $(SHORT_PLC_FADEOUT) [0,1]'
 	@echo 'Debug options:'
 	@echo '    AFL                      $(AFL) [0,1]'
 	@echo '    CLANG                    $(CLANG) [0-3]'

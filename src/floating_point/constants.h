@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
@@ -18,13 +17,15 @@
 extern const Complex dct2_16[16];
 
 /* Ari coder */
-extern const LC3_INT ari_tns_order_cf[2][9];
-extern const LC3_INT ari_tns_freq_cf[8][18];
+extern const LC3_INT16 ari_tns_order_cf[2][9];
+extern const LC3_INT16 ari_tns_freq_cf[8][18];
 extern const LC3_INT ari_spec_lookup_fl[4096];
-extern const LC3_INT ari_spec_cumfreq_fl[64][18];
+extern const LC3_INT16 ari_spec_cumfreq_fl[64][18];
 extern const LC3_INT ari_spec_bits_fl[64][17];
 
 /* SNS */
+extern const LC3_FLOAT sns_W[6];
+extern const LC3_FLOAT *sns_preemph_all[6];
 extern const LC3_FLOAT sns_LFCB[8][32];
 extern const LC3_FLOAT sns_HFCB[8][32];
 extern const LC3_INT   pvq_enc_A[16][11];
@@ -110,7 +111,6 @@ extern const LC3_INT bands_number_2_5ms_HR[6];
 extern const LC3_INT BW_cutoff_bin_all_2_5ms[MAX_BW_BANDS_NUMBER];
 extern const LC3_INT bands_number_2_5ms[5];
 
-
 extern const LC3_INT  BW_warp_idx_start_16k_5ms[4];
 extern const LC3_INT  BW_warp_idx_stop_16k_5ms[4];
 extern const LC3_INT  BW_warp_idx_start_24k_5ms[4];
@@ -127,6 +127,14 @@ extern const LC3_INT BW_cutoff_bin_all_HR[MAX_BW_BANDS_NUMBER];
 extern const LC3_INT BW_cutoff_bin_all_5ms_HR[MAX_BW_BANDS_NUMBER];
 extern const LC3_INT BW_cutoff_bin_all[MAX_BW_BANDS_NUMBER];
 extern const LC3_INT BW_cutoff_bits_all[MAX_BW_BANDS_NUMBER];
+
+extern const LC3_INT BW_cutoff_bin_all_7_5ms[MAX_BW_BANDS_NUMBER];
+extern const LC3_INT bands_number_7_5ms[6];
+extern const LC3_INT bands_number_7_5ms_HR[6];
+extern const LC3_INT* BW_warp_idx_start_all_7_5ms[4];
+extern const LC3_INT* BW_warp_idx_stop_all_7_5ms[4];
+extern const LC3_INT brickwall_dist_7_5ms[4];
+extern const LC3_INT* ACC_COEFF_PER_BAND_PLC_7_5ms[];
 
 /* Arithmetic coding */
 extern const LC3_INT tns_cf[8][18];
@@ -150,7 +158,6 @@ extern const LC3_FLOAT MDCT_WINDOW_480_2_5ms[240];
 extern const LC3_FLOAT* MDCT_WINS_2_5ms[2][6];
 extern const LC3_INT    MDCT_la_zeroes_2_5ms[6];
 
-
 extern const LC3_FLOAT MDCT_WINDOW_80_5ms[80];
 extern const LC3_FLOAT MDCT_WINDOW_160_5ms[160];
 extern const LC3_FLOAT MDCT_WINDOW_240_5ms[240];
@@ -159,12 +166,13 @@ extern const LC3_FLOAT MDCT_WINDOW_480_5ms[480];
 extern const LC3_FLOAT* MDCT_WINS_5ms[2][6];
 extern const LC3_INT    MDCT_la_zeroes_5ms[6];
 
+extern const LC3_FLOAT* MDCT_WINS_7_5ms[2][6];
+extern const LC3_INT32 MDCT_la_zeroes_7_5ms[6];
+
 extern const LC3_INT MDCT_WINDOWS_LENGTHS_10ms[6];
-
-extern const LC3_INT MDCT_WINDOWS_LENGTHS_2_5ms[6];
-
-
+extern const LC3_INT MDCT_WINDOWS_LENGTHS_7_5ms[6];
 extern const LC3_INT MDCT_WINDOWS_LENGTHS_5ms[6];
+extern const LC3_INT MDCT_WINDOWS_LENGTHS_2_5ms[6];
 
 /* Per band energy */
 extern const LC3_INT* ACC_COEFF_PER_BAND[6];
@@ -173,17 +181,25 @@ extern const LC3_INT* ACC_COEFF_PER_BAND_HR[6];
 extern const LC3_INT* ACC_COEFF_PER_BAND_2_5ms_HR[6];
 extern const LC3_INT* ACC_COEFF_PER_BAND_2_5ms[5];
 
+extern const LC3_INT* ACC_COEFF_PER_BAND_7_5ms_HR[6];
+extern const LC3_INT* ACC_COEFF_PER_BAND_7_5ms[5];
 
 extern const LC3_INT* ACC_COEFF_PER_BAND_5ms_HR[6];
 extern const LC3_INT* ACC_COEFF_PER_BAND_5ms[5];
 
 /* Near Nyquist detector */
 extern const LC3_INT NN_thresh;
-
+/* Tone detector */
+extern const LC3_INT32 TD_HR_thresh_10ms;
+extern const LC3_INT32 TD_HR_thresh_7_5ms;
+extern const LC3_INT32 TD_HR_thresh_5ms;
+extern const LC3_INT32 TD_HR_thresh_2_5ms; 
 
 extern const LC3_INT32 xavg_N_grp[5];
 extern const LC3_FLOAT *hannOla_wins[5];
 extern const LC3_INT32 gwlpr[MAX_LGW+1];
+extern const LC3_INT16 fade_scheme_tab[24 / 2][3];
+extern const LC3_FLOAT scATHFx[MAX_LGW - 2];
 extern const LC3_INT32 mdct_grp_bins[10];
 extern const LC3_FLOAT* PhECU_whr16ms_wins[5];
 
@@ -200,4 +216,7 @@ extern const LC3_FLOAT plc_tdc_lpc_48[17];
 extern const LC3_FLOAT plc_tdc_lpc_96[17];
 extern const LC3_FLOAT plc_tdc_lpc_8_25ms[9];
 
-#endif
+extern const LC3_INT16 plc_fadeout_param_maxlen[4];
+extern const LC3_INT16 plc_fadeout_param_maxbytes[4];
+extern const LC3_INT16 PLC_FADEOUT_TYPE_2_SELECTOR;
+#endif /* CONSTANTS_H */

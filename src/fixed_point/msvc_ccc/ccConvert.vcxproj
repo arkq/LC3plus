@@ -186,10 +186,10 @@
     <ClInclude Include="..\defines.h" />
     <ClInclude Include="..\dynmem.h" />
     <ClInclude Include="..\functions.h" />
-    <ClInclude Include="..\lc3.h" />
+    <ClInclude Include="..\lc3plus.h" />
     <ClInclude Include="..\rom_basop_util.h" />
-    <ClInclude Include="..\setup_dec_lc3.h" />
-    <ClInclude Include="..\setup_enc_lc3.h" />
+    <ClInclude Include="..\setup_dec_lc3plus.h" />
+    <ClInclude Include="..\setup_enc_lc3plus.h" />
     <ClInclude Include="..\tinywavein_c.h" />
     <ClInclude Include="..\tinywaveout_c.h" />
   </ItemGroup>
@@ -214,14 +214,14 @@
     <ClCompile Include="..\dct2_fx.c" />
     <ClCompile Include="..\dct4_fx.c" />
     <ClCompile Include="..\dec_entropy.c" />
-    <ClCompile Include="..\dec_lc3.c" />
+    <ClCompile Include="..\dec_lc3plus.c" />
     <ClCompile Include="..\detect_cutoff_warped_fx.c" />
     <ClCompile Include="..\enc_entropy.c" />
-    <ClCompile Include="..\enc_lc3.c" />
+    <ClCompile Include="..\enc_lc3plus.c" />
     <ClCompile Include="..\estimate_global_gain_fx.c" />
     <ClCompile Include="..\fft.c" />
     <ClCompile Include="..\imdct_fx.c" />
-    <ClCompile Include="..\lc3.c" />
+    <ClCompile Include="..\lc3plus.c" />
     <ClCompile Include="..\levinson_fx.c" />
     <ClCompile Include="..\ltpf_coder_fx.c" />
     <ClCompile Include="..\ltpf_decoder_fx.c" />
@@ -268,8 +268,8 @@
     <ClCompile Include="..\residual_decoding_fx.c" />
     <ClCompile Include="..\rom_basop_util.c" />
     <ClCompile Include="..\scale_signal24_fx.c" />
-    <ClCompile Include="..\setup_dec_lc3.c" />
-    <ClCompile Include="..\setup_enc_lc3.c" />
+    <ClCompile Include="..\setup_dec_lc3plus.c" />
+    <ClCompile Include="..\setup_enc_lc3plus.c" />
     <ClCompile Include="..\sns_compute_scf_fx.c" />
     <ClCompile Include="..\sns_interpolate_scf_fx.c" />
     <ClCompile Include="..\sns_quantize_scf_fx.c" />

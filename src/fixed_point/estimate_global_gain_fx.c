@@ -1,16 +1,13 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
-
-
 
 void processEstimateGlobalGain_fx(Word32 x[], Word16 x_e, Word16 lg, Word16 nbitsSQ,
 #ifdef ENABLE_HR_MODE
@@ -51,14 +48,14 @@ void processEstimateGlobalGain_fx(Word32 x[], Word16 x_e, Word16 lg, Word16 nbit
 #endif
 
     en = (Word32 *)scratchAlign(scratchBuffer,
-                                0); /* Size = 4 * MAX_LEN bytes : shouldnt this be 4 * MAX_LEN / 4 bytes */
+                                0); /* Size = MAX_LEN bytes */
 
 #ifdef ENABLE_HR_MODE
     if (hrmode)
     {
         M0 = 1;
         M1 = 1; /* Regularization factor; needs´to be 1e-5, but 1e-5 is 0 in Q15 */
-        en_exp = (Word16 *) scratchAlign(en, sizeof(*en) * 4 * MAX_LEN);
+        en_exp = (Word16 *) scratchAlign(en, sizeof(*en) * MAX_LEN);
     }
 #endif
     IF (*old_targetBits < 0)
@@ -275,6 +272,7 @@ void processEstimateGlobalGain_fx(Word32 x[], Word16 x_e, Word16 lg, Word16 nbit
                 {
                 case 25: mult_factor = 1311; break;
                 case 50: mult_factor = 655; break;
+                case  75: mult_factor =  437; break;
                 case 100: mult_factor = 328; break;
                 }
 

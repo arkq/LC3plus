@@ -1,21 +1,21 @@
 #!/usr/bin/perl -w
 
+#******************************************************************************
+#                        ETSI TS 103 634 V1.5.1                               *
+#              Low Complexity Communication Codec Plus (LC3plus)              *
+#                                                                             *
+# Copyright licence is solely granted through ETSI Intellectual Property      *
+# Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
+# estoppel or otherwise.                                                      *
+#*****************************************************************************/
+
 # ======================================
 # LC3plus ETSI Testvectors script V0.0.1
 # ======================================
 #
-# /******************************************************************************
-# *                        ETSI TS 103 634 V1.4.1                               *
-# *              Low Complexity Communication Codec Plus (LC3plus)              *
-# *                                                                             *
-# * Copyright licence is solely granted through ETSI Intellectual Property      *
-# * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
-# * estoppel or otherwise.                                                      *
-# ******************************************************************************/
-
 ##################################################
 my $EXE_TST_FX = './../src/fixed_point/LC3plus_HR';    # Path to test fixed point LC3plus executable
-my $EXE_TST_FL = './../src/floating_point/LC3plus'; # Path to test floating point LC3plus executable
+my $EXE_TST_FL = './../src/floating_point/LC3plus';    # Path to test floating point LC3plus executable
 my $md5_bin_fx = './md5_bin_fx.txt';
 my $md5_dec_fx = './md5_dec_fx.txt';
 my $md5_bin_fl = './md5_bin_fl.txt';
@@ -87,8 +87,15 @@ if ($log)
     open($fh, '>', $report) or die "Could not open file '$report' $!";
 }
 
+
 open(my $md5stream, '<', $md5_bin) or die "Could not open file '$md5_bin' $!";
 open(my $md5decoded, '<', $md5_dec) or die "Could not open file '$md5_dec' $!";
+
+if ($create)
+{
+    open(my $md5stream, '>', $md5_bin) or die "Could not open file '$md5_bin' $!";
+    open(my $md5decoded, '>', $md5_dec) or die "Could not open file '$md5_dec' $!";
+}
 
 print("Script started... \n");
 if ($create || $test)
@@ -129,6 +136,11 @@ if ($create || $test)
                 {
                     compare($output_stream, $output_decoded, $log, $fh, $md5stream, $md5decoded, \$testvectors_fail);
                 }
+                
+#                if ($create)
+#                {
+#                    create($output_stream, $output_decoded, $log, $fh, $md5stream, $md5decoded, \$testvectors_fail);
+#                }
             }
         }
     }
@@ -191,6 +203,54 @@ sub checkMD5
         exit(1);
     }
 }
+
+#sub create
+#{
+#    my ($stream_tst, $dec_tst, $log, $filehandle_log, $md5stream, $md5dec) = @_;
+#    my $ret;
+#    
+#    my $md5_ref_stream = <$md5stream>;
+#    my $md5_ref_dec = <$md5dec>;
+#    my $base_stream = basename($stream_tst);
+#    my $base_dec = basename($dec_tst);
+#    chomp($md5_ref_stream); chomp($md5_ref_dec);
+#    
+#    my @stream=split(/:/,$md5_ref_stream);
+#    my @dec=split(/:/,$md5_ref_dec);
+#    
+#    if ($stream[0] ne $base_stream || $dec[0] ne $base_dec)
+#    {
+#        print("Error: strings do not match!\n");
+#        exit(1);
+#    }
+#    
+#    if ($log)
+#    {
+#        print $filehandle_log "Creating MD5 of files: $stream_tst and $dec_tst\n";
+#    }
+#    
+#    my $md5 = qx($MY_MD5 $stream_tst);
+#    my ($hash_stream) = $md5 =~ /([a-z0-9]{32})/i;
+#    $hash_stream =~ s/^.//;
+#    
+#    $md5 = qx($MY_MD5 $dec_tst);
+#    my ($hash_dec) = $md5 =~ /([a-z0-9]{32})/i;
+#    $hash_dec =~ s/^.//;
+#    
+#    print $md5stream $stream_tst.":".$hash_stream."\n";
+#    print $md5dec $dec_tst.":".$hash_dec."\n";
+#    
+#    if ($log)
+#    {
+#        print $filehandle_log "Test MD5: stream=$hash_stream, dec=$hash_dec\n";
+#        if ($stream[1] ne $hash_stream || $dec[1] ne $hash_dec)
+#        {
+#            print $filehandle_log "The MD5 sums do NOT match!\n";
+#        } else {
+#            print $filehandle_log "The MD5 sums do match!\n";
+#        }
+#    }
+#}
 
 sub compare
 {

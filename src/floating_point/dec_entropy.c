@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
 
@@ -31,7 +30,7 @@ void read_bit_fl(LC3_UINT8* ptr, LC3_INT* mask_side, LC3_INT* bp_side, LC3_INT* 
 
 void read_uint_fl(LC3_INT nbits, LC3_UINT8* ptr, LC3_INT* mask_side, LC3_INT* bp_side, LC3_INT* val)
 {
-    LC3_INT bit = 0, i = 0;
+    LC3_INT bit, i;
 
     read_bit_fl(ptr, mask_side, bp_side, val);
 
@@ -53,7 +52,7 @@ LC3_INT paddingDec_fl(LC3_UINT8* bytes, LC3_INT nbbits, LC3_INT L_spec, LC3_INT 
     LC3_INT nbbytes = nbbits >> 3;
     LC3_INT lastnz;
     LC3_INT bw_cutoff_idx;
-    LC3_INT nbits = ceil(LC3_LOG2(L_spec / 2));
+    LC3_INT nbits = ceil(LC3_LOGTWO(L_spec / 2));
     
     if (nbits > nbbits)
     {
@@ -130,8 +129,8 @@ void processDecoderEntropy_fl(LC3_UINT8* bytes, LC3_INT numbytes, LC3_INT* mask_
                               LC3_INT* lsbMode, LC3_INT frame_dms)
 {
 
-    LC3_INT plc_trigger_bw = 0, plc_trigger_last_nz = 0, plc_trigger_SNS1 = 0, plc_trigger_SNS2 = 0, tmp = 0, bit = 0,
-        submodeMSB = 0, i = 0, ltpf_tmp[3] = {0}, ind = 0, submodeLSB = 0, bp_side_local = 0, mask_side_local = 0;
+    LC3_INT plc_trigger_bw, plc_trigger_last_nz, plc_trigger_SNS1, plc_trigger_SNS2, tmp, bit,
+        submodeMSB, i, ltpf_tmp[3], ind, submodeLSB, bp_side_local, mask_side_local;
     LC3_UINT8* ptr;
     LC3_INT      gainMSBbits[4] = {1, 1, 2, 2};
 
@@ -173,7 +172,7 @@ void processDecoderEntropy_fl(LC3_UINT8* bytes, LC3_INT numbytes, LC3_INT* mask_
     }
 
     /* Last non-zero tuple */
-    read_uint_fl(ceil(LC3_LOG2(N / 2)), ptr, &mask_side_local, &bp_side_local, lastnz);
+    read_uint_fl(ceil(LC3_LOGTWO(N >> 1)), ptr, &mask_side_local, &bp_side_local, lastnz);
     *lastnz = (*lastnz + 1) * 2;
 
     if (*lastnz > N) {

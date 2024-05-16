@@ -1,14 +1,16 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
+
+static const LC3_INT gainMSBbits[4] = {1, 1, 2, 2};
+static const LC3_INT gainLSBbits[4] = {0, 1, 0, 1};
 
 void processEncoderEntropy_fl(LC3_UINT8* bytes, LC3_INT* bp_side, LC3_INT* mask_side, LC3_INT numbytes, LC3_INT bw_cutoff_bits,
                               LC3_INT bw_cutoff_idx, LC3_INT lastnz, LC3_INT N, LC3_INT lsbMode, LC3_INT gg_idx, LC3_INT num_tns_filters,
@@ -17,8 +19,8 @@ void processEncoderEntropy_fl(LC3_UINT8* bytes, LC3_INT* bp_side, LC3_INT* mask_
                               )
 {
     LC3_UINT8* ptr;
-    LC3_INT      i = 0, submodeMSB = 0, submodeLSB = 0, tmp = 0, gainMSB = 0, gainLSB = 0;
-    LC3_INT      gainMSBbits[4] = {1, 1, 2, 2}, gainLSBbits[4] = {0, 1, 0, 1};
+    LC3_INT      i, submodeMSB, submodeLSB, tmp, gainMSB, gainLSB;
+
     
     LC3_INT16 lastnzTrigger[5] = {63, 127, 127, 255, 255};
 
@@ -33,11 +35,11 @@ void processEncoderEntropy_fl(LC3_UINT8* bytes, LC3_INT* bp_side, LC3_INT* mask_
 
     /* Last non zero touple */
     if (bfi_ext == 1) {
-        write_uint_backward_fl(ptr, bp_side, mask_side, lastnzTrigger[fs_idx], ceil(LC3_LOG2(N >> 1)));
+        write_uint_backward_fl(ptr, bp_side, mask_side, lastnzTrigger[fs_idx], ceil(LC3_LOGTWO(N >> 1)));
     }
     else
     {
-        write_uint_backward_fl(ptr, bp_side, mask_side, lastnz / 2 - 1, ceil(LC3_LOG2(N / 2)));
+        write_uint_backward_fl(ptr, bp_side, mask_side, lastnz / 2 - 1, ceil(LC3_LOGTWO(N >> 1)));
     }
 
     /* LSB mode bit */
@@ -99,27 +101,25 @@ void processEncoderEntropy_fl(LC3_UINT8* bytes, LC3_INT* bp_side, LC3_INT* mask_
 
 void write_uint_backward_fl(LC3_UINT8* ptr, LC3_INT* bp_side, LC3_INT* mask_side, LC3_INT val, LC3_INT numbits)
 {
-    LC3_INT k = 0, bit = 0;
+    LC3_INT k, bit;
 
     for (k = 0; k < numbits; k++) {
         bit = val & 1;
         write_bit_backward_fl(ptr, bp_side, mask_side, bit);
-        val = val / 2;
+        val = val >> 1;
     }
 }
 
 void write_bit_backward_fl(LC3_UINT8* ptr, LC3_INT* bp_side, LC3_INT* mask_side, LC3_INT bit)
 {
-    if (bit == 0) {
-        ptr[*bp_side] = ptr[*bp_side] & (255 - *mask_side);
-    } else {
+    if (bit != 0) {
         ptr[*bp_side] = ptr[*bp_side] | *mask_side;
-    }
+	}
 
     if (*mask_side == 128) {
         *mask_side = 1;
         *bp_side   = *bp_side - 1;
     } else {
-        *mask_side = *mask_side * 2;
+        *mask_side = *mask_side << 1;
     }
 }

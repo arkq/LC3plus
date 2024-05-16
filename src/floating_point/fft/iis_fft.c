@@ -1,20 +1,19 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include <assert.h>
 #include <stddef.h>
-#include "iis_fft.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../structs.h"
+#include <math.h>
+#include "iis_fft.h"
 
 /**************************************************************************************************/
 
@@ -23,10 +22,6 @@
  * iisfft is used for everything else. it is optimized for certain lengths. for a list of
    fast lengths, check the fft_n function.
 */
-
-#include <math.h>
-#include "cfft.h"
-#include "iisfft.h"
 
 #define FFT_COMPLEX 1
 #define FFT_REAL 2
@@ -40,14 +35,20 @@ static IIS_FFT_ERROR create(HANDLE_IIS_FFT* handle, LC3_INT type, LC3_INT len, I
     LC3_INT trlen = (type == FFT_COMPLEX) ? len : len / 2;
 
     /* check argument sanity */
-    if (sign != IIS_FFT_FWD && sign != IIS_FFT_BWD)
+    if ((sign != IIS_FFT_FWD) && (sign != IIS_FFT_BWD))
+    {
         return IIS_FFT_INTERNAL_ERROR;
+    }
 
 
     if (!(*handle))
+    {
       (*handle) = (HANDLE_IIS_FFT)calloc(1, sizeof(IIS_FFT));
+    }
     if (!(*handle))
+    {
         return IIS_FFT_MEMORY_ERROR;
+    }
 
     (*handle)->len  = len;
     (*handle)->sign = sign;
@@ -122,12 +123,15 @@ IIS_FFT_ERROR LC3_IIS_RFFT_Destroy(HANDLE_IIS_FFT* handle) { return real_destroy
 
 IIS_FFT_ERROR LC3_IIS_FFT_Apply_CFFT(HANDLE_IIS_FFT handle, const Complex* input, Complex* output)
 {
+    LC3_FLOAT* dummy;
     if (!handle)
+    {
         return IIS_FFT_INTERNAL_ERROR;
+    }
 
     /* check for inplace operation */
     memmove(output, input, sizeof(*input) * handle->len);
-    LC3_FLOAT* dummy = (LC3_FLOAT*)output;
+    dummy = (LC3_FLOAT*)output;
     if (handle->cfft.len > 0) {
         LC3_cfft_apply(&handle->cfft, dummy, dummy + 1, 2);
     } else {

@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
 
@@ -26,6 +25,24 @@ static const LC3_FLOAT* mdct_window(LC3_INT length, LC3_INT frame_dms, LC3_INT h
             return MDCT_WINS_10ms[hrmode][4];
         case 960:
             return MDCT_WINS_10ms[hrmode][5];
+        default:
+            return NULL;
+        }
+    }
+    else if (frame_dms == 75) {
+        switch (length) {
+        case 60:
+            return MDCT_WINS_7_5ms[hrmode][0];
+        case 120:
+            return MDCT_WINS_7_5ms[hrmode][1];
+        case 180:
+            return MDCT_WINS_7_5ms[hrmode][2];
+        case 240:
+            return MDCT_WINS_7_5ms[hrmode][3];
+        case 360:
+            return MDCT_WINS_7_5ms[hrmode][4];
+        case 720:
+            return MDCT_WINS_7_5ms[hrmode][5];
         default:
             return NULL;
         }
@@ -73,10 +90,13 @@ void mdct_init(Mdct* mdct, LC3_INT length, LC3_INT frame_dms, LC3_INT fs_idx, LC
 {
     if (frame_dms == 100) {
         mdct->leading_zeros = MDCT_la_zeroes[fs_idx];
-    } 
+    }
+    else if (frame_dms == 75) {
+        mdct->leading_zeros = MDCT_la_zeroes_7_5ms[fs_idx];
+    }
     else if (frame_dms == 50) {
         mdct->leading_zeros = MDCT_la_zeroes_5ms[fs_idx];
-    } 
+    }
     else if (frame_dms == 25) {
         mdct->leading_zeros = MDCT_la_zeroes_2_5ms[fs_idx];
     }
@@ -102,8 +122,9 @@ void mdct_free(Mdct* mdct)
 
 void mdct_apply(const LC3_FLOAT* input, LC3_FLOAT* output, Mdct* mdct)
 {
-    LC3_FLOAT tmp[MAX_LEN * 2] = {0};
-    LC3_INT   i = 0;
+    LC3_FLOAT tmp[MAX_LEN * 2];
+    LC3_INT   i;
+    LC3_INT hlen;
 
     move_float(tmp, mdct->mem, mdct->mem_length);
     move_float(tmp + mdct->mem_length, input, mdct->length);
@@ -112,7 +133,7 @@ void mdct_apply(const LC3_FLOAT* input, LC3_FLOAT* output, Mdct* mdct)
 
     mult_vec(tmp, mdct->window, mdct->length * 2);
 
-    LC3_INT hlen = mdct->length / 2;
+    hlen = mdct->length / 2;
     for (i = 0; i < hlen; i++) {
         output[i]        = -tmp[hlen * 3 - i - 1] - tmp[hlen * 3 + i];
         output[hlen + i] = tmp[i] - tmp[hlen * 2 - i - 1];

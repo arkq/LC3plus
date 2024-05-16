@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #ifndef FUNCTIONS_H
 #define FUNCTIONS_H
@@ -20,9 +19,9 @@
 
 #include "basop_util.h"
 #include "constants.h"
-#include "lc3.h"
-#include "setup_dec_lc3.h" /* for decoder state handle ptr  */
-#include "setup_enc_lc3.h" /* for encoder state handle ptr  */
+#include "lc3plus.h"
+#include "setup_dec_lc3plus.h" /* for decoder state handle ptr  */
+#include "setup_enc_lc3plus.h" /* for encoder state handle ptr  */
 #include "basop_mpy.h"
 
 #include <assert.h>
@@ -118,6 +117,9 @@ void processMdct_fx(
                     Word16 x[],
 #endif
                     Word16 x_exp, Word16 N,
+#  ifdef ENABLE_HR_MODE
+                    Word16       hrmode,    /* i:   indicate high precision */
+#  endif
 #ifdef ENABLE_HR_MODE
                     const Word32 w[], /* i:   window coefficients including normalization of sqrt(2/N) and scaled by 2^4 */
 #else
@@ -159,7 +161,11 @@ void ProcessingIMDCT(Word32 y[], Word16 *y_e,
 #endif
 );
 
+#ifdef ENABLE_HR_MODE
+void dct_IV(Word32 *pDat, Word16 *pDat_e, Word16 L, Word16 hrmode, Word32 *workBuffer);
+#else
 void dct_IV(Word32 *pDat, Word16 *pDat_e, Word16 L, Word32 *workBuffer);
+#endif
 
 #ifdef ENABLE_HR_MODE
 Word16 find_last_nz_pair(const Word32 x[], Word16 length);
@@ -277,7 +283,12 @@ void processPerBandEnergy_fx(Word32 *d2_fx, Word16 *d2_fx_exp, Word32 *d_fx, Wor
 );
 
 void processNearNyquistdetector_fx(Word16 *near_nyquist_flag, const Word16 fs_idx, const Word16 near_nyquist_index,
-                                   const Word16 bands_number, const Word32 *ener_fx, const Word16 ener_fx_exp);
+                                   const Word16 bands_number, const Word32 *ener_fx, const Word16 ener_fx_exp
+#ifdef ENABLE_HR_MODE
+                                  , Word16 frame_dms , Word16 hrmode);
+#else
+                                   );
+#endif
 void processDetectCutoffWarped_fx(Word16 *bw_idx, Word32 *d2_fx, Word16 d2_fx_exp, Word16 fs_idx, Word16 frame_dms);
 
 void process_resamp12k8_fx(Word16 x[], Word16 x_len, Word16 mem_in[], Word16 mem_in_len, Word32 mem_50[],
@@ -287,20 +298,25 @@ void process_resamp12k8_fx(Word16 x[], Word16 x_len, Word16 mem_in[], Word16 mem
                            );
 
 void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[], Word16 *pitch, Word16 *s12k8,
-                     Word16 len, Word16 *normcorr, Word16 *mem_pitch, Word16 s12k8_exp, Word16 frame_dms,
-                     Word8 *scratchBuffer);
+                     Word16 len, Word16 *normcorr, Word16 *mem_pitch, 
+                     Word16 *pitch_flag,                  
+                     Word16 s12k8_exp, Word16 frame_dms, Word8 *scratchBuffer);
 
 void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Word16 *old_wsp_exp, Word16 *old_wsp,
                            Word16 old_wsplen, Word16 *param, Word16 *wsp, Word16 len, Word16 *mem_normcorr,
                            Word16 *mem_mem_normcorr, Word16 ol_normcorr, Word16 *mem_ltpf_on, Word16 *mem_ltpf_pitch,
-                           Word16 wsp_exp, Word16 frame_dms, Word8 *scratchBuffer);
+                           Word16 wsp_exp, Word16 frame_dms, Word8 *scratchBuffer
+                           , Word16 hrmode
+);
 
 void process_ltpf_decoder_fx(Word16 *x_e, Word16 L_frame, Word16 old_x_len, Word16 fs_idx, Word16 old_y_len,
                              Word16 *old_e, Word16 *x, Word16 *old_x, Word16 *y, Word16 *old_y, Word16 ltpf,
                              Word16 ltpf_active, Word16 pitch_index, Word16 *old_pitch_int, Word16 *old_pitch_fr,
                              Word16 *old_gain, Word16 *mem_ltpf_active, Word16 scale_fac_idx, Word16 bfi,
                              Word16 concealMethod,
-                             Word16 damping, Word16 *old_scale_fac_idx, Word8 *scratchBuffer);
+                             Word16 damping, Word16 *old_scale_fac_idx, 
+                             Word32 *rel_pitch_change, Word16 hrmode, Word16 frame_dms,
+                             Word8 *scratchBuffer);
 
 void attack_detector_fx(LC3PLUS_Enc *enc, EncSetup *setup, Word16 *input, Word16 input_scaling, void *scratch);
 
@@ -353,6 +369,8 @@ void processPLCmain_fx(Word16 plcMeth, Word16 *concealMethod, Word16 *nbLostFram
 #ifdef ENABLE_HR_MODE
                        , Word16 hrmode
 #endif
+                       , Word32 rel_pitch_change
+                       , Word16 *alpha_type_2_table
                        );
 
 void processPLCupdate_fx(AplcSetup *plcAd, Word16 x_fx[], Word16 q_fx_exp, Word16 concealMethod, Word16 frame_length,
@@ -383,7 +401,9 @@ void processPLCclassify_fx(Word16 plcMeth, Word16 *concealMethod, Word16 *nbLost
 #      endif
                            );
 
-void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 bfi, Word16 prev_bfi,
+void processPLCapply_fx(
+    Word16 *concealMethod, 
+    Word16 nbLostFramesInRow, Word16 bfi, Word16 prev_bfi,
                         Word16 frame_length, Word16 la_zeroes,
 #ifdef ENABLE_HR_MODE
                         const Word32 w[],
@@ -398,6 +418,8 @@ void processPLCapply_fx(Word16 concealMethod, Word16 nbLostFramesInRow, Word16 b
 #ifdef ENABLE_HR_MODE
                         , Word16 hrmode
 #endif
+                        , Word32 rel_pitch_change
+                        , Word16 *alpha_type_2_table
                         );
 
 void processPLCNoiseSubstitution_fx(Word32 spec[], Word16 spec_prev[], Word16 L_spec);
@@ -405,10 +427,15 @@ void processPLCDampingScrambling_main_fx(Word16 bfi, Word16 concealMethod, Word1
                                          Word16 pc_nbLostFramesInRow, Word16 *ns_seed, Word16 *pc_seed, Word16 pitch_present_bfi1,
                                          Word16 pitch_present_bfi2, Word32 spec[], Word16 *q_fx_exp, Word16 *q_old_d_fx,
                                          Word16 *q_old_fx_exp, Word16 L_spec, Word16 stabFac, Word16 frame_dms,
-                                         Word16 *cum_fading_slow, Word16 *cum_fading_fast, Word16 spec_inv_idx);
+                                         Word16 *cum_fading_slow, Word16 *cum_fading_fast, Word16 spec_inv_idx
+                                         , UWord8 plc_fadeout_type                  
+                                         );
+
 void processPLCDampingScrambling_fx(Word32 spec[], Word16 L_spec, Word16 nbLostFramesInRow, Word16 stabFac, Word16 processDampScramb,
                                     Word16 *cum_fflcAtten, Word16 pitch_present, Word16 frame_dms, Word16 *cum_fading_slow,
-                                    Word16 *cum_fading_fast, Word16 *seed, Word16 spec_inv_idx);
+                                    Word16 *cum_fading_fast, Word16 *seed, Word16 spec_inv_idx
+                                    , UWord8 plc_fadeout_type                  
+                                    );
 
 void processLagwin_fx(Word32 r[], const Word32 w[], Word16 m);
 
@@ -438,7 +465,10 @@ void processTimeDomainConcealment_Apply_fx(const Word16 pitch_int, const Word16 
                                            Word32 *gain_c_fx, Word16 *synth_fx, Word16 *Q_syn,
                                            Word16 *alpha, Word16 max_len_pcm_plc,
                                            Word16 harmonicBuf_fx[MAX_PITCH], Word16 synthHist_fx[M], Word16 *const harmonicBuf_Q,
-                                           Word8 *scratchBuffer);
+                                           Word8 *scratchBuffer
+                                           , UWord8 plc_fadeout_type
+                                           , Word16 *alpha_type_2_table
+);
 
 void processTdac_fx(Word16 *ola_mem, Word16 *ola_mem_exp, const Word16 *synth, const Word16 synth_exp,
 #ifdef ENABLE_HR_MODE
@@ -499,13 +529,19 @@ void trans_burst_ana_fx(const Word16 *xfp,     /* i  : Input signal             
                         Word16 *     Xavg,      /* o  : Frequency group average gain to fade to                */
                         Word16 Q_spec, Word32 L_oold_xfp_w_E_fx, Word16 oold_xfp_w_E_exp_fx, Word16 oold_Ltot_exp_fx,
                         Word16 *oold_grp_shape_fx, Word32 L_old_xfp_w_E_fx, Word16 old_xfp_w_E_exp_fx,
-                        Word16 old_Ltot_exp_fx, Word16 *old_grp_shape_fx, Word8 *scratchBuffer);
+                        Word16 old_Ltot_exp_fx, Word16 *old_grp_shape_fx, 
+                        Word16 fadeout, 
+	                    Word32 *L_Xavg,  /*  full scale average band amplitudes  */           
+                        Word8 *scratchBuffer);
 
 void spec_ana_fx(Word16 *xfp, Word16 *, Word32 *, Word16 *, Word16 *, const Word16, const Word16,
                  const Word16 *, const Word16, const Word16, Word16 maxLprot, Word16 maxPlocs, Word8 *scratchBuffer);
 
 void subst_spec_fx(const Word16 *, const Word32 *, Word16 *, const Word16, Word16 *, const Word16 *, const Word16,
                    const Word16 *, const Word16, Word16 *, const Word16 *, const Word16 *, const Word16 *, const Word16
+				   ,const Word16, 
+	               Word16*,
+	               const Word32 *  
 );
 
 void rec_frame_fx(Word16 *     X,                                  /* i  : FFT spectrum */
@@ -553,6 +589,8 @@ void hq_phase_ecu_fx(const Word16 *prevsynth, /* i  : buffer of previously synth
                      Word16 *old_grp_shape_fx,
                      Word16  margin_prev_synth, /* i: margin in prev_synth(16ms for first bfi , 3.75 ms for other bfi
                                                    frames ) ,  from  plcAd.PhECU_margin_xfp */
+                     const Word16 fadeout,             /*i:  fadeout length indicator */
+                     Word16 *nonpure_tone_flag_ptr,    /* i/o : non-pure single tone indicator state */
                      Word8 *scratchBuffer       /* Size = 2 * MAX_LGW + 8 * MAX_LPROT + 12 * MAX_L_FRAME */
 );
 
@@ -720,7 +758,7 @@ int    paddingDec_fx(UWord8 *bytes, Word16 nbbits, Word16 L_spec, Word16 BW_cuto
 
 Word16 read_bit(UWord8 *ptr, Word16 *bp, Word16 *mask);
 
-/* setup_enc_lc3.c */
+/* setup_enc_lc3plus.c */
 int       alloc_encoder(LC3PLUS_Enc *encoder, int samplerate, int channels);
 void      set_enc_frame_params(LC3PLUS_Enc *encoder);
 LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc *encoder, int bitrate);
@@ -731,7 +769,7 @@ LC3PLUS_Error FillEncSetup(LC3PLUS_Enc *encoder, int samplerate, int channels
                            , int32_t lfe_channel_array[]
                           );
 
-/* setup_dec_lc3.c */
+/* setup_dec_lc3plus.c */
 int       alloc_decoder(LC3PLUS_Dec *decoder, int samplerate, int channels);
 void      set_dec_frame_params(LC3PLUS_Dec *decoder);
 LC3PLUS_Error update_dec_bitrate(LC3PLUS_Dec *decoder, int ch, Word16 nBytes);
@@ -747,5 +785,6 @@ LC3PLUS_Error Dec_LC3PLUS(LC3PLUS_Dec *decoder, UWord8 *input, int input_bytes, 
 
 void *balloc(void *base, size_t *base_size, size_t size);
 
+Word16 type_2_fadeout_fx(Word16 nbLostFramesInRow, Word16 frame_dms);
 
 #endif

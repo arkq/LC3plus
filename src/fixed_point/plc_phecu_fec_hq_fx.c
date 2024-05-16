@@ -1,19 +1,15 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "defines.h"
-
 #include "functions.h"
- 
 #include "math.h" /*dbg*/
-
 
 /*---------------------------------------------------------------------*
  * Local constants
@@ -24,62 +20,9 @@
  
 #define MAX_INCREASE_GRPPOW_FX 0 /* max. amplification in case of transients (in dB scale) */
 
-#if PLC2_FADEOUT_IN_MS   ==  0 
-#define BURST_ATT_THRESH (4)  /* speech start attenuate with <burst_att_thresh> losses in a row  , stable content  is +1  */
-#define ATT_PER_FRAME 2            /*  ptr to a table , regular voiced attenuation settings      table [0.4 dBx16 frames + 6dBx16 frames]    10 ms frame */
-/* #define ATT_PER_FRAME 1      */      /*  ptr to a table , regular   attenuation settings  table [0.3 dBx16 frames + 6dBx16 frames]    10 ms frame */
-#define BETA_MUTE_THR 20            /* time threshold from BFI start to start of beta-noise further energy attenuation,   by .5 each frame  */
-/*  #define OFF_FRAMES_LIMIT 30       in defines.h   , table size and complete zero signal after BURST_ATT_THRESH + OFF_FRAMES_LIMIT  */        
-#endif 
-
-#if PLC2_FADEOUT_IN_MS   !=  0         /*   TD_PLC muting setting */
-    /*% burst attenuation scheme is allowed to be indirectly controlled by a setting from TDC-PLC settings ,if negative PLC2_FADEOUT_IN_MS  */
-
-#if (PLC2_FADEOUT_IN_MS < 0)
-#define        FADEOUT_IN_MS  PLC_FADEOUT_IN_MS    /*% use TDC-SETTING as input */ 
-#else
-#define        FADEOUT_IN_MS  PLC2_FADEOUT_IN_MS  /*  % use a PLC2  individual settings as basis */
-#endif
-    
-  /*  %Examples
-    %   FADEOUT_IN_MS  ==30 ms --> shortest setting,  att per frame idx = 10    for PLC2   
-    %   FADEOUT_IN_MS  ==40 ms --> att per frame idx = 8  setting for PLC2
-    %   FADEOUT_IN_MS  ==60 ms --> att per frame idx = 6  setting for PLC2 (3+4) low decay then fast decay 
-    %   FADEOUT_IN_MS  ==80 ms --> att per frame idx = 4  setting for PLC2
-    %   FADEOUT_IN_MS ==100 ms --> att per frame idx = 2  longest = near original  setting for PLC2  
-   */ 
-#define    PLC_P800_SPEECH_FADEOUT_IN_FRAMES (FADEOUT_IN_MS/10)
-#define    PLC2_FADEOUT_IN_FRAMES  MIN(OFF_FRAMES_LIMIT,MAX(6, (3*PLC_P800_SPEECH_FADEOUT_IN_FRAMES))) /* help variable */   
-    
-#define    BURST_ATT_THRESH_PRE   MIN(5,MAX(1,((1*PLC2_FADEOUT_IN_FRAMES)/6))) /* nominal 10-50 ms to start  actual  muting, will be thresh +1   */
-
-#undef      ATT_PER_FRAME
-#define     ATT_PER_FRAME     MIN(10, MAX(2, 2*(6-BURST_ATT_THRESH_PRE)))    /* we let the BURST_ATT_THRESH_PRE  control the initial table selection */   
-/*   will eventually become  ATT_PER_FRAME-1 =    */
-                                   /* table ptr  1,2 --> 16 low decay, 16 high decay, "0" */
-                                   /* table ptr  3,4 -->  8 low decay, 24 high decay, "0" */
-                                   /* table ptr  5,6 -->  4 low decay, 28 high decay , "0"*/
-                                   /* table ptr  7,8 -->  2 low decay, 30  high decay, "0"*/
-                                   /* table ptr 9,10 -->  1 low decay, 31  high decay, "0"*/
-#undef      BURST_ATT_THRESH  
-#define     BURST_ATT_THRESH    MIN(BURST_ATT_THRESH_PRE, 4 )   /* nominal 10-40 ms, of no regular muting , 20-50 ms   */
- 
-     /* beta mute starts to become active when the low decay mute has ended */
-#undef      BETA_MUTE_THR 
-#define     BETA_MUTE_THR        MIN( 4+(OFF_FRAMES_LIMIT/2)+1 , MAX(4, BURST_ATT_THRESH + 1 +(1<<(BURST_ATT_THRESH_PRE-1))))   /* nominal time  to start mandatory decrease of Xavg */
-   
-
-
- 
-#if (ATT_PER_FRAME < 2)  ||  (ATT_PER_FRAME > 10) 
-#pragma  message(" ROM table  POW_ATT_TABLES needs update  to change the ATT_PER FRAME constants supported are (1),2  (3), 4, (5) ,6   dB/frame ") 
-#endif
-
-#else
-#if ( ATT_PER_FRAME != 2)   
-#pragma (" ROM table  POW_ATT_TABLES needs update  to change the ATT_PER FRAME constants supported are (1),2    dB/frame ")
-#endif
-#endif   
+#    define ONE_SIDED_SINE_WIDTH    (4)       /* expected pure sine main lobe   maximum width (4+1+4) bins *62.5 hz/bin  => approx 560 Hz total width    */  
+#    define SIDE_LIM  12539859L    /* 10^ (4.5/20.0) = 2^(a);  -->  x= 0.747433821  -> Lx_Q24 = round((1L<<(24))*0.747433821)) = 12539859   */ 
+#    define LFHF_LIM  16719812L    /* 10^ (6.0/20.0) = 2^(b);  -->  x= 0.996578428  -> Lx_Q24 = round((1L<<(24))*0.996578428)) =  16719812   */ 
 
 #define CMPLMNT_PLOC_SENS_FX 2294            /* (1.0 - p_locator_sens) in Q15 */
 #define FEC_HQ_ECU_ROOT2 23170 /*(0x5a83) */  /* sqrt(2) in Q14 */
@@ -110,6 +53,10 @@ Word16 rand_phase_fx(const Word16 seed, Word16 *sin_F, Word16 *cos_F);
 static Word16 imax2_jacobsen_mag_fx(const Word16 *y_re, const Word16 *y_im, const Word16 special);
 static void   fft_spec2_sqrt_approx_fx(const Word16 x[], Word16 xMagSqrt[], const Word16 N);
 static Word16 sqrtMagnApprox_fx(const Word16 re, const Word16 im);
+
+static Word16   plc_phEcu_nonpure_tone_ana_fx(const Word16* plocs, const Word16 n_plocs, const Word16* X,
+	const Word32 *L_Xavg,    /* i   : Frequency group amp averages for tonal tilt analysis    pref. Max upshifted  */
+	const  Word16 Lprot, const  Word16 fs_idx);
 
 static void rotate_W16_fx(Word16 re_in, Word16 im_in, Word16 cosFactor, Word16 sinFactor, Word16 *re_out_ptr,
    Word16 *im_out_ptr)
@@ -203,6 +150,8 @@ void trans_burst_ana_fx(
    Word16 *oold_grp_shape_fx,
 
    Word32 L_old_xfp_w_E_fx, Word16 old_xfp_w_E_exp_fx, Word16 old_Ltot_exp_fx, Word16 *old_grp_shape_fx,
+   Word16 fadeout,
+   Word32 * L_Xavg,  /*  full scale band amplitudes */
    Word8 *scratchBuffer /* Size = 4*4 * MAX_LTRANA + (2*4 + 1*2) * MAX_LGW  + 8 */
 )
 {
@@ -213,8 +162,8 @@ void trans_burst_ana_fx(
    Word16        man, expo;
    Word16        att_always = 0; /* fixed attenuation per frequency group if set to  1 */
    Word16        oneOverFrame, roundEstMusContent, tmp16; 
-   Word16        burst_att_thresh = BURST_ATT_THRESH; 
-   Word16        att_per_frame    = ATT_PER_FRAME;
+   Word16        burst_att_thresh;
+   Word16        att_per_frame;
    Word16 *      tr_dec;
    Word32        L_acc;
    Word16 fs_scale;
@@ -232,40 +181,49 @@ void trans_burst_ana_fx(
     Word32 L_tmp, L_tmp2;
     Word16 thresh_tr_rise_lin_Q15;
     Word16 thresh_tr_decay_lin_Q15;
-
+    Word16 beta_mute_thr;
+    Word16 fade_ms_ind;
 
 #ifdef DYNMEM_COUNT
-   Dyn_Mem_In("trans_burst_ana_fx", sizeof(struct {
+	Dyn_Mem_In("trans_burst_ana_fx", sizeof(struct {
 
-      Word16        att_val, attDegreeFrames;
-      Word32 *      pGrPowLeft_L, *pGrPowRight_L;
-      Word32 *      L_gr_pow_left, *L_gr_pow_right;
-      Word16        Lprot;
-      Word16        Lgw, i, k, burst_len;
-      Word16        man, expo;
-      Word16        att_always; /* fixed attenuation per frequency group if set to  1 */
-      Word16        oneOverFrame, roundEstMusContent, tmp16;
+		Word16        att_val, attDegreeFrames;
+		Word32 *      pGrPowLeft_L, *pGrPowRight_L;
+		Word32 *      L_gr_pow_left, *L_gr_pow_right;
+		Word16        Lprot;
+		Word16        Lgw, i, k, burst_len;
+		Word16        man, expo;
+		Word16        att_always; /* fixed attenuation per frequency group if set to  1 */
+		Word16        oneOverFrame, roundEstMusContent, tmp16;
 
-      Word16        burst_att_thresh;
-      Word16        att_per_frame;
+		Word16        burst_att_thresh;
+		Word16        att_per_frame;
 
-      Word16 *      tr_dec;
-      UWord16       lsb;
-      Word32        L_acc;
-      Word16        fs_scale;
-      Word16        scale_sh;
+		Word16 *      tr_dec;
+		UWord16       lsb;
+		Word32        L_acc;
+		Word16        fs_scale;
+		Word16        scale_sh;
 
-      Word32 L_oold_tmp;
-      Word32 L_old_tmp;
-      Word16 fs_idx;
-      Word16 shift32;
-      Word16 margin_old;
-      Word16 margin_oold;
+		Word32 L_oold_tmp;
+		Word32 L_old_tmp;
+		Word16 fs_idx;
+		Word16 shift32;
+		Word16 margin_old;
+		Word16 margin_oold;
 
-      Word16 Xavg_exp_fx, Xavg_mod_exp_fx;
-      Word16 tr_rise[MAX_LGW];
-      Word16 tr_decay[MAX_LGW];
-   }));
+		Word16 Xavg_exp_fx, Xavg_mod_exp_fx;
+		Word16 tr_rise[MAX_LGW];
+		Word16 tr_decay[MAX_LGW];
+
+		Word16  man_in, expo_in, tmp;
+		Word32 L_tmp, L_tmp2;
+		Word16 thresh_tr_rise_lin_Q15;
+		Word16 thresh_tr_decay_lin_Q15;
+
+        Word16 beta_mute_thr;
+        Word16 fade_ms_ind;
+	}));
 #endif
 
    UNUSED(xfp);
@@ -297,11 +255,24 @@ void trans_burst_ana_fx(
 
    UNUSED(est_stab_content);
    UNUSED(roundEstMusContent);
-   burst_att_thresh = add(BURST_ATT_THRESH, 1);    /* in Q0 , stable setting */
-   att_per_frame = sub(ATT_PER_FRAME, 1);       /* in Q0 , stable  setting */
+
+   move16();
+   fade_ms_ind = (PLC2_FADEOUT_IN_MS - PLC2_FADEOUT_IN_MS_MIN) / PLC2_FADEOUT_RES;   /* a shorter  fading entry in  fade_scheme_tab_fx  */
+   test();
+   if (fadeout != 0)
+   {
+       fade_ms_ind = (PLC2_FADEOUT_LONG_IN_MS - PLC2_FADEOUT_IN_MS_MIN) / PLC2_FADEOUT_RES;  move16();
+       /* a long fading table entry in fade_scheme_tab  */
+   }
+
+   move16(); move16(); move16();
+   att_per_frame = fade_scheme_tab_fx[fade_ms_ind][0];
+   burst_att_thresh = fade_scheme_tab_fx[fade_ms_ind][1]; /* number of 1.0 frames before  muting phase */
+                                                          /* band gain muting can take place earlier due to a band transient */
+   beta_mute_thr = fade_scheme_tab_fx[fade_ms_ind][2];  /* faster muting of added noise  starts when slow main signal fadeout is over */
  
 #ifdef    PLC_FADEOUT_IN_MS 
-  ASSERT(att_per_frame >= 1 &&  att_per_frame <=10 ); /* table based lookup restriction */
+   ASSERT(att_per_frame >= 1 && att_per_frame <= 12); /* table based lookup restriction */
 #else
  ASSERT(att_per_frame == 1 || att_per_frame == 2); /* table based lookup restriction */
 #endif
@@ -443,6 +414,7 @@ void trans_burst_ana_fx(
             {
                L_acc = L_shr_sat(L_acc, exp_diff);
             }
+			L_Xavg[k] = L_acc;  /* export  full 31 bit scale band amplitude */
             Xavg[k] = round_fx_sat(L_acc); /* extract high part */
 
          } /*end of new Xavg_fx calculation */
@@ -542,11 +514,17 @@ void trans_burst_ana_fx(
        * either ATT_PER_FRAME-1 or ATT_PER_FRAME and nothing else. This
        * means only 2 tables of size=(OFF_FRAMES_LIMIT+1) each are required.
        * To take square root into account, it is divided by 20 instead of 10. */
+
+      if (sub(burst_len, beta_mute_thr) > 0)  /* beta_mute_thr   coincides/close to  stronger 6dB muting phase  */
+         {
+            *beta_mute = shr_pos_pos(*beta_mute, 1);
+         }
+
       FOR(k = 0; k < Lgw; k++) /* Lgw may be shorter than all bands at 48k */
       {
          /* global burst attenuation */
- #if PLC2_FADEOUT_IN_MS   != 0 
-         /* att_per_frame idx = "1:10")  */
+ #if PLC2_FADEOUT_IN_MS   != 0 	  
+        /* att_per_frame idx = "1:12")  */
          att_val = POW_ATT_TABLES[att_per_frame][s_min(OFF_FRAMES_LIMIT, attDegreeFrames)];   move16();
 #else 
          /* att_per_frame idx = "1:2")   */
@@ -555,11 +533,6 @@ void trans_burst_ana_fx(
 #endif 
 
          mag_chg[k] = mult_r(mag_chg_1st[k], att_val); /* Q15 */
- 
-         if (sub(burst_len, BETA_MUTE_THR) > 0)  /* BETA_MUTE_THR ~= (5+15)  coincides/close to  stronger 6dB muting phase  */
-         {
-            *beta_mute = shr_pos_pos(*beta_mute, 1);
-         }
 
          alpha[k] = mag_chg[k];  move16();
          ASSERT(beta[k] == 0); /* initialization required */
@@ -1098,6 +1071,9 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          const Word16 *beta,         /* i   : Magnitude modification factors for fade to average Q15 */
          const Word16 *Xavg,         /* i   : Frequency group averages to fade to                Q0  */
          const Word16  t_adv         /* i   : time adjustement excluding time_offs               Q0  */
+		 ,const Word16 fadeout,            /* need for DC muting */
+         Word16 * nonpure_tone_flag_ptr, /* i/o : non-pure single tone indicator state */
+		 const Word32 * L_Xavg          /* i   : Frequency group amp averages for tonal tilt analysis    Max upshifted    */ 
       )
       {
          Word16  Xph_short;
@@ -1163,6 +1139,7 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          {
             BASOP_sub_sub_start("PhECU::subst_spec_fx(N)");
          }
+ 
 
          gwlpr_fxPlus1 = &(gwlpr_fx[1]); /* ptr init */
          fs_idx = mult(output_frame, (Word16)(32768.0 / 99.0)); /* truncation needed , i.e no rounding can be applied here */
@@ -1208,11 +1185,32 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          }
 
          one_peak_flag_mask = (Word16)0xFFFF; move16(); /* all ones mask -> keep  */
-         logic16();
-         if ((*num_plocs > 0) && sub(*num_plocs, 3) < 0)
-         {
-            one_peak_flag_mask = 0x0000;  move16(); /* all zeroes  mask -> zero  */
-         }
+		  test(); logic16();
+		  IF((*num_plocs > 0) && sub(*num_plocs, 3) < 0)
+		  {
+			  one_peak_flag_mask = 0x0000;  move16(); /* all zeroes  mask -> zeroes in valleys, single clean tone assumed    */
+
+			  /* revert initial pure tone  decision in some cases  */
+			  logic16(); logic16();
+			  IF((sub(*nonpure_tone_flag_ptr, 0) < 0) && 
+				  ((sub(fs_idx, 2) == 0)/* SemiSWB 24 kHz */ || (sub(fs_idx, 4) >= 0)) /* FB 48 kHz */  
+			  )
+			  {
+				  /* in the first lost frame  analyze spectra and spectral bands to possibly reverse an initial pure sine assumption  */
+				  *nonpure_tone_flag_ptr = plc_phEcu_nonpure_tone_ana_fx(plocs, *num_plocs, X,  L_Xavg,  Lprot, fs_idx);
+
+#ifdef				LOCAL_PLC2_TON_ANA_DEACTIVATE
+				  *nonpure_tone_flag_ptr = 0;  /* dbg of inactive tone analysis */
+#endif
+			  }
+
+
+			  if (sub(*nonpure_tone_flag_ptr, 0) > 0)
+			  {
+				  /* actually  revert single pure tone detection  */  /* 0->  mute all surrounding valley bins in evolution ,    0xff  -> generate noise in all valleys */
+				  one_peak_flag_mask = (Word16)0xFFFF;   move16(); /* all ones mask -> keep  */
+			  }
+		  }
 
          noise_mag_scale_neg = 0;  move16(); /* no change of valley noise magnitude */
          logic16();
@@ -1227,7 +1225,14 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
             X[shr_pos(Lprot, 1)] = 0;  move16(); /* also reset fs/2 if there are no peaks */
          }
 
-         IF(sub(tmp2, (BURST_ATT_THRESH+1)) > 0)
+         /* the binary selection of fadeout scheme  */
+         tmp = (PLC2_FADEOUT_IN_MS - PLC2_FADEOUT_IN_MS_MIN) / PLC2_FADEOUT_RES;  move16();
+         if (fadeout != 0)
+         {
+             tmp = (PLC2_FADEOUT_LONG_IN_MS - PLC2_FADEOUT_IN_MS_MIN) / PLC2_FADEOUT_RES; move16();
+         }
+
+         IF(sub(tmp2, add(fade_scheme_tab_fx[tmp][1],1) ) > 0)
          {
             /*   also start DC  scaling attenuation  */
             X[0] = mult(alpha[0], X[0]); move16();
@@ -1788,6 +1793,8 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          Word16  old_Ltot_exp_fx,                                                       /*true exp of energy */
          Word16 *old_grp_shape_fx,
          Word16  margin_prevsynth,
+         const Word16 fadeout,
+		 Word16 *nonpure_tone_flag_ptr, /* i/o : non-pure single tone indicator state */        
          Word8 *scratchBuffer /* Size = 2 * MAX_LGW + 8 * MAX_LPROT + 12 * MAX_L_FRAME */
       )
       {
@@ -1799,6 +1806,7 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          Word16  prevsynth_man_upshift;
          Word16 Q_prevsynthMinus1;
          Word8 *buffer;
+		 Word32   L_Xavg[MAX_LGW];   /* i/o   : Frequency group amp averages for tonal tilt analysis    Max upshifted    */      
 #ifdef DYNMEM_COUNT
          Dyn_Mem_In("hq_phase_ecu_fx", sizeof(struct {
             Counter i;
@@ -1809,6 +1817,7 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
             Word16  prevsynth_man_upshift;
             Word16 Q_prevsynthMinus1;
             Word8 *buffer;
+	       // ToDO  Word32 L_Xavg[MAX_LGW];
          }));
 #endif
 
@@ -1836,9 +1845,10 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
 
          test(); 
          ASSERT(prev_bfi >= 0 && prev_bfi <= 1);
-         IF( prev_bfi == 0 ) /* inside PhECU we can chek vs 0 */
+         IF( prev_bfi == 0 ) /* inside PhECU we can check vs 0 */
          {
             *time_offs = 0; move16();
+			*nonpure_tone_flag_ptr = -1;  move16(); /* flag nonpure tone flag for new analysis */
             /* analysis made outside,  up/down scaling here from static RAM to dynamic RAM */
             /*  prevsynth_in_flt =   prev_synth_man*2.^(-15 + exp_old)   */
             /*  X_sav_flt        =   X_man/2.^(Q_spec)                   */
@@ -1899,6 +1909,8 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
                mag_chg, &ph_dith, mag_chg_1st, output_frame, *time_offs, env_stab, alpha, beta, beta_mute, Xavg,
                (*Q_spec), L_oold_xfp_w_E_fx, oold_xfp_w_E_exp_fx, oold_Ltot_exp_fx, oold_grp_shape_fx,
                L_old_xfp_w_E_fx, old_xfp_w_E_exp_fx, old_Ltot_exp_fx, old_grp_shape_fx,
+               fadeout,
+				L_Xavg,  /*  full scale band amplitudes in first bfi frame */
                buffer);
 
             spec_ana_fx(&(xfp[0]), plocs, L_plocsi, num_p, X_sav, output_frame, bwidth_fx,
@@ -1939,6 +1951,8 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
                      (0), /* *Q_spec input only used in first bfi frames for burst analysis  */
                      L_oold_xfp_w_E_fx, oold_xfp_w_E_exp_fx, oold_Ltot_exp_fx, oold_grp_shape_fx, L_old_xfp_w_E_fx,
                      old_xfp_w_E_exp_fx, old_Ltot_exp_fx, old_grp_shape_fx,
+                     fadeout,
+					 NULL,  /*  full scale band amplitudes , only used in first bfi frame */
                      buffer);
          }
          /* cpy LPROT Word16 from Static RAM Xsav to working DRAM/scratch buffer X ;*/
@@ -1959,6 +1973,9 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          subst_spec_fx(plocs, L_plocsi, num_p, *time_offs, X, mag_chg, ph_dith, old_is_transient, output_frame,
             &seed, alpha, beta,
             Xavg, t_adv
+			 ,fadeout,
+			 nonpure_tone_flag_ptr, /* i/o : non-pure single tone indicator state */
+			 L_Xavg  /*i : only used in first bfi frame  */
          );
 
          if (seed_out_fxPtr != NULL)
@@ -2596,6 +2613,272 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          BASOP_sub_sub_end();
       }
 
+	  static Word16   plc_phEcu_nonpure_tone_ana_fx(const Word16* plocs,
+		  const Word16 n_plocs,
+		  const  Word16* X,              /*i: { DC, Re1,Re2 ,.....ReN ,   Fs/2,  ImN... , Im2, Im1} */
+		  const Word32 *L_Xavg,    /* i   : Frequency group amp averages for tonal tilt analysis    Max upshifted    */
+		  const  Word16 Lprot,
+		  const  Word16 fs_idx)
+	  {
+#ifdef DYNMEM_COUNT
+		  Dyn_Mem_In("PhECU::nonpure_tone_ana", sizeof(struct {
+			  Word16 nonpure_tone_detect;
+			  Word16 n_ind, tone_ind, low_ind, high_ind;
+			  Word16 peak_amp, peak_amp2, valley_amp, x_abs[(1 + 2 * ONE_SIDED_SINE_WIDTH + 2 * 1)];
+			  Word16 sineband_ind_low, sineband_ind_high;
+			  Word16 i, N_grp;
+			  Word16  tmp, tmp_dB;
+			  Word32 L_tot_inc_HF, L_tot_inc_LF;
+			  Word16* pRe;
+			  Word16* pIm;
+			  Word16* gwlpr_fxPlus1;
+			  Word32   L_nf;
+			  Word32  L_XavgL2_fx[MAX_LGW + 1];
+			  Word32  L_XavgUp_fx[MAX_LGW + 1];
+		  }));
+#endif
+
+		  BASOP_sub_sub_start("PhEcu::nonpure_tone_ana_fx");
+
+		  Word16 nonpure_tone_detect; /* output variable */
+		  Word16 n_ind, tone_ind, low_ind, high_ind;
+		  Word16 peak_amp, peak_amp2, valley_amp, x_abs[(1 + 2 * ONE_SIDED_SINE_WIDTH + 2 * 1)];
+
+		  Word16 sineband_ind_low, sineband_ind_high;
+		  Word16 i, N_grp;
+		  Word16  tmp;
+
+		  Word32 L_Ltot_inc_HF, L_Ltot_inc_LF;
+		  Word32 L_tmp_dB;
+ 
+		  const Word16* pRe;
+		  const Word16* pIm;
+		  const Word16* gwlpr_fxPlus1;
+		  Word32 L_nf;
+		  Word32  L_XavgL2_fx[MAX_LGW + 1], L_tmp ;
+		  Word32  L_XavgUp_fx[MAX_LGW + 1]; /* upscaled values , excluding peak band(s)  */
+
+		  /* use of a  compressed hearing sensitivity curve  allowing more energy deviation in highest and lowest bands */
+		  /* ROM table Word16 scATHFx[MAX_LGW - 1] */
+
+		  /* init */
+		  nonpure_tone_detect = 0;   move16();   /* Word16 register with decisions */
+
+		  peak_amp = 0;  move16();
+		  peak_amp2 = 0; move16();
+
+		  /*  limit single sine optimization to when 2 peaks are close enough to represent a single sinusoid */
+		  test();
+		  if ((sub(n_plocs, 2) == 0) &&
+			  (sub(sub(plocs[1], plocs[0]), ONE_SIDED_SINE_WIDTH) >= 0)
+			  )   /* NB, plocs is an ordered vector */
+		  {
+			  nonpure_tone_detect = s_or(nonpure_tone_detect, 0x01);
+		  }
+
+		  /* local bin wise dynamics analysis, for 1 or 2  initial local maxima peaks ,
+			 if 2 peaks ,  we do the analysis based on the location of the largest  abs peak */
+		  {
+			  tone_ind = 0; move16(); /* one peak only ,  use position plocs[tone_ind], tone_ind==0  */
+			
+			 peak_amp = shr(abs_s(X[0]), 1);  /* plocs[0]=0,   simply multiply DC*0.5  to match scaling in function sqrtMagnApprox_fx */
+			 test();
+			  IF(plocs[0] != 0)
+			  {
+				  peak_amp = sqrtMagnApprox_fx(X[plocs[0]], X[sub(Lprot, plocs[0])]);
+			  }
+
+			  IF(sub(n_plocs, 2) == 0)  /* locate abs max peak  */
+			  {
+				  peak_amp2 = sqrtMagnApprox_fx(X[plocs[1]], X[sub(Lprot, plocs[1])]);  /* Re-part and Im-part in different ends of array X */
+
+				  tmp = sub(peak_amp, peak_amp2);
+				  tone_ind = lshr(tmp, 15);             /* mask out sign bit 0(for peak_amp0),  1( for peak_amp2), lshr --> no sign extension in shift  */
+				  peak_amp = s_max(peak_amp, peak_amp2);
+			  }
+
+			  low_ind  = s_max(1, sub(plocs[tone_ind], (ONE_SIDED_SINE_WIDTH + 1)));                      /* DC is not allowed in the range   */
+			  high_ind = s_min(sub(shr(Lprot, 1), 2), add(plocs[tone_ind], (ONE_SIDED_SINE_WIDTH + 1)));  /* Fs/2 is not allowed  in the range */
+
+			  n_ind = add(sub(high_ind, low_ind), 1);
+			  /*  find lowest amplitude  around the assumed  main  lobe center location */
+  
+			  pRe = &(X[low_ind]);         /* ptr init */
+			  pIm = &(X[Lprot - low_ind]); /* ptr init*/
+			  FOR(i = 0; i < n_ind; i++)
+			  {
+				  x_abs[i] = sqrtMagnApprox_fx(*pRe++, *pIm--);   move16(); /* x_abs is downscaled by 0.5 in abs(complex) approximation */
+			  }
+
+			  valley_amp = peak_amp;          move16();
+			  FOR(i = 0; i < n_ind; i++)
+			  {
+				  valley_amp = s_min(x_abs[i], valley_amp);
+			  }
+
+			  /* at least  a localized amplitude ratio of 16 (24 dB)  required to declare a pure noise-free sinusoid  */
+			  if (sub(shr(peak_amp, 4), valley_amp) < 0)  /* 1/16  */
+			  {
+				  nonpure_tone_detect = s_or(nonpure_tone_detect, 0x02);  /* not a pure tone due to too low local SNR  P2V */
+			  }
+		  }
 
 
+		  /* analyze LF/ HF bands  energy dynamics vs the  assumed single tone band ( for one or two  peaks found cases ) */
+		  {
+			  /* Xavg , is a vector of rather rough MDCT based band amplitude estimates in perceptually motivated bands.  from approx the last 26 ms of synthesis */
 
+			  /*  eval amplitude relations  for assumed tonal  band vs  lower and higher bands */
+			  /*N_grp = xavg_N_grp[fs_idx];*/  /* { 4 NB , 5 WB , 6 SSWB , 7 SWB, 8  FB };  */
+			  N_grp = add(fs_idx, 4);
+			  assert(fs_idx < 5);
+
+
+			 /* establish band(s) with assumed sinusoid tone */
+			 /* if tone freq location is below first  MDCT-band definition,  use first band as band location anyway */
+
+			  /* band                 0   ,    1     ,     2      , 3      , ...*/
+			 /*  dct-inds "c"     "0"...11, 12...19,   20...35,     36 ...     */
+			  /*  gwplr_fx=    [   1      , 12(750Hz), 20(1250Hz) , 36     ,  ... */  /* lowest lim+1 in gwplr */
+
+			  /* for-loop BASOP version */
+			  tmp = 0;                          move16();
+			  gwlpr_fxPlus1 = &(gwlpr_fx[1]);  /* ptr init */
+			  FOR(i = 0; i < N_grp; i++)
+			  {
+				  if (sub(plocs[tone_ind], gwlpr_fxPlus1[i]) >= 0)
+				  {
+					  tmp = add(i, 1);
+				  }
+			  }
+
+			  sineband_ind_low = tmp;   move16();
+			  sineband_ind_high = tmp;  move16();  /* typically  in the same band as low  */
+
+			  /* a single tone may end up on a band border
+				, handle case when assumed tone is more or less right in-between two perceptual bands  +/- 4*62.5  Hz */
+
+			  test(); logic16();
+			  if ((sineband_ind_high > 0) &&
+				  (sub(sub(plocs[tone_ind], ONE_SIDED_SINE_WIDTH), gwlpr_fx[add(sineband_ind_high, 1)]) >= 0)
+				  )
+			  {
+				  sineband_ind_low = sub(sineband_ind_high, 1);
+			  }
+
+			  logic16();
+			  if ((sub(sineband_ind_low, sub(N_grp, 1)) < 0) &&
+				  (sub(add(plocs[tone_ind], ONE_SIDED_SINE_WIDTH), gwlpr_fx[add(sineband_ind_low, 1)]) >= 0)
+				  )
+			  {
+				  sineband_ind_high = add(sineband_ind_low, 1);
+			  }
+		  }
+
+		  /* intraframe(26 ms),    weighted LB and HB envelope dynamics/variation  analysis  */
+		   /* envelope analysis ,
+			  require at least two HF or two LF  bands in the envelope taper/roll-off  analysis ,  otherwise skip this  condition  */
+
+		  logic16(); 
+		  test(); logic16();
+		  IF( (nonpure_tone_detect == 0) &&
+			  ( (sub( add(sineband_ind_high, 2), N_grp) < 0 ) ||
+			    (sub(sineband_ind_low, 2+1 ) >= 0)
+				  )
+		  )
+		  {
+
+			  /* delta taper-off analysis solution, less sensitive to input bandwidth limitation and levels   */
+
+				  /* test Xavg Word16 result above  vs a high resolution Word32 L_Xavg */
+				  /* strong spectral tilt causes HF to be truncated in Word16 */
+ 
+				  basop_memcpy(L_XavgUp_fx, L_Xavg, N_grp * sizeof(Word32) ) ;
+
+				  /* first remove all energy from the assumed tonal peak  band(s) */
+				  L_XavgUp_fx[sineband_ind_low]  = L_min(L_XavgUp_fx[sineband_ind_low], 1); move32();
+				  L_XavgUp_fx[sineband_ind_high] = L_min(L_XavgUp_fx[sineband_ind_high], 1); move32();
+
+				  tmp = getScaleFactor32_0(L_XavgUp_fx, N_grp);                     /* o: measured headroom in range [0..32], 32 if all L_x[i] == 0 */
+				  if (sub(tmp, 32) == 0)
+				  {
+					  nonpure_tone_detect = s_or(nonpure_tone_detect, 0x100);   /* also set a  flag for an all zero L_Xavg coarse spectrum estimate signal  */
+				  }
+
+
+				  /* add noise floor to L_Xavg  before log2 function call */
+				  L_nf = L_shl(1L, sub(tmp, 1));
+				  L_nf = L_max(L_nf, 1L);
+				  for (i = 0; i < N_grp; i++)
+				  {
+					  L_XavgUp_fx[i] = L_shl_sat(L_XavgUp_fx[i], tmp); move32();  /* maximize precision before actual log2_fx(Word32) calc call */
+
+					  L_tmp = L_XavgUp_fx[i];  move32();
+					  test();
+					  if (L_tmp <= 0)
+					  {
+						  L_tmp = L_nf; move32();
+					  }
+
+					   /*  log2(Upshifted Word32) */
+					   /* maximize precision in BASOP Log2 function  */
+					  L_XavgL2_fx[i] = BASOP_Util_Log2(L_tmp);              /* L_input 1.0   or lower -->  output always negative */
+						/* add 31.0  to store as  fractional bits of an upscaled  positive Word32  integer input  ) */
+					  L_XavgL2_fx[i] = L_add(31L << 25, L_XavgL2_fx[i]);  /* only diffs added so 31.0 is cancelled out later , in total only values between +/- 2^6 = [-64 ... -64[   are possible  */
+				  } /* band i for L_Xavg  calc*/
+ /* verify that an assumed  clean sine does not have any odd HF content indications by thresholding the accumulated delta rise in  LF/HF side lobes   */
+			  L_Ltot_inc_HF = 0;             move32();
+			  for (i = (sineband_ind_high + 1); i < (N_grp - 1); i++)
+			  {
+				  L_tmp_dB = 0;   move32();
+				  if (L_sub(L_Xavg[i], L_Xavg[i + 1]) < 0) /* only increases are  accumulated    */
+				  {
+					  L_tmp_dB = L_sub(L_XavgL2_fx[i + 1], L_XavgL2_fx[i]);   /*  obtain ratio in log2 domain */
+				  }
+				  L_tmp = Mpy_32_16(L_tmp_dB, scATHFx[i]);  /* scATHFx[i] is the ATH weight for band i and band i+1 */
+				  L_tmp = L_shr_pos(L_tmp, 1); /* Q25 -> Q24 */
+
+				  L_Ltot_inc_HF = L_add(L_Ltot_inc_HF, L_tmp);           /*      Q24 */
+			  }
+
+			  /* verify that an assumed  clean sine does not have any odd LF  content by thresholding the accumulated LF reverse up tilt  */
+
+			  L_Ltot_inc_LF = 0;             move32(); 
+			  tmp = s_max(0, sub(sineband_ind_low, 1));  /* could also be pointer init */
+			  for (i = tmp; i > 0; i--)
+			  {
+				  L_tmp_dB = 0;   move32();
+				  if (L_sub(L_Xavg[i - 1], L_Xavg[i]) > 0) /* only increases are  accumulated    */
+				  {
+					  L_tmp_dB = L_sub(L_XavgL2_fx[i - 1], L_XavgL2_fx[i]);   /*  obtain ratio in log2 domain */
+				  }
+				  L_tmp         = Mpy_32_16(L_tmp_dB, scATHFx[i-1]);   /* scATHFx[i-1] is the ATH weight in between  band i-1 and band i */           
+				  L_tmp         = L_shr_pos(L_tmp, 1); /* Q25 -> Q24 */
+				  L_Ltot_inc_LF = L_add(L_Ltot_inc_LF, L_tmp);           /*      Q24 */
+			  }
+              
+			  if (L_sub(L_Ltot_inc_HF, SIDE_LIM) > 0)  /*  side_lim=round(Q24x*0.7474) */
+			  {
+				  /* 4.5 dB in log2 is   0.7474   */
+				  nonpure_tone_detect = s_or(nonpure_tone_detect, 0x10); /* still not a pure tone,  too  great  HF  side increase  */
+			  }
+
+			  if (L_sub(L_Ltot_inc_LF, SIDE_LIM) > 0)  /*  side_lim=round(Q24x*0.7474) */
+			  {
+				  /* 4.5 dB in log2 is   0.7474   */
+				  nonpure_tone_detect = s_or(nonpure_tone_detect, 0x20); /* still not a pure tone,  too  great  HF  side increase  */
+			  }
+ 
+			  /* verify that an assumed  clean sine does not have any odd LF+HF  content by thresholding the accumulated LF+HF unexpected  tilt  */
+			  if (L_sub(L_add_sat(L_Ltot_inc_LF, L_Ltot_inc_HF),  LFHF_LIM) > 0)  /*  side_lim=round(Q24x*0.7474) */
+			  {
+				  /* 6.0  dB in log2 is   0.996578428   */
+				  nonpure_tone_detect = s_or(nonpure_tone_detect, 0x40); /* still not a pure tone,  too  great  LF+HF  side increase  */
+			  }
+
+		  } /* bands available*/
+
+		  BASOP_sub_sub_end();
+
+		  return nonpure_tone_detect;
+	  }

@@ -1,18 +1,15 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "defines.h"
-
 #include "constants.h"
 #include "functions.h"
-
 
 void processPCmain_fx(Word16 rframe, Word16 *bfi, Word16 yLen, Word16 frame_dms, Word16 q_old_res_fx[],
                       Word16 *q_old_res_fx_exp, 

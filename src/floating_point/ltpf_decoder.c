@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
 
@@ -14,19 +13,24 @@ void process_ltpf_decoder_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_FLOAT* y, LC3_INT f
                              LC3_INT* mem_pitch_int, LC3_INT* mem_pitch_fr, LC3_FLOAT* mem_gain, LC3_INT* mem_beta_idx, LC3_INT bfi,
                              LC3_INT* param, LC3_INT* mem_param, LC3_INT conf_beta_idx, LC3_FLOAT conf_beta, LC3_INT concealMethod,
                              LC3_FLOAT damping
-                             , LC3_INT *mem_ltpf_active
+                             , LC3_INT *mem_ltpf_active                         
+                             , LC3_FLOAT *rel_pitch_change, LC3_INT hrmode, LC3_INT frame_dms
 )
 {
-    LC3_INT i = 0, j = 0, n = 0, N = 0, L_past_x = 0, N4 = 0, N34 = 0,
-        pitch_int = 0, pitch_fr = 0, p1 = 0, p2 = 0, L_past_y = 0, inter_len = 0, tilt_len = 0,
-        tilt_len_r = 0, inter_len_r = 0, old_x_len = 0, old_y_len = 0;
+    LC3_INT i, j, n, N, L_past_x, N4, N34,
+        pitch_int, pitch_fr, p1, p2, L_past_y, inter_len, tilt_len = 0,
+        tilt_len_r, inter_len_r, old_x_len, old_y_len;
 
-    LC3_FLOAT conf_alpha = 0, gain = 0, a1[MAX_LEN] = {0}, a2[MAX_LEN] = {0}, b1[MAX_LEN] = {0}, b2[MAX_LEN] = {0},
-          buf_x[4 * MAX_LEN] = {0}, buf_y[4 * MAX_LEN] = {0}, buf_z[4 * MAX_LEN] = {0}, pitch = 0, sum1 = 0, sum2 = 0;
-
+    LC3_FLOAT conf_alpha, gain, a1[12], a2[12], b1[11], b2[11],
+          buf_x[4 * MAX_LEN], buf_y[4 * MAX_LEN], buf_z[4 * MAX_LEN], pitch, sum1, sum2;
+	LC3_FLOAT *p_x, *p_y, *p_y2, *p_x_init, *p_y_init, *p_a1, *p_b1, *p_a2, *p_b2, fade_fac, current_fade_fac_up, current_fade_fac_down;
+    LC3_FLOAT pitch_fl_c_old, pitch_delta;
     const LC3_FLOAT *inter_filter[4], *tilt_filter[4];
 
-
+#ifdef WMOPS
+    push_wmops("process_ltpf_decoder_fl");
+#endif
+    pitch_fl_c_old = (LC3_FLOAT) *mem_pitch_int + (LC3_FLOAT)*mem_pitch_fr / 4.0;
     conf_alpha = 0.85;
 
     if (bfi != 1) {
@@ -212,6 +216,11 @@ void process_ltpf_decoder_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_FLOAT* y, LC3_INT f
         }
 
         /* First quarter of the current frame: cross-fading */
+        fade_fac = 1. / (LC3_FLOAT) N4;
+        current_fade_fac_up = 0.f;
+        current_fade_fac_down = 1.f;
+        (void) p_x; (void) p_y; (void) p_a1; (void) p_b1;
+        
         if (mem_param[1] == 0 && param[1] == 0) {
             memmove(&buf_y[L_past_y], &buf_x[L_past_x], sizeof(LC3_FLOAT) * N4);
 
@@ -231,8 +240,9 @@ void process_ltpf_decoder_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_FLOAT* y, LC3_INT f
                     j++;
                 }
 
-                buf_y[L_past_y + n] = buf_x[L_past_x + n] - (((LC3_FLOAT)N4 - (LC3_FLOAT)n) / (LC3_FLOAT)N4) * sum1 +
-                                      (((LC3_FLOAT)N4 - (LC3_FLOAT)n) / (LC3_FLOAT)N4) * sum2;
+                buf_y[L_past_y + n] = buf_x[L_past_x + n] - current_fade_fac_down * sum1 +
+                                      current_fade_fac_down * sum2;
+                current_fade_fac_down -= fade_fac;
             }
 
         } else if (mem_param[1] == 0 && param[1] == 1) {
@@ -251,7 +261,8 @@ void process_ltpf_decoder_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_FLOAT* y, LC3_INT f
                     j++;
                 }
 
-                buf_y[L_past_y + n] = buf_x[L_past_x + n] - ((LC3_FLOAT)n / (LC3_FLOAT)N4) * sum1 + ((LC3_FLOAT)n / (LC3_FLOAT)N4) * sum2;
+                buf_y[L_past_y + n] = buf_x[L_past_x + n] - current_fade_fac_up * sum1 + current_fade_fac_up * sum2;
+                current_fade_fac_up += fade_fac;
             }
         } else if (*mem_pitch_int == pitch_int && *mem_pitch_fr == pitch_fr) {
             for (n = 0; n < N4; n++) {
@@ -272,70 +283,103 @@ void process_ltpf_decoder_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_FLOAT* y, LC3_INT f
                 buf_y[L_past_y + n] = buf_x[L_past_x + n] - sum1 + sum2;
             }
         } else {
+            p_x_init = &buf_x[L_past_x];
+            p_y_init = &buf_y[L_past_y - p1 + inter_len - 1];
+            p_y2 = &buf_y[L_past_y];
             for (n = 0; n < N4; n++) {
                 sum1 = 0;
                 sum2 = 0;
-                j    = 0;
-                for (i = L_past_x + n; i >= L_past_x + n - tilt_len; i--) {
-                    sum1 += b1[j] * buf_x[i];
-                    j++;
+                p_b1 = b1;
+                p_x  = p_x_init;
+                for (i = tilt_len; i >= 0; i--) {
+                    sum1 += *p_b1 * *p_x;
+                    p_b1++;
+                    p_x--;
                 }
 
-                j = 0;
-                for (i = L_past_y + n - p1 + inter_len - 1; i >= L_past_y + n - p1 - inter_len; i--) {
-                    sum2 += a1[j] * buf_y[i];
-                    j++;
+                p_y  = p_y_init;
+                p_a1 = a1;
+                for (i = 2*inter_len - 1; i >= 0; i--) {
+                    sum2 += *p_a1 * *p_y;
+                    p_a1++;
+                    p_y--;
                 }
 
-                buf_y[L_past_y + n] = buf_x[L_past_x + n] - (((LC3_FLOAT)N4 - (LC3_FLOAT)n) / (LC3_FLOAT)N4) * sum1 +
-                                      (((LC3_FLOAT)N4 - (LC3_FLOAT)n) / (LC3_FLOAT)N4) * sum2;
+                *p_y2 = *p_x_init - current_fade_fac_down * sum1 +
+                                      current_fade_fac_down * sum2;
+                current_fade_fac_down -= fade_fac;
+                p_x_init++;
+                p_y_init++;
+                p_y2++;
             }
 
-            memmove(buf_z, buf_y, sizeof(LC3_FLOAT) * 4 * MAX_LEN);
+            move_float(buf_z, buf_y, (old_y_len + xLen));
+            p_x_init = &buf_z[L_past_y];  /* buf z in this case */
+            p_y_init = &buf_y[L_past_y - p2 + inter_len - 1];
+            p_y2 = &buf_y[L_past_y];
 
             for (n = 0; n < N4; n++) {
                 sum1 = 0;
                 sum2 = 0;
                 j    = 0;
-                for (i = L_past_y + n; i >= L_past_y + n - tilt_len; i--) {
-                    sum1 += b2[j] * buf_z[i];
-                    j++;
+                p_x  = p_x_init;
+                p_b2 = b2;
+                for (i = tilt_len; i >= 0; i--) {
+                    sum1 += *p_b2 * *p_x;
+                    p_b2++;
+                    p_x--;
                 }
 
-                j = 0;
-                for (i = L_past_y + n - p2 + inter_len - 1; i >= L_past_y + n - p2 - inter_len; i--) {
-                    sum2 += a2[j] * buf_y[i];
-                    j++;
+                p_y = p_y_init;
+                p_a2 = a2;
+                for (i = 2*inter_len - 1; i >= 0; i--) {
+                    sum2 += *p_a2 * *p_y;
+                    p_a2++;
+                    p_y--;
                 }
 
-                buf_y[L_past_y + n] = buf_z[L_past_y + n] - ((LC3_FLOAT)n / (LC3_FLOAT)N4) * sum1 + ((LC3_FLOAT)n / (LC3_FLOAT)N4) * sum2;
+                *p_y2 = *p_x_init - current_fade_fac_up * sum1 + current_fade_fac_up * sum2;
+                current_fade_fac_up += fade_fac;
+                p_x_init++;
+                p_y_init++;
+                p_y2++;
             }
         }
 
         /* Second quarter of the current frame */
         if (param[1] == 0) {
-            memmove(&buf_y[L_past_y + N4], &buf_x[L_past_x + N4],
-                    sizeof(LC3_FLOAT) * ((L_past_x + N4 + N34) - (L_past_x + N4)));
+            move_float(&buf_y[L_past_y + N4], &buf_x[L_past_x + N4],
+                    ((L_past_x + N4 + N34) - (L_past_x + N4)));
         } else {
+            p_x_init = &buf_x[L_past_x + N4];
+            p_y_init = &buf_y[L_past_y + N4 - p2 + inter_len - 1];
+            p_y2 = &buf_y[L_past_y + N4];
             for (n = 0; n < N34; n++) {
                 sum1 = 0;
                 sum2 = 0;
-                j    = 0;
-                for (i = L_past_x + N4 + n; i >= L_past_x + n + N4 - tilt_len; i--) {
-                    sum1 += b2[j] * buf_x[i];
-                    j++;
-                }
+                p_b2  = b2;
+                p_x   = p_x_init;
 
-                j = 0;
-                for (i = L_past_y + N4 + n - p2 + inter_len - 1; i >= L_past_y + N4 + n - p2 - inter_len; i--) {
-                    sum2 += a2[j] * buf_y[i];
-                    j++;
+                for (i = 0; i <= tilt_len; i++) {
+                    sum1 += *p_b2 * *p_x;
+                    p_b2++;
+                    p_x--;
                 }
-
-                buf_y[L_past_y + N4 + n] = buf_x[L_past_x + N4 + n] - sum1 + sum2;
+                
+                p_a2 = a2;
+                p_y  = p_y_init;
+                 
+                for (i = 2*inter_len - 1; i >= 0; i--) {
+                    sum2 += *p_a2 * *p_y;
+                    p_a2++;
+                    p_y--;
+                }
+                p_y_init++;
+                *p_y2 = *p_x_init - sum1 + sum2;
+                p_x_init++;
+                p_y2++;
             }
         }
-
         /* Output */
         move_float(y, &buf_y[L_past_y], N);
 
@@ -351,5 +395,13 @@ void process_ltpf_decoder_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_FLOAT* y, LC3_INT f
     *mem_pitch_int = pitch_int;
     *mem_pitch_fr  = pitch_fr;
     *mem_gain      = gain;
-    *mem_beta_idx  = conf_beta_idx;
+    *mem_beta_idx  = conf_beta_idx;                         
+    if (bfi == 0 && hrmode == 1 && (frame_dms == 50 || frame_dms == 25)){
+        pitch_delta = LC3_FABS(pitch_fl_c_old - (LC3_FLOAT)pitch_int - (LC3_FLOAT)(pitch_fr / 4.0));
+        *rel_pitch_change = pitch_delta / MAX(pitch_fl_c_old, 1);
+    }
+
+#ifdef WMOPS
+    pop_wmops();
+#endif
 }

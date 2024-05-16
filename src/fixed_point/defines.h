@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #ifndef DEFINES_H
 #define DEFINES_H
@@ -75,9 +74,6 @@
 #define FRAME_MS_BLOCK 25
 
 /* OPTIONS */
-#define ENABLE_2_5MS_MODE
-#define ENABLE_5MS_MODE
-#define ENABLE_10_MS_MODE
 #define ENABLE_ADVANCED_PLC
 #define ENABLE_ADVANCED_PLC_DEFAULT
 #define ENABLE_BW_CONTROLLER
@@ -90,12 +86,29 @@
 #define ENABLE_BANDWIDTH_FLAG
 #define ENABLE_RBANDWIDTH_FLAG
 #define ENABLE_EP_MODE_FLAG
-#define ENABLE_FRAME_MS_FLAG
+#define ENABLE_FRAME_MS_FLAG                   
 
 #ifndef NO_POST_REL_CHANGES
 /* Post-release non-bitexact changes */
 
 #endif /* NO_POST_REL_CHANGES Post-release changes */
+
+#      define THRESH_100_DMS_TDC_CNT    9
+#      define THRESH_100_DMS_NS_CNT     7
+#      define THRESH_100_DMS_TDC_NS_CNT 73
+#      define THRESH_075_DMS_TDC_CNT    7
+#      define THRESH_075_DMS_NS_CNT     7
+#      define THRESH_075_DMS_TDC_NS_CNT 87
+#      define THRESH_050_DMS_TDC_CNT    22
+#      define THRESH_050_DMS_NS_CNT     15
+#      define THRESH_050_DMS_TDC_NS_CNT 141
+#      define THRESH_025_DMS_TDC_CNT    20
+#      define THRESH_025_DMS_NS_CNT     21
+#      define THRESH_025_DMS_TDC_NS_CNT 278
+#  define PLC_LONGTERM_ANALYSIS_MS 200         /* Nominal analysis window 2000 ms   */
+#  define PLC_LONGTERM_ANALYSIS_STARTUP_FILL  (Word16)(0.5*32768.0)     /* 16384/32768 == 0.5 required buffer fill amount, set to 0.0 to not require any fill at all */
+
+#define REL_PITCH_THRESH 11796
 
 #  define MIN_BR_100DMS   16000  /*       20 * 800 * 100/100  */
 #    ifdef SUBSET_NB
@@ -115,6 +128,13 @@
 #define G192_ZERO 0x007F
 #define G192_ONE 0x0081
 #define READ_G192FER      /* allow C executable to also read G192 formatted FER files */
+
+#ifdef DEBUG 
+#ifdef READ_G192FER
+#  define  READ_G192_FER_BYTE  /* Allow C executable to also read G192 byte formatted FER files  0x20=BAD , 0x21=Good  */ 
+#endif 
+#endif 
+
 
 #define DYNMEM_COUNT
 #define STAMEM_COUNT
@@ -160,6 +180,17 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #    ifdef SUBSET_SSWB
 #      define MAX_BR_100DMS_SSWB 314400  /* for 100ms at 24kHz */
 #    endif
+
+#  define MIN_BR_075DMS_48KHZ_HR ((int)124800/ 800/2)* 800
+#  define MIN_BR_075DMS_96KHZ_HR ((int)149600/ 800/2)* 800
+#  define MIN_BR_075DMS   21334 /* ceil( 20 * 800 * 100/ 75) */
+#  define MAX_BR_075DMS  426667 /* ceil(400 * 800 * 100/ 75) */
+#  define MAX_BR_075DMS_NB   152534  /* ceil(143 * 800 * 100/ 75) */
+#  define MAX_BR_075DMS_WB   295467  /* ceil(277 * 800 * 100/ 75) */
+#  define MAX_BR_075DMS_SSWB 419200  /* ceil(393 * 800 * 100/ 75) */
+
+#  define NOISEFILLWIDTH_7_5MS 2
+#  define NOISEFILLSTART_7_5MS 18
 
 #define PACK_RESBITS
 
@@ -210,6 +241,7 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
                                  25dms:  64  kbps at !=44.1kHz,  58.8kbps at 44.1kHz */
 #define MAX_NBYTES_025 100  /* any dms: 320  kbps at !=44.1kHz, 294  kbps at 44.1kHz */
 #define MAX_NBYTES_050 200  /* any dms: 320  kbps at !=44.1kHz, 294  kbps at 44.1kHz */
+#define MAX_NBYTES_075 400  /* any dms: 320  kbps at !=44.1kHz, 294  kbps at 44.1kHz */
 #define MAX_NBYTES_100 400  /* any dms: 320  kbps at !=44.1kHz, 294  kbps at 44.1kHz */
 #ifdef ENABLE_HR_MODE
 #    define MIN_BR_25MS_48KHZ_HR ((int)172800/3200/2)*3200
@@ -252,6 +284,7 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #ifdef ENABLE_HR_MODE
 #  define SNS_DAMPING_HRMODE 19661 /* 0.6 in Q15 */
 #    define SNS_DAMPING_HRMODE_UB_10MS  6881 /* 0.21 in Q15 */
+#    define SNS_DAMPING_HRMODE_UB_7_5MS 5898 /* 0.18 in Q15 */
 #    define SNS_DAMPING_HRMODE_UB_5MS   4915 /* 0.15 in Q15 */
 #    define SNS_DAMPING_HRMODE_UB_2_5MS 4915 /* 0.15 in Q15 */
 #endif
@@ -321,17 +354,29 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #define LTPF_MEM_Y_LEN (MAX_LEN + CEILING(MAX_PITCH_12K8 * MAX_LEN, 128) + (MAX_LEN / 80))
 
 /* PLC */
-#define PLC_DEBUG
+#define PLC_FADEOUT_TYPE_1_IN_MS 200
+#define PLC_FADEOUT_IN_MS         60    /* fade-out to zero in ms for TD-PLC and NS, minimum value is 20 */ 
+                                                    /* table settings */
+#  define PLC2_FADEOUT_IN_MS_MIN        30          /* table min */
+#  define PLC2_FADEOUT_IN_MS_MAX        140         /* table max  */
+#  define PLC2_FADEOUT_RES   10                     /* 10 ms steps used in fade tables  */
 
-#define PLC_FADEOUT_IN_MS         60    /* fade-out to zero in ms for TD-PLC and NS, minimum value is 20 */
-#define PLC2_FADEOUT_IN_MS        30    /*  0 uses original fixed values for PLC2
-                                           -1 uses PLC_FADEOUT_IN_MS as basis for a PLC2 macro-re-calculation
-                                           30..100 uses separate setting for PLC2 */
+/* current settings */
+#  define PLC2_FADEOUT_LONG_IN_MS   120         
+#  define PLC2_FADEOUT_IN_MS        30          /*  0 uses original constants for  PLC2
+                                           -1 uses TDC::PLC_FADEOUT_IN_MS as basis for a PLC2 macro-re-calculation
+                                           30..140 will use a separate settings for PLC2 fadeout
+                                             30: P800 short fade optimization
+                                             120: Mushra optimized  fade */
+
+
+
 #define PLC4_TRANSIT_END_IN_MS PLC_FADEOUT_IN_MS    /* end   of transition time for noise substitution */
 #define PLC4_TRANSIT_START_IN_MS  20    /* begin of transition time for noise substitution for voiced signals */
 #define PLC34_ATTEN_FAC_100_FX   0x4000 /* attenuation factor for NS and TDC @ 10  ms (0.5000)*/
 #define PLC34_ATTEN_FAC_050_FX   0x5A83 /* attenuation factor for NS and TDC @ 5.0 ms (0.7071)*/
 #define PLC34_ATTEN_FAC_025_FX   0x6BA3 /* attenuation factor for NS and TDC @ 2.5 ms (0.8409)*/
+#define PLC34_ATTEN_FAC_075_FX   0x4C1C /* attenuation factor for NS and TDC @ 7.5 ms (0.5946) */
 #define PLC3_HPBLENDTHROTTLE      30    /* higher numbers increase throttled blending from hp filtered to unfiltered uv excitation (0 is no throttle) */
 
 #define MAX_PITCH_8K (CEILING((MAX_PITCH_12K8 * 8000), (12800))) /*NB  was a risky MACRO   at 0.5 border !!,    */

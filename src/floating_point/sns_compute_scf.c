@@ -1,21 +1,24 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
 
-void processSnsComputeScf_fl(LC3_FLOAT* x, LC3_INT tilt, LC3_INT xLen, LC3_FLOAT* gains, LC3_INT smooth, LC3_FLOAT sns_damping, LC3_FLOAT attdec_damping_factor)
+void processSnsComputeScf_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_FLOAT* gains, LC3_INT smooth, LC3_FLOAT sns_damping, LC3_FLOAT attdec_damping_factor, LC3_INT fs_idx)
 {
-    LC3_INT   bands_number = 0, d = 0, i = 0, j = 0, n = 0, n2 = 0, n4 = 0, mapping[64] = {0};
-    LC3_FLOAT tmp[64] = {0}, x_tmp1[MAX_LEN] = {0}, x_tmp2[MAX_LEN] = {0}, sum = 0, mean = 0, xl4[16] = {0}, nf = 0, xl[64] = {0}, gains_smooth[M] = {0}, ratio = 0;
-    LC3_FLOAT W[6] = {1.0 / 12.0, 2.0 / 12.0, 3.0 / 12.0, 3.0 / 12.0, 2.0 / 12.0, 1.0 / 12.0};
-
+    LC3_INT   bands_number, d, i, j, n, n2, n4, mapping[64];
+    LC3_FLOAT x_tmp1[MAX_LEN], sum, mean, nf, gains_smooth[M], ratio;
+    LC3_FLOAT sum_gains_smooth;
+    const LC3_FLOAT* sns_preemph;
+    
+    sum_gains_smooth = 0; sum = 0;
+    sns_preemph = sns_preemph_all[fs_idx];
+    
     bands_number = xLen;
     assert(bands_number <= 64);
 
@@ -27,13 +30,14 @@ void processSnsComputeScf_fl(LC3_FLOAT* x, LC3_INT tilt, LC3_INT xLen, LC3_FLOAT
         {
             j = 0;
             for (i = 0; i < 2 * d; i = i + 2) {
-                tmp[i]     = x[j];
-                tmp[i + 1] = x[j];
+                x_tmp1[i]     = x[j];
+                x_tmp1[i + 1] = x[j];
                 j++;
             }
 
-            move_float(&tmp[2 * d], &x[d], 64 - 2 * d);
-        } else if (ceil(64.0 / (LC3_FLOAT) xLen) == 4)
+            move_float(&x_tmp1[2 * d], &x[d], 64 - 2 * d);
+        }
+        else if (bands_number < 32)
         {
             ratio = LC3_FABS((LC3_FLOAT) (1.0 - 32.0 / (LC3_FLOAT) xLen));
             n4 = round(ratio * xLen);
@@ -59,13 +63,13 @@ void processSnsComputeScf_fl(LC3_FLOAT* x, LC3_INT tilt, LC3_INT xLen, LC3_FLOAT
             
             for (i = 0; i < 64; i++)
             {
-                tmp[i] = x[mapping[i] - 1];
+                x_tmp1[i] = x[mapping[i] - 1];
             }
         } else {
             assert(0 && "Unsupported number of bands!");
         }
 
-        move_float(x, tmp, 64);
+        move_float(x, x_tmp1, 64);
 
         bands_number = 64;
         xLen         = bands_number;
@@ -75,20 +79,17 @@ void processSnsComputeScf_fl(LC3_FLOAT* x, LC3_INT tilt, LC3_INT xLen, LC3_FLOAT
     /* Smoothing */
 
     x_tmp1[0] = x[0];
+    move_float(&x_tmp1[1], &x[0], 63);
 
-    move_float(&x_tmp1[1], &x[0], xLen - 1);
-
-    move_float(&x_tmp2[0], &x[1], xLen - 1);
-
-    x_tmp2[xLen - 1] = x[xLen - 1];
-
-    for (i = 0; i < xLen; i++) {
-        x[i] = 0.5 * x[i] + 0.25 * (x_tmp1[i] + x_tmp2[i]);
+    for (i = 0; i < 63; i++) {
+        x[i] = 0.5 * x[i] + 0.25 * (x_tmp1[i] + x[i + 1]);
     }
+    
+    x[63] = 0.5 * x[63] + 0.25 * (x_tmp1[63] + x[63]);
 
     /* Pre-emphasis */
-    for (i = 0; i < xLen; i++) {
-        x[i] = x[i] * LC3_POW(10.0, (LC3_FLOAT)i * (LC3_FLOAT)tilt / ((LC3_FLOAT)bands_number - 1.0) / 10.0);
+    for (i = 0; i < 64; i++) {
+        x[i] = x[i] * sns_preemph[i];
     }
 
     /* Noise floor at -40dB */
@@ -96,10 +97,10 @@ void processSnsComputeScf_fl(LC3_FLOAT* x, LC3_INT tilt, LC3_INT xLen, LC3_FLOAT
         sum += x[i];
     }
 
-    mean = sum / (LC3_FLOAT)xLen;
+    mean = sum * 0.015625; /* 1/64 */
 
-    nf = mean * LC3_POW(10.0, -40.0 / 10.0);
-    nf = MAX(nf, LC3_POW(2.0, -32.0));
+    nf = mean * 1.00e-04;
+    nf = MAX(nf, 2.328306436538696e-10);
 
     for (i = 0; i < 64; i++) {
         if (x[i] < nf) {
@@ -109,45 +110,40 @@ void processSnsComputeScf_fl(LC3_FLOAT* x, LC3_INT tilt, LC3_INT xLen, LC3_FLOAT
 
     /* Log-domain */
     for (i = 0; i < 64; i++) {
-        xl[i] = LC3_LOG2(x[i]) / 2.0;
+        x[i] = LC3_LOGTWO(x[i]) * 0.5;
     }
 
     /* Downsampling */
-    for (n = 0; n < bands_number / 4; n++) {
+    for (n = 0; n < 16; n++) {
         if (n == 0) {
-            tmp[0] = xl[0];
+            x_tmp1[0] = x[0];
 
-            move_float(&tmp[1], &xl[0], 5);
+            move_float(&x_tmp1[1], &x[0], 5);
 
-        } else if (n == (bands_number / 4 - 1)) {
-            move_float(tmp, &xl[59], 5);
+        } else if (n == 15) {
+            move_float(x_tmp1, &x[59], 5);
 
-            tmp[5] = xl[63];
+            x_tmp1[5] = x[63];
 
         } else {
-            move_float(tmp, &xl[n * 4 - 1], ((n * 4 + 5 - 1) - (n * 4 - 1) + 1));
+            move_float(x_tmp1, &x[n * 4 - 1], ((n * 4 + 5 - 1) - (n * 4 - 1) + 1));
         }
 
         sum = 0;
         for (i = 0; i < 6; i++) {
-            sum += tmp[i] * W[i];
+            sum += x_tmp1[i] * sns_W[i];
         }
 
-        xl4[n] = sum;
+        gains_smooth[n] = sum;
+        sum_gains_smooth += sum;
     }
 
 
     /* Remove mean and scaling */
+    mean = sum_gains_smooth / 16.0;
 
-    sum = 0;
-    for (i = 0; i < bands_number / 4; i++) {
-        sum += xl4[i];
-    }
-
-    mean = sum / ((LC3_FLOAT)bands_number / 4.0);
-
-    for (i = 0; i < bands_number / 4; i++) {
-        gains[i] = sns_damping * (xl4[i] - mean);
+    for (i = 0; i < 16; i++) {
+        gains[i] = sns_damping * (gains_smooth[i] - mean);
     }
 
     /* Smoothing */

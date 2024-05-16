@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
-*                        Software Version V1.6.9ETSI                          *
+*                        Software Version V1.7.4ETSI                          *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-
 
 Description
 -----------
@@ -39,7 +38,7 @@ Features
                                 48 kHz, 96 kHz
     - Multichannel support by multi-mono coding
     - Support of audio sample depth: 16 bits and 24 bits
-    - Frame duration of 10 ms, 5 ms and 2.5 ms
+    - Frame duration of 10 ms, 7.5 ms, 5 ms and 2.5 ms
     - Supported bit rates as outlined in Table 5.1 and Table 5.2 of TS 103 634
     - Packet loss concealment as defined in ETSI TS 103 634
 
@@ -47,6 +46,26 @@ Changelog
 ---------
   Latest non-bitexact changes are encapsulated in defines listed in defines.h
   for review.
+  
+    - V1.7.4ETSI 2024-05-01 (ETSI TS 103 634 V1.5.1)
+       - General
+            - Accepted defines CR8, CR9, CR10 and CR11
+  
+    - V1.7.3ETSI 2024-04-01 (ETSI TS 103 634 V1.4.5)
+       - General
+            - Implemented CR1 on ETSI TS 103 634 V1.4.4 (changes marked with CR11)
+
+    - V1.7.2ETSI 2024-03-13 (ETSI TS 103 634 V1.4.4)
+       - General
+            - Implemented CR1 on ETSI TS 103 634 V1.4.3 (changes marked with CR10)
+
+    - V1.7.1ETSI 2024-02-09 (ETSI TS 103 634 V1.4.4)
+       - General
+            - Implemented CR1 on ETSI TS 103 634 V1.4.2 (changes marked with CR9)
+  
+    - V1.7.0ETSI 2023-09-15 (ETSI TS 103 634 V1.4.2)
+       - General
+            - Implemented CR1, CR2 and CR3 on ETSI TS 103 634 V1.4.1 (changes marked with CR8)
   
     - V1.6.9ETSI 2023-03-01 (ETSI TS 103 634 V1.4.1)
        - General

@@ -1,15 +1,13 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
-
 
 /*************************************************************************/
 
@@ -17,7 +15,9 @@
 void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Word16 *mem_in_exp, Word16 mem_in[],
                            Word16 mem_in_len, Word16 param[], Word16 *xin, Word16 len, Word16 *mem_normcorr,
                            Word16 *mem_mem_normcorr, Word16 ol_normcorr, Word16 *mem_ltpf_on, Word16 *mem_ltpf_pitch,
-                           Word16 xin_exp, Word16 frame_dms, Word8 *scratchBuffer)
+                           Word16 xin_exp, Word16 frame_dms, Word8 *scratchBuffer
+                           , Word16 hrmode
+)
 {
     Word16  pitch_index, scale0, scale1, scale2, *x, x_exp, shift, prod_exp, ltpf_pitch;
     Word32  L_tmp, cor_max32, sum0, sum1, sum2, prod, inv;
@@ -78,7 +78,14 @@ void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Wo
         *mem_in_exp = x_exp; move16();
     }
 
-    IF (sub(ol_normcorr, 19660) > 0)
+    Word32 normCorrTh = 0; 
+    if (hrmode) {
+        normCorrTh = 13107;
+    } else {
+        normCorrTh = 19660;
+    }
+
+    IF (sub(ol_normcorr, normCorrTh) > 0)
     {
         /* Autocorrelation Bounds */
         min_pitch    = sub(ol_pitch, 4);

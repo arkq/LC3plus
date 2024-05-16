@@ -1,15 +1,13 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
-
 
 static int Dec_LC3PLUS_Channel_fl(LC3PLUS_Dec* decoder, int channel, uint8_t* bs_in, void* s_out, int bps, int bfi_ext)
 {
@@ -53,25 +51,19 @@ static int Dec_LC3PLUS_Channel_fl(LC3PLUS_Dec* decoder, int channel, uint8_t* bs
         
         if (decoder->rframe == 1 && zero_frame == 0 && bfi != 1)
         {
-            bfi = 2;
             LC3_INT32 max_bw_stopband = BW_cutoff_bin_all[bw_cutoff_idx];
+            bfi = 2;
             switch (decoder->frame_dms)
             {
-#      ifdef ENABLE_025_DMS_MODE
             case 25:
                 max_bw_stopband  = max_bw_stopband >> 2;
                 break;
-#      endif
-#      ifdef ENABLE_050_DMS_MODE
             case 50:
                 max_bw_stopband  = max_bw_stopband >> 1;
                 break;
-#      endif
-#      ifdef ENABLE_075_DMS_MODE
             case 75:
                 max_bw_stopband = 3 * (max_bw_stopband >> 2);
                 break;
-#      endif
             case 100:
                 break;
             }
@@ -150,7 +142,9 @@ static int Dec_LC3PLUS_Channel_fl(LC3PLUS_Dec* decoder, int channel, uint8_t* bs
                                        &h_DecSetup->PlcAdvSetup->cum_fading_slow, &h_DecSetup->PlcAdvSetup->cum_fading_fast,
                                        h_DecSetup->PlcSetup.q_d_prev, h_DecSetup->sqQdec_fl, h_DecSetup->spec_inv_idx, decoder->yLen, bfi,
                                        decoder->frame_dms, h_DecSetup->concealMethod, h_DecSetup->ltpf_mem_pitch, h_DecSetup->ltpf_param[0],
-                                       &h_DecSetup->PlcAdvSetup->cum_fflcAtten);
+                                       &h_DecSetup->PlcAdvSetup->cum_fflcAtten
+                                       , h_DecSetup->PlcAdvSetup->plc_fadeout_type
+                                      );
     
     /* IMDCT */
     if (h_DecSetup->concealMethod == 4 || bfi != 1 )
@@ -170,6 +164,7 @@ static int Dec_LC3PLUS_Channel_fl(LC3PLUS_Dec* decoder, int channel, uint8_t* bs
                             bfi, h_DecSetup->ltpf_param, h_DecSetup->ltpf_param_mem, h_DecSetup->ltpf_conf_beta_idx,
                             h_DecSetup->ltpf_conf_beta, h_DecSetup->concealMethod, h_DecSetup->alpha
                             , &h_DecSetup->ltpf_mem_active
+                            , &h_DecSetup->rel_pitch_change, decoder->hrmode, decoder->frame_dms
                            );
 
     {
@@ -239,7 +234,10 @@ LC3PLUS_Error Dec_LC3PLUS_fl(LC3PLUS_Dec* decoder, uint8_t* input, LC3_INT32 num
                 }
 
                 bfi = Dec_LC3PLUS_Channel_fl(decoder, ch, input, output[ch], bps, bfi);
-                input += decoder->channel_setup[ch]->targetBytes;
+                if (input != NULL)
+                {
+                    input += decoder->channel_setup[ch]->targetBytes;
+                }
             }
         }
         else
@@ -270,7 +268,11 @@ LC3PLUS_Error Dec_LC3PLUS_fl(LC3PLUS_Dec* decoder, uint8_t* input, LC3_INT32 num
                         channel_bfi = 1;
                     }
 
-                    input         = input + np_zero;
+                    if (input != NULL)
+                    {
+                        input = input + np_zero;
+                    }
+                    
                     decoder->n_pc = MAX(decoder->n_pc - (2 * np_zero), 0);
                     
                     if (channel_bfi == 2)
@@ -308,7 +310,10 @@ LC3PLUS_Error Dec_LC3PLUS_fl(LC3PLUS_Dec* decoder, uint8_t* input, LC3_INT32 num
                 channel_bfi = Dec_LC3PLUS_Channel_fl(decoder, ch, input, output[ch], bps, channel_bfi);
 
                 out_bfi |= channel_bfi;
-                input += fec_num_bytes;
+                if (input != NULL)
+                {
+                    input += fec_num_bytes;
+                }
             }
 
             bfi = out_bfi & 1;
@@ -355,10 +360,16 @@ LC3PLUS_Error Dec_LC3PLUS_fl(LC3PLUS_Dec* decoder, uint8_t* input, LC3_INT32 num
             }
 
             bfi = Dec_LC3PLUS_Channel_fl(decoder, ch, input, output[ch], bps, bfi);
-            input += decoder->channel_setup[ch]->targetBytes;
+            if (input != NULL)
+            {
+                input += decoder->channel_setup[ch]->targetBytes;
+            }
         }
     }
 
-    if (decoder->last_error == LC3PLUS_OK && bfi) decoder->last_error = LC3PLUS_DECODE_ERROR;
+    if ((decoder->last_error == LC3PLUS_OK) && bfi)
+    {
+        decoder->last_error = LC3PLUS_DECODE_ERROR;
+    }
     return bfi == 1 ? LC3PLUS_DECODE_ERROR : LC3PLUS_OK;
 }

@@ -1,16 +1,13 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
-
 
 #include "functions.h"
-
 
 static void ltpf_synth_filter(Word16 *synth_ltp, Word16 *synth, Word16 length, Word16 pitch_int, Word16 pitch_fr,
                               Word16 gain, Word16 scale_fac_idx, Word16 fs_idx,
@@ -24,19 +21,22 @@ void process_ltpf_decoder_fx(Word16 *x_e, Word16 L_frame, Word16 old_x_len, Word
                              Word16 ltpf_active, Word16 pitch_index, Word16 *old_pitch_int, Word16 *old_pitch_fr,
                              Word16 *old_gain, Word16 *mem_ltpf_active, Word16 scale_fac_idx, Word16 bfi,
                              Word16 concealMethod,
-                             Word16 damping, Word16 *old_scale_fac_idx, Word8 *scratchBuffer)
+                             Word16 damping, Word16 *old_scale_fac_idx,                      
+                             Word32 *rel_pitch_change, Word16 hrmode, Word16 frame_dms,
+                             Word8 *scratchBuffer)
 {
     Counter i;
     Word16  gain, s, s0, s1, pitch, pitch_int, pitch_fr, N4, N34;
     Word16 *x, *y;
-    Word16 *z;
-
+    Word16 *z;                          
+    Word32 tmp32, pitch_delta;
 #ifdef DYNMEM_COUNT
     Dyn_Mem_In("process_ltpf_decoder_fx", sizeof(struct {
                    Counter i;
                    Word16  gain, s, s0, s1, pitch, pitch_int, pitch_fr, N4, N34;
                    Word16 *x, *y;
-                   Word16 *z;
+                   Word16 *z;                          
+                   Word32 tmp32, pitch_delta;
                }));
 #endif
 
@@ -185,6 +185,13 @@ void process_ltpf_decoder_fx(Word16 *x_e, Word16 L_frame, Word16 old_x_len, Word
 
             *old_e = *x_e; move16();
         }
+
+    if (bfi == 0 && sub(hrmode,1) == 0 && (sub(frame_dms,50) == 0 || sub(frame_dms,25) == 0)){
+        pitch_delta = abs_s(add(sub(*old_pitch_int,pitch_int) , shr_pos(sub(*old_pitch_fr, pitch_fr),2))); //int_old -int_new + (fr_old-fr_new) / 4.0));
+        tmp32 = BASOP_Util_Divide3216_Scale(pitch_delta, MAX(add(*old_pitch_int, shr_pos(*old_pitch_fr,2)), 1),&s0);// = pitch_delta *2^15 / MAX(pitch_fl_c_old, 1);
+        *rel_pitch_change = L_shl_pos(tmp32,s0+16);
+    }
+
         *old_pitch_int   = pitch_int; move16();
         *old_pitch_fr    = pitch_fr;  move16();
         *old_gain        = 0;         move16();

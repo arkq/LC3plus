@@ -1,12 +1,11 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
 
@@ -14,8 +13,9 @@
 
 
 void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[], Word16 *pitch, Word16 *s12k8,
-                     Word16 len, Word16 *normcorr, Word16 *mem_pitch, Word16 s12k8_exp, Word16 frame_dms,
-                     Word8 *scratchBuffer)
+                     Word16 len, Word16 *normcorr, Word16 *mem_pitch, 
+                     Word16 *pitch_flag,                   
+                     Word16 s12k8_exp, Word16 frame_dms, Word8 *scratchBuffer)
 {
     Word32  sum, sum0, sum1, sum2, prod, inv;
     Word16  shift, s6k4_exp, prod_exp, min_pitch, max_pitch;
@@ -51,11 +51,20 @@ void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[]
     mem_in_len = MAX_PITCH_6K4;  move16();
     len2       = shr(len, 1);
     acflen     = len2;           move16();
-    IF (sub(frame_dms, 25) == 0)
+
+    SWITCH(frame_dms)
     {
-        mem_in_len = add(mem_in_len, 16);
-        acflen     = add(acflen, 16);
+        case 50:
+            mem_in_len = add(mem_in_len, 32);
+            acflen     = add(acflen, 32);
+            break;
+
+        case 25:
+            mem_in_len = add(mem_in_len, 48);
+            acflen     = add(acflen, 48);
+            break;
     }
+
     s6k4    = mem_s6k4 + mem_in_len;
     sum     = L_mac(L_mac(L_mult(mem_s12k8[0], 4053), mem_s12k8[1], 7712), mem_s12k8[2], 9239);
     *s6k4++ = round_fx(L_mac_sat(L_mac(sum, s12k8[0], 7712), s12k8[1], 4053)); move16();
@@ -91,10 +100,18 @@ void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[]
         shift         = add(scale0, scale2);
         *mem_s6k4_exp = s6k4_exp; move16();
     }
-    if (sub(frame_dms, 25) == 0)
+
+    SWITCH(frame_dms)
     {
-        s6k4 = s6k4 - 16;
+        case 50:
+            s6k4 = s6k4 - 32;
+            break;
+        
+        case 25:
+            s6k4 = s6k4 - 48;
+            break;
     }
+
     Scale_sig(mem_s6k4, mem_in_len, shift);
 
     /* Compute autocorrelation */
@@ -158,6 +175,7 @@ void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[]
     /* Second try in the neighborhood of the previous pitch */
     min_pitch = s_max(MIN_PITCH_6K4, sub(*mem_pitch, 4));
     max_pitch = s_min(MAX_PITCH_6K4, add(*mem_pitch, 4));
+
     max32     = ac[min_pitch - MIN_PITCH_6K4]; move32();
     pitch2    = min_pitch;                     move16();
     FOR (n = min_pitch + 1; n <= max_pitch; n++)
@@ -208,8 +226,34 @@ void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[]
             *normcorr = normcorr2; move16();
         }
     }
-    *mem_pitch = *pitch; move16();
 
+    SWITCH(frame_dms)
+    {
+        case 50:
+            if(*pitch_flag == 1) {
+                *mem_pitch = *pitch; move16();
+                *pitch_flag = 0;
+            }
+            else {
+                *pitch_flag += 1;
+            }
+            break;
+        
+        case 25:
+            if (*pitch_flag == 3) {
+                *mem_pitch   = *pitch; move16();
+                *pitch_flag = 0;
+            }
+            else {
+                *pitch_flag += 1;
+            }
+            break;
+
+        default:
+
+    *mem_pitch = *pitch; move16();
+    }
+    
     /* Update memory */
     basop_memmove(mem_s6k4, &mem_s6k4[len2], mem_in_len * sizeof(Word16));
 

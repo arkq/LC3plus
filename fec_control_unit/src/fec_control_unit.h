@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -17,7 +17,7 @@
 #ifndef __fec_control_unit_h__
 #define __fec_control_unit_h__
 
-#include "lc3.h" /* required for LC3PLUS_EpMode and LC3PLUS_EpModeRequest*/
+#include "lc3plus.h" /* required for LC3PLUS_EpMode and LC3PLUS_EpModeRequest*/
 
 typedef struct t_fecControlUnit * HANDLE_FEC_CONTROL_UNIT;
 

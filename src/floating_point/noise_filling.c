@@ -1,19 +1,18 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
 
 void processNoiseFilling_fl(LC3_FLOAT xq[], LC3_INT nfseed, LC3_INT fac_ns_idx, LC3_INT bw_stopband, LC3_INT frame_dms, LC3_FLOAT fac_ns_pc, LC3_INT spec_inv_idx)
 {
-    LC3_INT   zeroLines[MAX_LEN] = {0};
-    LC3_INT   nTransWidth = 0, startOffset = 0, i = 0, j = 0, k = 0, start = 0, end = 0, allZeros = 0, kZeroLines = 0;
+    LC3_INT   zeroLines[MAX_LEN];
+    LC3_INT   nTransWidth, startOffset, j, k, nzeros = 0, kZeroLines;
     LC3_FLOAT fac_ns = 0;
 
     switch (frame_dms)
@@ -26,6 +25,10 @@ void processNoiseFilling_fl(LC3_FLOAT xq[], LC3_INT nfseed, LC3_INT fac_ns_idx, 
             nTransWidth = 1;
             startOffset = 12;
             break;
+        case 75:
+            nTransWidth = 2;
+            startOffset = 18;
+            break;
         case 100:
             nTransWidth = 3;
             startOffset = 24;
@@ -36,24 +39,43 @@ void processNoiseFilling_fl(LC3_FLOAT xq[], LC3_INT nfseed, LC3_INT fac_ns_idx, 
 
     j = 0;
 
-    for (k = startOffset; k < bw_stopband; k++) {
-        allZeros = 1;
-
-        start = k - nTransWidth;
-        end   = MIN(bw_stopband - 1, k + nTransWidth);
-
-        for (i = start; i <= end; i++) {
-            if (xq[i] != 0) {
-                allZeros = 0;
-            }
+    for (k = startOffset - nTransWidth; k < startOffset + nTransWidth; k++)
+    {
+        if (xq[k] != 0)
+        {
+            nzeros = -2 * nTransWidth - 1;
         }
-
-        if (allZeros == 1) {
-            zeroLines[j] = k;
-            kZeroLines++;
-            j++;
+        if (xq[k] == 0)
+        {
+            nzeros ++;
         }
     }
+    for (k = startOffset; k < bw_stopband - nTransWidth; k++)
+    {
+        if (xq[k + nTransWidth] != 0)
+        {
+            nzeros = -2 * nTransWidth - 1;
+        }
+        if (xq[k + nTransWidth] == 0)
+        {
+            nzeros ++;
+        }
+        if (nzeros >= 0)
+        {
+            zeroLines[j++] = k;
+        }
+    }
+
+    for (k = bw_stopband - nTransWidth; k < bw_stopband; k++)
+    {
+        nzeros ++;
+        if (nzeros >= 0)
+        {
+            zeroLines[j++] = k;
+        }
+    }
+
+    kZeroLines = j;
 
     for (k = 0; k < kZeroLines; k++) {
         nfseed = (13849 + (nfseed + 32768) * 31821) & 65535;

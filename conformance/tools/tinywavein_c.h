@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -301,12 +301,6 @@ static WAVEFILEIN* OpenWav(
   if (fread_LE(&fmt_chunk.chunkSize, 4, 1, self->theFile) != 1) {
     goto bail;
   }
-
-#if 0
-  if (fmt_chunk.chunkSize != 16) {   /* should be 16 for PCM-format (uncompressed) */
-    goto bail;
-  }
-#endif
 
   /* read fmt info */
   fread_LE(&(wavinfo.formatType),     2, 1, self->theFile);

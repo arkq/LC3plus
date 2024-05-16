@@ -1,18 +1,14 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "functions.h"
 #include "rom_basop_util.h"
-
-/* #define BIT_EXACT */
-
 
 void processPerBandEnergy_fx(Word32 *d2_fx, Word16 *d2_fx_exp, Word32 *d_fx, Word16 d_fx_exp,
                              const Word16 *band_offsets, Word16 fs_idx, Word16 n_bands, Word16 linear, Word16 frame_dms,
@@ -61,6 +57,13 @@ void processPerBandEnergy_fx(Word32 *d2_fx, Word16 *d2_fx_exp, Word32 *d_fx, Wor
             move16();
         }
         BREAK;
+    case 75:
+        maxBwBin = (maxBwBin >> 2) * 3; move16();
+        bandsOffsetOne = bands_offset_with_one_max_7_5ms[fs_idx];
+        move16();
+        bandsOffsetTwo = bands_offset_with_two_max_7_5ms[fs_idx];
+        move16();
+        BREAK;
     default: /* 100 */
         {
             bandsOffsetOne = bands_offset_with_one_max[fs_idx];
@@ -93,6 +96,12 @@ void processPerBandEnergy_fx(Word32 *d2_fx, Word16 *d2_fx_exp, Word32 *d_fx, Wor
             bandsOffsetOne = bands_offset_with_one_max_lin_5ms[fs_idx];
             move16();
             bandsOffsetTwo = bands_offset_with_two_max_lin_5ms[fs_idx];
+            move16();
+            BREAK;
+        case 75:
+            bandsOffsetOne = bands_offset_with_one_max_lin_7_5ms[fs_idx];
+            move16();
+            bandsOffsetTwo = bands_offset_with_two_max_lin_7_5ms[fs_idx];
             move16();
             BREAK;
         case 100:

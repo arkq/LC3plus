@@ -1,16 +1,14 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.4.1                               *
+*                        ETSI TS 103 634 V1.5.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-                                                                               
 
 #include "defines.h"
 #include "functions.h"
-
 
 /*****************************************************************************/
 
@@ -28,6 +26,16 @@ static void   TDC_LPC_synthesis_fx(const Word16 sh, const Word16 a[], const Word
                                    const Word16 m);
 static void   TDC_normalize_energy_fx(Word16 *gain, Word16 *gain_exp, const Word16 *x, const Word16 lg);
  
+const Word16 beforeNextIncArray_fx[4][4] = {{0,0,0,1},
+                                          {0,1,0,1},
+                                          {0,1,1,1},
+                                          {1,1,1,1}};
+const Word16  nextIncArray_fx[4][4] = {{1,0,0,0},
+                                    {1,0,1,0},
+                                    {1,0,1,1},
+                                    {1,1,1,1}};
+static Word16 type_2_alpha_long(Word16 nbLostFramesInRow, Word16 frame_dms);
+static Word16 powWord16rest(Word16 base, Word16 exp, Word16 rest);
 
 /*****************************************************************************/
 
@@ -67,7 +75,10 @@ void processTimeDomainConcealment_Apply_fx(const Word16 pitch_int, const Word16 
                                            Word16 *seed_fx, 
                                            Word32 *gain_c_fx, Word16 *synth_fx, Word16 *Q_syn, Word16 *alpha, Word16 max_len_pcm_plc,
                                            Word16 harmonicBuf_fx[MAX_PITCH], Word16 synthHist_fx[M], Word16 *const harmonicBuf_Q,
-                                           Word8 *scratchBuffer)
+                                           Word8 *scratchBuffer
+                                           , UWord8 plc_fadeout_type
+                                           , Word16 * alpha_type_2_table
+)
 {
     Counter       i;
     Word16        s, s1, c1, c2, len, cnt, g_fx, ilen, Tc, nextInc, beforeNextInc;
@@ -83,6 +94,7 @@ void processTimeDomainConcealment_Apply_fx(const Word16 pitch_int, const Word16 
     const Word16 *hp_filt_fx, *TDC_high_harm;
     Word16        alphaPrev_fx;
     Word16        throttle;
+    Word16        frame_dms_idx, nbLostFramesInRow_mod;
 
 #ifdef DYNMEM_COUNT
     Dyn_Mem_In("processTimeDomainConcealment_Apply_fx", sizeof(struct {
@@ -100,31 +112,30 @@ void processTimeDomainConcealment_Apply_fx(const Word16 pitch_int, const Word16 
                    const Word16 *hp_filt_fx, *TDC_high_harm;
                    Word16        alphaPrev_fx;
                    Word16        throttle;
+                   Word16        frame_dms_idx, nbLostFramesInRow_mod;
                }));
 #endif
 
+    Word32 plc_fadeout_len = 0;
+    if (plc_fadeout_type >= 1){
+        plc_fadeout_len = PLC_FADEOUT_TYPE_1_IN_MS;
+    }
+    else{
+        plc_fadeout_len = PLC_FADEOUT_IN_MS;
+    }
 
     /* len of output signal */
     len = add(frame_length, overlap);
 
-    nbLostCmpt_loc = nbLostFramesInRow; move16();
-    nextInc = 1;  move16();
-    beforeNextInc = 1;  move16();
-    SWITCH (frame_dms)
-    {
-        case 25: 
-            nbLostCmpt_loc = shr(add(nbLostFramesInRow, 3), 2);
-            nextInc = (nbLostFramesInRow & 0x0003) == 1;  move16();
-            beforeNextInc = (nbLostFramesInRow & 0x0003) == 0;  move16();
-            BREAK;
-        case 50:
-            nbLostCmpt_loc = shr(add(nbLostFramesInRow, 1), 1);
-            nextInc = (nbLostFramesInRow & 0x0001) == 1;  move16();
-            beforeNextInc = (nbLostFramesInRow & 0x0001) == 0;  move16();
-            BREAK;
-    }
+    nbLostFramesInRow_mod = sub(nbLostFramesInRow, 1) & 0x0003;
+    
+    frame_dms_idx  = mult(frame_dms, 0x051F);
+    nbLostCmpt_loc = add(shr(L_mult0(frame_dms_idx, sub(nbLostFramesInRow, 1)), 2), 1);
+    frame_dms_idx  = sub(frame_dms_idx, 1);
+    beforeNextInc = beforeNextIncArray_fx[frame_dms_idx][nbLostFramesInRow_mod]; move16();
+    nextInc       = nextIncArray_fx      [frame_dms_idx][nbLostFramesInRow_mod]; move16();
 
-    IF (sub(nbLostCmpt_loc, PLC_FADEOUT_IN_MS / 10) > 0)
+    IF (sub(nbLostCmpt_loc, plc_fadeout_len / 10) > 0)
     {
         gain_p_fx  = 0; move16();
         *gain_c_fx = 0; move32();
@@ -247,7 +258,10 @@ void processTimeDomainConcealment_Apply_fx(const Word16 pitch_int, const Word16 
     {
         alphaPrev_fx = *alpha; move16();
     }
-  
+    IF (sub(plc_fadeout_type,2) == 0 ){
+        *alpha = alpha_type_2_table[nbLostFramesInRow];
+    }
+    ELSE{
     IF (nextInc != 0)
     {
         IF (sub(nbLostCmpt_loc, 1) == 0)
@@ -314,7 +328,8 @@ void processTimeDomainConcealment_Apply_fx(const Word16 pitch_int, const Word16 
       SWITCH (frame_dms)
       {
       case  25: *alpha = mult(*alpha, PLC34_ATTEN_FAC_025_FX); BREAK;
-      case  50: *alpha = mult(*alpha, PLC34_ATTEN_FAC_050_FX); BREAK;
+      case  50: *alpha = mult(*alpha, PLC34_ATTEN_FAC_025_FX); BREAK;
+      case  75: *alpha = mult(*alpha, PLC34_ATTEN_FAC_075_FX); BREAK;
       case 100: *alpha = mult(*alpha, PLC34_ATTEN_FAC_100_FX); BREAK;
       }
     }
@@ -322,8 +337,7 @@ void processTimeDomainConcealment_Apply_fx(const Word16 pitch_int, const Word16 
     {
         gain_p_fx = *alpha; move16();
     }
-
-
+  }
 
     /*---------------------------------------------------------------*
      * Construct the harmonic part                                   *
@@ -407,7 +421,12 @@ void processTimeDomainConcealment_Apply_fx(const Word16 pitch_int, const Word16 
     gain_h_fx = alphaPrev_fx; move16();
 
     /* update steps */
-    ilen = BASOP_Util_Divide1616_Scale((Word16)1, frame_length, &ilen_exp);
+    if (frame_length == 720)
+    {
+        ilen = BASOP_Util_Divide1616_Scale((Word16)1, 960, &ilen_exp);
+    } else {
+        ilen = BASOP_Util_Divide1616_Scale((Word16)1, frame_length, &ilen_exp);
+    }
     step_fx = round_fx(L_shl(L_mult(sub(gain_h_fx, *alpha), ilen), ilen_exp));
 
     s     = norm_l(gain_c_32_fx);
@@ -415,8 +434,7 @@ void processTimeDomainConcealment_Apply_fx(const Word16 pitch_int, const Word16 
 
     gain_c_16_fx     = extract_h(tmp32);
     gain_c_16_fx_exp = sub(15, s);
-
-    gainc_tmp = L_mult (gain_c_16_fx, div_s(*alpha, alphaPrev_fx));
+    gainc_tmp = L_mult (gain_c_16_fx, div_s(*alpha, s_max(alphaPrev_fx, 1)));
     tmp32     = L_sub (tmp32, gainc_tmp);
     step_n_fx = round_fx(L_shl(Mpy_32_16(tmp32, ilen), ilen_exp));
 
@@ -488,7 +506,7 @@ void processTimeDomainConcealment_Apply_fx(const Word16 pitch_int, const Word16 
 
     IF (beforeNextInc != 0)
     {
-        IF (sub(nbLostCmpt_loc, PLC_FADEOUT_IN_MS / 10) == 0)
+        IF (sub(nbLostCmpt_loc, plc_fadeout_len / 10) == 0)
         {
             gain_h_fx = (Word16)0x7FFF; move16();
             step_fx   = round_fx(L_shl(L_mult(gain_h_fx, ilen), ilen_exp));
@@ -1091,3 +1109,73 @@ static void TDC_normalize_energy_fx(Word16 *gain, Word16 *gain_exp, const Word16
     Dyn_Mem_Deluxe_Out();
 }
 
+static Word16 type_2_alpha_long(Word16 nbLostFramesInRow, Word16 frame_dms)
+{   
+    Word16 n_help;
+    Word32 n_shift;
+
+    if (nbLostFramesInRow <= 3*(100.0/frame_dms)){
+        n_help = (nbLostFramesInRow + (100/frame_dms) - 1) * frame_dms;
+        return powWord16rest(31129,n_help/100,n_help%100);
+    }
+    else {
+        n_shift = (nbLostFramesInRow - 3*(100/frame_dms)) * 50/frame_dms;
+        n_help = (n_shift + (100/frame_dms) - 1) * frame_dms;
+        return powWord16rest(22937,n_help/100,n_help%100);
+    }
+}
+
+Word16 type_2_fadeout_fx(Word16 nbLostFramesInRow, Word16 frame_dms)
+{   
+    Word16 n_help;
+    Word16 selector = PLC_FADEOUT_TYPE_2_SELECTOR * 2 * (100/frame_dms);
+
+    if (selector >= nbLostFramesInRow){
+        return type_2_alpha_long(nbLostFramesInRow, frame_dms);
+    }
+    else {
+        n_help = (nbLostFramesInRow + (100/frame_dms) - 1) * frame_dms;
+        return powWord16rest(16383,n_help/100, n_help%100);
+    } 
+}
+
+static Word16 powWord16rest(Word16 base, Word16 exp, Word16 rest) {
+    Word32 exp_result = 32767;
+    Word32 tmp_result;
+    Word16 root, i, exp2;
+
+    FOR (i = 0; i < exp; ++i) {
+        tmp_result = (Word32)exp_result * base;
+        exp_result = (Word16)(tmp_result >> 15);
+    }
+
+    IF (rest != 0) {
+        exp2 = 0;
+        SWITCH (rest)
+        {
+            case 50:
+                root = Sqrt16(base, &exp2);
+                shr(root,exp2);
+                exp_result = L_shr(exp_result * root,15); /* 0.5^1.5 = 0.5^(3/2) = 0.5^3*sqrt(0.5) */
+                BREAK;
+            case 25:
+                root = Sqrt16(base, &exp2);
+                shr(root,exp2);
+                exp2 = 0;
+                root = Sqrt16(root, &exp2);
+                shr(root,exp2);
+                exp_result = L_shr(exp_result * root,15); /* 0.5^(1/4) = 0.5^sqrt(sqrt(0.5)) */
+                BREAK;
+            case 75:
+                root = Sqrt16(base, &exp2);
+                shr(root,exp2);
+                exp2 = 0;
+                root = Sqrt16(root, &exp2);
+                shr(root,exp2);
+                tmp_result = powWord16rest(root, 3, 0);
+                exp_result = L_shr( exp_result * tmp_result,15);
+                BREAK;
+        }
+    }
+    return (Word16) exp_result;
+}
