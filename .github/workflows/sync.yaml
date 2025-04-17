@@ -1,0 +1,36 @@
+name: Sync Mirror
+
+on:
+  schedule:
+    - cron: '45 5 * * 0'
+
+jobs:
+
+  sync-check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+    - uses: awalsh128/cache-apt-pkgs-action@v1
+      with:
+        packages: >
+          libxml2-utils
+    - name: Get the latest release from ETSI
+      run: |
+        HOST="https://www.etsi.org"
+        ARTIFACTORY="$HOST/deliver/etsi_ts/103600_103699/103634"
+        # Get the location of the latest release
+        LATEST=$(curl -sSL $ARTIFACTORY | xmllint --html --xpath 'string((//a/@href)[last()])' -)
+        echo "Latest release: $LATEST"
+        # Get the latest release archive
+        URL=$(curl -sSL $HOST$LATEST | xmllint --html --xpath '//a/@href' - | awk -F\" '/zip/ {print $2}')
+        echo "Latest release archive: $URL"
+        # Download the latest release archive
+        curl -sSL $HOST$URL -o ${{ runner.temp }}/lc3plus.zip
+        unzip ${{ runner.temp }}/lc3plus.zip -d ${{ runner.temp }}
+        # Apply the changes on top of the current state
+        rm -rf *  # Clean up the working directory, so we will see deleted files
+        mv ${{ runner.temp }}/LC3plus*/* .
+    - name: Verify changes
+      run: |
+        git add .
+        git diff --cached --exit-code
