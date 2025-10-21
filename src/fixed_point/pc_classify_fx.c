@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -17,7 +17,7 @@
 
 void peakDetector_fx(Word16 in_sig[], Word16 yLen, Word16 *xover);
 
-void processPCclassify_fx(Word16 pitch_present, Word16 frame_dms, Word16 q_old_d_fx[], Word16 q_old_res_fx[],
+void processPCclassify_fx(Word16 pitch_present, LC3PLUS_FrameDuration frame_dms, Word16 q_old_d_fx[], Word16 q_old_res_fx[],
                           Word16 yLen, Word16 spec_inv_idx, Word16 stab_fac, Word16 *bfi)
 {
     Dyn_Mem_Deluxe_In(
@@ -26,9 +26,28 @@ void processPCclassify_fx(Word16 pitch_present, Word16 frame_dms, Word16 q_old_d
         Word16  s, tmp16, full_nrg16, part_nrg16;
         Word32  full_nrg, part_nrg;
     );
+  
+    int frame_dms_val = 0;
+    SWITCH (frame_dms)
+    {
+#ifdef CR9_C_ADD_1p25MS
+        case  LC3PLUS_FRAME_DURATION_1p25MS:
+            assert(0); frame_dms_val = 125; BREAK;
+#endif
+        case  LC3PLUS_FRAME_DURATION_2p5MS:
+            frame_dms_val = 250; BREAK;
+        case  LC3PLUS_FRAME_DURATION_5MS:
+            frame_dms_val = 500; BREAK;
+        case  LC3PLUS_FRAME_DURATION_7p5MS:
+            frame_dms_val = 750; BREAK;
+        case  LC3PLUS_FRAME_DURATION_10MS:
+            frame_dms_val = 1000; BREAK;
+        case  LC3PLUS_FRAME_DURATION_UNDEFINED:
+            assert(0);
+    }
 
     /* Apply classifier only if lower than 2kHz signal */
-    IF (sub(i_mult(spec_inv_idx, 10), shl_pos(frame_dms, 2)) < 0 )
+    IF (sub(i_mult(spec_inv_idx, 10), shl_pos(frame_dms_val/10, 2)) < 0 )
     {
         IF (sub(stab_fac, 16384 /* 0.5 */) < 0)
         {
@@ -37,7 +56,7 @@ void processPCclassify_fx(Word16 pitch_present, Word16 frame_dms, Word16 q_old_d
         ELSE IF (sub(pitch_present, 1) == 0)
         {
             maxPitchBin = 8;  move16();
-            IF (sub(frame_dms, 50) == 0)
+            IF (sub(frame_dms, LC3PLUS_FRAME_DURATION_5MS) == 0)
             {
                 maxPitchBin = 4;  move16();
             }

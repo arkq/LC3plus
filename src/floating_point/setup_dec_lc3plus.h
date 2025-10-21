@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -11,6 +11,7 @@
 #define SETUP_DEC_LC3_FL_H
 
 #include "constants.h"
+#include "lc3plus.h"
 
 /* Channel state and bitrate-derived values go in this struct */
 typedef struct {
@@ -36,6 +37,24 @@ typedef struct {
     LC3_INT  scf_idx[SCF_MAX_PARAM];
     uint8_t  resBits[MAX_RESBITS_LEN];
     LC3_INT  tns_idx[TNS_NUMFILTERS_MAX * MAXLAG];
+#ifdef CR9_C_ADD_1p25MS
+    /* 1.25 continuation */
+    LC3_INT16   ltpf_mem_continuation;
+    LC3_INT32   ltpf_param_mem_prev[3];
+    LC3_INT16   ltpf_mem_pitch_prev;
+    LC3_INT16   ltpf_mem_pitch_fr_prev;
+    LC3_INT32   ltpf_mem_beta_idx_prev;
+    LC3_FLOAT   ltpf_conf_beta_max;
+    LC3_INT16   ltpf_pitch_stability_counter;
+    LC3_FLOAT   ltpf_gain_step;
+    LC3_FLOAT   ltpf_mem_gain_prev;
+#ifdef FIX_TX_RX_STRUCT_STEREO
+    LC3_INT32   ltpf_rx_status[2];
+#endif
+#ifdef NEW_SIGNALLING_SCHEME_1p25
+    LC3_INT32 ltpfinfo_frame_cntr;  /* individual cntr for each channel */
+#endif 
+#endif
 
     LC3_FLOAT prev_fac_ns;
     LC3_FLOAT ltpf_mem_x[3 * MAX_LEN];
@@ -60,7 +79,7 @@ typedef struct {
 
 /* Constants and sampling rate derived values go in this struct */
 struct LC3PLUS_Dec {
-    LC3_FLOAT alpha_type_2_table[PLC_FADEOUT_TYPE_1_IN_MS*10/25]; /* [80] */
+    LC3_FLOAT alpha_type_2_table[PLC_FADEOUT_TYPE_1_IN_MS*100/125]; /* [160] */
     DecSetup*  channel_setup[MAX_CHANNELS];
     const LC3_INT* W_fx;
     const LC3_INT* bands_offset;
@@ -71,8 +90,8 @@ struct LC3PLUS_Dec {
     LC3_INT fs_idx;       /* sampling rate index */
     LC3_INT frame_length; /* sampling rate index */
     LC3_INT channels;     /* number of channels */
-    LC3_FLOAT frame_ms;   /* frame length in ms (wrong for 44.1) */
-    LC3_INT frame_dms;    /* frame length in ms * 10 (wrong for 44.1) */
+    LC3PLUS_FrameDuration frame_ms;   /* frame length in ms (wrong for 44.1) */
+    LC3PLUS_FrameDuration frame_dms;    /* frame length in ms * 10 (wrong for 44.1) */
     LC3_INT last_size;    /* size of last frame, without error protection */
     LC3_INT ep_enabled;   /* error protection enabled */
     LC3_INT error_report; /* corrected errors in last frame or -1 on error */
@@ -107,6 +126,9 @@ struct LC3PLUS_Dec {
     int    epmr;
     LC3_INT16        combined_channel_coding;
     int        last_error;
+#ifndef FIX_TX_RX_STRUCT_STEREO
+    LC3_INT  ltpf_rx_status[2];
+#endif
 };
 
 #endif

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -84,6 +84,7 @@ int lc3plus_samplerate_supported(int samplerate)
 #endif
     default: return 0;
     }
+    return 0;
 }
 
 static int lc3plus_plc_mode_supported(LC3PLUS_PlcMode plc_mode)
@@ -94,19 +95,24 @@ static int lc3plus_plc_mode_supported(LC3PLUS_PlcMode plc_mode)
         return 1;
     default: return 0;
     }
+    return 0;
 }
 
-static int lc3plus_frame_size_supported(int frame_dms)
+static int lc3plus_frame_size_supported(LC3PLUS_FrameDuration frame_dms)
 {
     switch (frame_dms)
     {
-    case 25: /* fallthru */
-    case 50: /* fallthru */
-    case 75: /* fallthru */
-    case 100:
+#ifdef CR9_C_ADD_1p25MS
+    case LC3PLUS_FRAME_DURATION_1p25MS: /* fallthru */
+#endif
+    case LC3PLUS_FRAME_DURATION_2p5MS: /* fallthru */
+    case LC3PLUS_FRAME_DURATION_5MS: /* fallthru */
+    case LC3PLUS_FRAME_DURATION_7p5MS: /* fallthru */
+    case LC3PLUS_FRAME_DURATION_10MS:
             return 1;
     default: return 0;
     }
+    return 0;
 }
 
 static int null_in_list(void **list, int n)
@@ -211,9 +217,13 @@ int lc3plus_enc_get_real_bitrate(const LC3PLUS_Enc *encoder)
     {
         totalBytes += encoder->channel_setup[ch]->targetBytes;
     }
-    
+#ifdef CR9_C_ADD_1p25MS
+    int frame_ns = (int)(1250L*(encoder->frame_dms));
+    int bitrate = (long long int)((totalBytes * 8L) * 1000000L + (frame_ns - 1L)) / (frame_ns);
+#else
     int bitrate = (totalBytes * 80000.0 + encoder->frame_dms - 1) / encoder->frame_dms;
-    
+#endif
+
     if (encoder->fs_in == 44100)
     {
         int rem = bitrate % 480;
@@ -252,11 +262,15 @@ LC3PLUS_Error lc3plus_enc_set_ep_mode_request(LC3PLUS_Enc *encoder, LC3PLUS_EpMo
     return LC3PLUS_OK;
 }
 
-LC3PLUS_Error lc3plus_enc_set_frame_dms(LC3PLUS_Enc *encoder, int frame_dms)
+LC3PLUS_Error lc3plus_enc_set_frame_dms(LC3PLUS_Enc *encoder, LC3PLUS_FrameDuration frame_dms)
 {
     RETURN_IF(encoder == NULL, LC3PLUS_NULL_ERROR);
     RETURN_IF(!lc3plus_frame_size_supported(frame_dms), LC3PLUS_FRAMEMS_ERROR);
     RETURN_IF(encoder->lc3_br_set, LC3PLUS_BITRATE_SET_ERROR);
+#ifdef CR9_C_ADD_1p25MS
+    RETURN_IF(encoder->fs == 8000 && frame_dms == LC3PLUS_FRAME_DURATION_1p25MS, LC3PLUS_SAMPLERATE_ERROR);
+#endif
+  
     encoder->frame_dms = frame_dms;
     set_enc_frame_params(encoder);
     return LC3PLUS_OK;
@@ -383,12 +397,15 @@ LC3PLUS_EpModeRequest lc3plus_dec_get_ep_mode_request(const LC3PLUS_Dec *decoder
     return (LC3PLUS_EpModeRequest)decoder->epmr;
 }
 
-LC3PLUS_Error lc3plus_dec_set_frame_dms(LC3PLUS_Dec *decoder, int frame_dms)
+LC3PLUS_Error lc3plus_dec_set_frame_dms(LC3PLUS_Dec *decoder, LC3PLUS_FrameDuration frame_dms)
 {
     RETURN_IF(decoder == NULL, LC3PLUS_NULL_ERROR);
     RETURN_IF(!lc3plus_frame_size_supported(frame_dms), LC3PLUS_FRAMEMS_ERROR);
-    RETURN_IF(decoder->plcMeth == 2 && frame_dms != 100, LC3PLUS_FRAMEMS_ERROR);
-
+    RETURN_IF(decoder->plcMeth == 2 && frame_dms != LC3PLUS_FRAME_DURATION_10MS, LC3PLUS_FRAMEMS_ERROR);
+#ifdef CR9_C_ADD_1p25MS
+    RETURN_IF(decoder->fs == 8000 && frame_dms == LC3PLUS_FRAME_DURATION_1p25MS, LC3PLUS_SAMPLERATE_ERROR);
+#endif
+  
     decoder->frame_dms = frame_dms;
     set_dec_frame_params(decoder);
     return LC3PLUS_OK;

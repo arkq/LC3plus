@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -13,7 +13,7 @@ void processPlcDampingScramblingMain_fl(LC3_INT32 *ns_seed,
                                         LC3_INT32 *pc_seed, LC3_INT32 ns_nbLostCmpt_pc,
                                         LC3_INT32 ns_nbLostCmpt, LC3_FLOAT *stabFac, LC3_FLOAT *cum_fading_slow, LC3_FLOAT *cum_fading_fast,
                                         LC3_FLOAT *spec_prev, LC3_FLOAT *spec, LC3_INT32 spec_inv_idx, LC3_INT32 yLen, LC3_INT32 bfi,
-                                        LC3_INT32 frame_dms, LC3_INT32 concealMethod, LC3_INT32 pitch_present_bfi1, LC3_INT32 pitch_present_bfi2,
+                                        LC3PLUS_FrameDuration frame_dms, LC3_INT32 concealMethod, LC3_INT32 pitch_present_bfi1, LC3_INT32 pitch_present_bfi2,
                                         LC3_FLOAT *cum_fflcAtten
                                         , LC3_UINT8 plc_fadeout_type
                                         )
@@ -57,7 +57,7 @@ void processPlcDampingScramblingMain_fl(LC3_INT32 *ns_seed,
 }
 
 void processPlcDampingScrambling_fl(LC3_FLOAT *spec, LC3_INT32 yLen, LC3_INT32 nbLostCmpt, LC3_FLOAT *stabFac, LC3_INT32 processDampScramb,
-                            LC3_FLOAT *cum_fflcAtten, LC3_INT32 pitch_present, LC3_INT32 frame_dms, LC3_FLOAT *cum_fading_slow,
+                            LC3_FLOAT *cum_fflcAtten, LC3_INT32 pitch_present, LC3PLUS_FrameDuration frame_dms, LC3_FLOAT *cum_fading_slow,
                             LC3_FLOAT *cum_fading_fast, LC3_INT32 *seed, LC3_INT32 spec_inv_idx
                             , LC3_UINT8 plc_fadeout_type
                             )
@@ -72,18 +72,28 @@ void processPlcDampingScrambling_fl(LC3_FLOAT *spec, LC3_INT32 yLen, LC3_INT32 n
 
     switch (frame_dms)
     {
-    case 25:
-        slow = LC3_SQRT(LC3_SQRT(slow));
-        fast = LC3_SQRT(LC3_SQRT(fast));
-        break;
-    case 50:
-        slow = LC3_SQRT(slow);
-        fast = LC3_SQRT(fast);
-        break;
-    case 75:
-        slow = LC3_SQRT(LC3_SQRT(slow*slow*slow));
-        fast = LC3_SQRT(LC3_SQRT(fast*fast*fast));
-        break;
+#ifdef CR9_C_ADD_1p25MS
+      case LC3PLUS_FRAME_DURATION_1p25MS:
+          slow = LC3_SQRT(LC3_SQRT(LC3_SQRT(slow)));
+          fast = LC3_SQRT(LC3_SQRT(LC3_SQRT(fast)));
+          break;
+#endif
+      case LC3PLUS_FRAME_DURATION_2p5MS:
+          slow = LC3_SQRT(LC3_SQRT(slow));
+          fast = LC3_SQRT(LC3_SQRT(fast));
+          break;
+      case LC3PLUS_FRAME_DURATION_5MS:
+          slow = LC3_SQRT(slow);
+          fast = LC3_SQRT(fast);
+          break;
+      case LC3PLUS_FRAME_DURATION_7p5MS:
+          slow = LC3_SQRT(LC3_SQRT(slow*slow*slow));
+          fast = LC3_SQRT(LC3_SQRT(fast*fast*fast));
+          break;
+      case LC3PLUS_FRAME_DURATION_10MS:
+          break;
+        case LC3PLUS_FRAME_DURATION_UNDEFINED:
+            assert(0);
     }
 
     if (plc_fadeout_type == 0)
@@ -96,10 +106,10 @@ void processPlcDampingScrambling_fl(LC3_FLOAT *spec, LC3_INT32 yLen, LC3_INT32 n
 	{
 		if (plc_fadeout_type != 0)
 		{
-			if (nbLostCmpt < (4 * (100.0 / (LC3_FLOAT)frame_dms))) {
+			if (nbLostCmpt < (4 * (100.0 / (LC3_FLOAT)(frame_dms*1.25*10)))) {
 				cum_fading_slow_local = 1.0;
 			}
-			else if (nbLostCmpt < (8 * (100.0 / (LC3_FLOAT)frame_dms))) {
+			else if (nbLostCmpt < (8 * (100.0 / (LC3_FLOAT)(frame_dms*1.25*10)))) {
 				cum_fading_slow_local = 0.9;
 			}
 			else {
@@ -116,22 +126,26 @@ void processPlcDampingScrambling_fl(LC3_FLOAT *spec, LC3_INT32 yLen, LC3_INT32 n
 
 			if (spec_inv_idx == 0)
 			{
-				if (nbLostCmpt * frame_dms > PLC_FADEOUT_IN_MS * 10)
+				if (nbLostCmpt * frame_dms * 1.25 * 10 > PLC_FADEOUT_IN_MS * 10)
 				{
 					fflcAtten = 0;
 					*cum_fflcAtten = 0;
 				}
-				else if (nbLostCmpt * frame_dms > 200)
+				else if (nbLostCmpt * frame_dms * 1.25 * 10 > 200)
 				{
 					switch (frame_dms)
 					{
-					case  25: fflcAtten = PLC34_ATTEN_FAC_025; break;
-					case  50: fflcAtten = PLC34_ATTEN_FAC_050; break;
-                    case  75: fflcAtten = PLC34_ATTEN_FAC_075; break;
-					case 100: fflcAtten = PLC34_ATTEN_FAC_100; break;
+#ifdef CR9_C_ADD_1p25MS
+					case  LC3PLUS_FRAME_DURATION_1p25MS: fflcAtten = PLC34_ATTEN_FAC_0125; break;
+#endif
+					case  LC3PLUS_FRAME_DURATION_2p5MS: fflcAtten = PLC34_ATTEN_FAC_025; break;
+					case  LC3PLUS_FRAME_DURATION_5MS: fflcAtten = PLC34_ATTEN_FAC_050; break;
+                    case  LC3PLUS_FRAME_DURATION_7p5MS: fflcAtten = PLC34_ATTEN_FAC_075; break;
+					case LC3PLUS_FRAME_DURATION_10MS: fflcAtten = PLC34_ATTEN_FAC_100; break;
+                    case LC3PLUS_FRAME_DURATION_UNDEFINED:
+                        assert(0);
 					}
 				}
-
 
 				*cum_fflcAtten = *cum_fflcAtten * fflcAtten;
 				cum_fading_slow_local = *cum_fading_slow * *cum_fflcAtten;
@@ -143,10 +157,10 @@ void processPlcDampingScrambling_fl(LC3_FLOAT *spec, LC3_INT32 yLen, LC3_INT32 n
 				plc_start_inFrames = 1;
 			}
 			else {
-				plc_start_inFrames = floor(PLC4_TRANSIT_START_IN_MS / (frame_dms / 10.0));
+				plc_start_inFrames = floor(PLC4_TRANSIT_START_IN_MS / (frame_dms * 1.25));
 			}
 
-			plc_end_inFrames = floor(PLC4_TRANSIT_END_IN_MS / (frame_dms / 10.0));
+			plc_end_inFrames = floor(PLC4_TRANSIT_END_IN_MS / (frame_dms * 1.25));
 			plc_duration_inFrames = plc_end_inFrames - plc_start_inFrames;
 
 			if (nbLostCmpt <= plc_start_inFrames)

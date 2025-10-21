@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -63,17 +63,20 @@ static int lc3plus_plc_mode_supported(LC3PLUS_PlcMode plc_mode)
     return 0;
 }
 
-static int lc3plus_frame_size_supported(float frame_ms)
+static int lc3plus_frame_size_supported(LC3PLUS_FrameDuration frame_dms)
 {
-    switch ((int)(ceil(frame_ms * 10)))
+    switch (frame_dms)
     {
-    case 25: /* fallthru */
-    case 50: /* fallthru */
-    case 75: /* fallthru */
-    case 100: return 1;
-    default: break;
+#ifdef CR9_C_ADD_1p25MS
+    case LC3PLUS_FRAME_DURATION_1p25MS: /* fallthru */
+#endif
+    case LC3PLUS_FRAME_DURATION_2p5MS: /* fallthru */
+    case LC3PLUS_FRAME_DURATION_5MS: /* fallthru */
+    case LC3PLUS_FRAME_DURATION_7p5MS: /* fallthru */
+    case LC3PLUS_FRAME_DURATION_10MS:
+            return 1;
+    default: return 0;
     }
-    return 0;
 }
 
 static int null_in_list(void **list, int n)
@@ -86,9 +89,9 @@ static int null_in_list(void **list, int n)
 /* return pointer to aligned base + base_size, *base_size += size + 4 bytes align */
 void *balloc(void *base, size_t *base_size, size_t size)
 {
-    uintptr_t ptr = ((uintptr_t)base + *base_size + 3) & ~3;
+    uintptr_t ptr = ((uintptr_t)base + *base_size + 3) & (uintptr_t)(~3);
     assert((uintptr_t)base % 4 == 0); /* base must be 4-byte aligned */
-    *base_size = (*base_size + size + 3) & ~3;
+    *base_size = (*base_size + size + 3) & (uintptr_t)(~3);
     return (void *)ptr;
 }
 
@@ -149,6 +152,9 @@ int lc3plus_enc_get_real_bitrate(const LC3PLUS_Enc *encoder)
 {
     int ch = 0, totalBytes = 0;
     int bitrate;
+#ifdef CR9_C_ADD_1p25MS
+    int frame_ns;
+#endif 
     RETURN_IF(encoder == NULL, 0);
     RETURN_IF(!encoder->lc3_br_set, LC3PLUS_BITRATE_UNSET_ERROR);
     
@@ -156,9 +162,12 @@ int lc3plus_enc_get_real_bitrate(const LC3PLUS_Enc *encoder)
     {
         totalBytes += encoder->channel_setup[ch]->targetBytes;
     }
-    
+#ifdef CR9_C_ADD_1p25MS
+    frame_ns = (int)(1250L * encoder->frame_dms);
+    bitrate = (int) ((totalBytes*8L) * 1000000L + (frame_ns - 1) ) / (frame_ns);
+#else
     bitrate = (totalBytes * 80000.0 + encoder->frame_dms - 1) / encoder->frame_dms;
-    
+#endif     
     if (encoder->fs_in == 44100)
     {
         int rem = bitrate % 480;
@@ -185,13 +194,18 @@ int lc3plus_enc_get_delay(const LC3PLUS_Enc *encoder)
     return encoder->frame_length - 2 * encoder->la_zeroes;
 }
 
-LC3PLUS_Error lc3plus_enc_set_frame_dms(LC3PLUS_Enc *encoder, int frame_dms)
+LC3PLUS_Error lc3plus_enc_set_frame_dms(LC3PLUS_Enc *encoder, LC3PLUS_FrameDuration frame_dms)
 {
     RETURN_IF(encoder == NULL, LC3PLUS_NULL_ERROR);
-    RETURN_IF(!lc3plus_frame_size_supported(frame_dms / 10.0), LC3PLUS_FRAMEMS_ERROR);
+    RETURN_IF(!lc3plus_frame_size_supported(frame_dms), LC3PLUS_FRAMEMS_ERROR);
     RETURN_IF(encoder->lc3_br_set, LC3PLUS_BITRATE_SET_ERROR);
+#ifdef CR9_C_ADD_1p25MS
+    RETURN_IF(encoder->fs == 8000 && frame_dms == LC3PLUS_FRAME_DURATION_1p25MS, LC3PLUS_SAMPLERATE_ERROR);
+#endif
+  
     encoder->frame_dms = frame_dms;
-    encoder->frame_ms = frame_dms / 10.0;
+    encoder->frame_ms = frame_dms;
+
     set_enc_frame_params(encoder);
     return LC3PLUS_OK;
 }
@@ -277,14 +291,18 @@ int lc3plus_dec_get_scratch_size(const LC3PLUS_Dec *decoder)
     return 0;
 }
 
-LC3PLUS_Error lc3plus_dec_set_frame_dms(LC3PLUS_Dec *decoder, int frame_dms)
+LC3PLUS_Error lc3plus_dec_set_frame_dms(LC3PLUS_Dec *decoder, LC3PLUS_FrameDuration frame_dms)
 {
     RETURN_IF(decoder == NULL, LC3PLUS_NULL_ERROR);
-    RETURN_IF(!lc3plus_frame_size_supported(frame_dms / 10.0), LC3PLUS_FRAMEMS_ERROR);
-    RETURN_IF(decoder->plcMeth == 2 && frame_dms != 100, LC3PLUS_FRAMEMS_ERROR);
-
+    RETURN_IF(!lc3plus_frame_size_supported(frame_dms), LC3PLUS_FRAMEMS_ERROR);
+    RETURN_IF(decoder->plcMeth == 2 && frame_dms != LC3PLUS_FRAME_DURATION_10MS, LC3PLUS_FRAMEMS_ERROR);
+#ifdef CR9_C_ADD_1p25MS
+    RETURN_IF(decoder->fs == 8000 && frame_dms == LC3PLUS_FRAME_DURATION_1p25MS, LC3PLUS_SAMPLERATE_ERROR);
+#endif
+  
     decoder->frame_dms = frame_dms;
-    decoder->frame_ms = frame_dms / 10.0;
+    decoder->frame_ms = frame_dms;
+  
     set_dec_frame_params(decoder);
     return LC3PLUS_OK;
 }
@@ -401,7 +419,7 @@ LC3PLUS_Error lc3plus_enc_set_ep_mode(LC3PLUS_Enc *encoder, LC3PLUS_EpMode epmod
     error = encoder->lc3_br_set ? update_enc_bitrate(encoder, encoder->bitrate) : LC3PLUS_OK;
     if (error != LC3PLUS_OK)
     {
-        encoder->epmode = oldEpmode;  // preserve old epmode in case of failure
+        encoder->epmode = oldEpmode;  /* preserve old epmode in case of failure */
     }
     return error;
 }

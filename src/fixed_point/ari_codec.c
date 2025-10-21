@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -73,7 +73,16 @@ static Word16 ac_enc_finish_fx(UWord8 *ptr, Word16 *bp, Encoder_State_fx *st_fx 
 
 static Word16 ac_decode_fx(                         /* o  : Decoded cumulative frequency    */
                            Decoder_State_fx *st_fx, /* i/o: Decoder State                   */
-                           Word16            pki);
+                           Word16            pki
+#ifdef CR13_B_FIX_PC_BINS
+                           , 
+                           Word16 *bp,
+                           Word16 *bp_side,
+                           Word16 *mask_side,
+                           Word16 cur_bin,
+                           Word16 from_left
+#endif
+                           );
 static Word16 ac_decode_tns_order(                         /* o  : Decoded cumulative frequency    */
                                   Decoder_State_fx *st_fx, /* i/o: Decoder State                   */
                                   Word16            enable_lpc_weighting);
@@ -743,7 +752,7 @@ Word16 processAriEncoder_fx(UWord8 *bytes, Word16 bp_side_in, Word16 mask_side_i
 void processAriDecoder_fx(UWord8 *bytes, Word16 *bp_side, Word16 *mask_side, Word16 nbbits, Word16 L_spec,
     Word16 fs_idx, Word16 enable_lpc_weighting, Word16 tns_numfilters, Word16 lsbMode,
     Word16 lastnz, Word16 *bfi, Word16 *tns_order, Word16 fac_ns_idx, Word16 gg_idx,
-    Word16 frame_dms,
+    LC3PLUS_FrameDuration frame_dms,
                           Word16 n_pc, Word16 be_bp_left, Word16 be_bp_right, Word16 mode, Word16 *spec_inv_idx,
                           Word16 *b_left,
                           Word16 *resBits,
@@ -865,11 +874,11 @@ ac_dec_init_fx(ptr, &bp, bp_side, mask_side, &st);
 
     /* Decode TNS data */
     tmp = MAXLAG;
-IF (sub(frame_dms, 25) == 0)
+IF (sub(frame_dms, LC3PLUS_FRAME_DURATION_2p5MS) == 0)
 {
 tmp = shr_pos(tmp, 1);
 }
-IF (sub(frame_dms, 50) == 0)
+IF (sub(frame_dms, LC3PLUS_FRAME_DURATION_5MS) == 0)
 {
 tmp = shr_pos(tmp, 1);
 }
@@ -928,7 +937,16 @@ if (sub(k, nt_half) > 0)
 t = add(t, 1 << NBITS_CONTEXT);
 }
 
-            r = ac_decode_fx(&st, ari_spec_lookup[t]);
+            r = ac_decode_fx(&st, ari_spec_lookup[t]
+#ifdef CR13_B_FIX_PC_BINS
+                             , 
+                             &bp,
+                             bp_side,
+                             mask_side,
+                             k,
+                             1
+#endif
+            );
             if (ac_dec_update_fx(ptr, &bp, bp_side, mask_side, k, &st, ari_spec_cumfreq[ari_spec_lookup[t]][r],
                                  ari_spec_freq[ari_spec_lookup[t]][r]) != 0)
             {
@@ -987,7 +1005,16 @@ if (check_pc_bytes(&bp, bp_side, mask_side, a1_i, 0, &st.pc) != 0)
 GOTO ber_detect;
 }
                 b = read_bit(ptr, bp_side, mask_side);
-                r = ac_decode_fx(&st, ari_spec_lookup[t + Tab_esc_nb[1]]);
+                r = ac_decode_fx(&st, ari_spec_lookup[t + Tab_esc_nb[1]]
+#ifdef CR13_B_FIX_PC_BINS
+                             , 
+                             &bp,
+                             bp_side,
+                             mask_side,
+                             k,
+                             1
+#endif
+                );
                 if (ac_dec_update_fx(ptr, &bp, bp_side, mask_side, k, &st,
                                      ari_spec_cumfreq[ari_spec_lookup[t + Tab_esc_nb[1]]][r],
                                      ari_spec_freq[ari_spec_lookup[t + Tab_esc_nb[1]]][r]) != 0)
@@ -1043,7 +1070,16 @@ if (check_pc_bytes(&bp, bp_side, mask_side, a1_i, 0, &st.pc) != 0)
                     FOR (lev = 2; lev < max_lev; lev++)
                     {
                         esc_nb = s_min(lev, 3);
-                        r      = ac_decode_fx(&st, ari_spec_lookup[t + Tab_esc_nb[esc_nb]]);
+                        r      = ac_decode_fx(&st, ari_spec_lookup[t + Tab_esc_nb[esc_nb]]
+#ifdef CR13_B_FIX_PC_BINS
+                             , 
+                             &bp,
+                             bp_side,
+                             mask_side,
+                             k,
+                             1
+#endif
+                        );
                         if (ac_dec_update_fx(ptr, &bp, bp_side, mask_side, k, &st,
                                              ari_spec_cumfreq[ari_spec_lookup[t + Tab_esc_nb[esc_nb]]][r],
                                              ari_spec_freq[ari_spec_lookup[t + Tab_esc_nb[esc_nb]]][r]) != 0)
@@ -1153,7 +1189,16 @@ if (sub(k, nt_half) > 0)
 t = add(t, 1 << NBITS_CONTEXT);
 }
 
-            r = ac_decode_fx(&st, ari_spec_lookup[t]);
+            r = ac_decode_fx(&st, ari_spec_lookup[t]
+#ifdef CR13_B_FIX_PC_BINS
+                             , 
+                             &bp,
+                             bp_side,
+                             mask_side,
+                             k,
+                             1
+#endif
+            );
             if (ac_dec_update_fx(ptr, &bp, bp_side, mask_side, k, &st, ari_spec_cumfreq[ari_spec_lookup[t]][r],
                                  ari_spec_freq[ari_spec_lookup[t]][r]) != 0)
             {
@@ -1202,7 +1247,16 @@ if (check_pc_bytes(&bp, bp_side, mask_side, b1_i, 0, &st.pc) != 0)
             }
             ELSE
             {
-                r = ac_decode_fx(&st, ari_spec_lookup[t + Tab_esc_nb[1]]);
+                r = ac_decode_fx(&st, ari_spec_lookup[t + Tab_esc_nb[1]]
+#ifdef CR13_B_FIX_PC_BINS
+                             , 
+                             &bp,
+                             bp_side,
+                             mask_side,
+                             k,
+                             1
+#endif
+                );
                 if (ac_dec_update_fx(ptr, &bp, bp_side, mask_side, k, &st,
                                      ari_spec_cumfreq[ari_spec_lookup[t + Tab_esc_nb[1]]][r],
                                      ari_spec_freq[ari_spec_lookup[t + Tab_esc_nb[1]]][r]) != 0)
@@ -1260,7 +1314,16 @@ if (check_pc_bytes(&bp, bp_side, mask_side, a1_i, 0, &st.pc) != 0)
                     FOR (lev = 2; lev < max_lev; lev++)
                     {
                         esc_nb = s_min(lev, 3);
-                        r      = ac_decode_fx(&st, ari_spec_lookup[t + Tab_esc_nb[esc_nb]]);
+                        r      = ac_decode_fx(&st, ari_spec_lookup[t + Tab_esc_nb[esc_nb]]
+#ifdef CR13_B_FIX_PC_BINS
+                             , 
+                             &bp,
+                             bp_side,
+                             mask_side,
+                             k,
+                             1
+#endif
+                        );
                         if (ac_dec_update_fx(ptr, &bp, bp_side, mask_side, k, &st,
                                              ari_spec_cumfreq[ari_spec_lookup[t + Tab_esc_nb[esc_nb]]][r],
                                              ari_spec_freq[ari_spec_lookup[t + Tab_esc_nb[esc_nb]]][r]) != 0)
@@ -1397,6 +1460,14 @@ GOTO ber_detect;
         move16();
         i=0;
 
+#  ifdef CR9_C_ADD_1p25MS
+        Counter l, lMax = 1;
+        if (frame_dms == LC3PLUS_FRAME_DURATION_1p25MS) {
+            lMax = 3;
+        }
+        FOR (l = 0; l < lMax; l++)
+        {
+#  endif
 #ifdef ENABLE_HR_MODE
         FOR (k = 0; k < L_spec; k++)
         {
@@ -1443,7 +1514,9 @@ GOTO ber_detect;
             }
         }
 #endif
-        
+#  ifdef CR9_C_ADD_1p25MS
+        }
+#  endif
 #  ifdef ENABLE_HR_MODE
         if (hrmode)
         {
@@ -2119,11 +2192,74 @@ static __forceinline void ac_dec_init_fx(UWord8 *ptr, Word16 *bp, Word16 *bp_sid
     Dyn_Mem_Deluxe_Out();
 }
 
+#ifdef CR13_B_FIX_PC_BINS
+static Word16 pc_check_bytes_ac_decode_fx(
+    Word16 *bp,
+    Word16 *bp_side,
+    Word16 *mask_side,
+    Word16 cur_bin,
+    Word16 from_left,
+    Pc_State_fx *pc
+)
+{
+    Word16 bp_local, bp_side_local;
+
+    if (pc->bytes > 0)
+    {
+        bp_local = *bp;
+        bp_side_local = *bp_side;
+
+        if (from_left)
+        {
+            if (*mask_side == 1)
+            {
+                bp_side_local = add(bp_side_local, 1);
+            }
+        }
+        else
+        {
+            bp_local = sub(bp_local, 1);
+        }
+
+        if (!pc->enc && pc->b_right > -1)
+        {
+            if (pc->bfi == 2)
+            {
+                if (pc->c_bp && bp_local > pc->be_bp_left)
+                {
+                    pc->inv_bin = cur_bin;
+                    return 1;
+                }
+            }
+        }
+    }
+
+    return 0;
+}
+#endif
+
 /* o  : Decoded cumulative frequency    */
 static __forceinline Word16 ac_decode_fx(Decoder_State_fx *st_fx, /* i/o: Decoder State                   */
-                                         Word16            pki)
+                                         Word16            pki
+#ifdef CR13_B_FIX_PC_BINS
+                                         , 
+                                         Word16 *bp,
+                                         Word16 *bp_side,
+                                         Word16 *mask_side,
+                                         Word16 cur_bin,
+                                         Word16 from_left
+#endif
+                                         )
 {
     Dyn_Mem_Deluxe_In(UWord16 sgn; Word16 val, r;);
+    
+#ifdef CR13_B_FIX_PC_BINS
+    IF (pc_check_bytes_ac_decode_fx(bp, bp_side, mask_side, cur_bin, from_left, &st_fx->pc))
+    {
+        st_fx->BER_detect = 1;
+        return 0;
+    }
+#endif
 
     st_fx->ac_help_fx = UL_lshr_pos(st_fx->ac_range_fx, 10);
     move32();

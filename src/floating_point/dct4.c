@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -50,8 +50,8 @@ void dct4_init(Dct4* dct, int length)
     int i;
     assert(length <= MAX_LEN);
     dct->length = length;
-    dct->twid1  = calloc(sizeof(*dct->twid1), length / 2);
-    dct->twid2  = calloc(sizeof(*dct->twid2), length / 2);
+    dct->twid1  = calloc(length / 2, sizeof(*dct->twid1));
+    dct->twid2  = calloc(length / 2, sizeof(*dct->twid2));
     for (i = 0; i < length / 2; i++) {
         dct->twid1[i] = cexpi(-(LC3_FLOAT)M_PI_LC3PLUS * (i + (LC3_FLOAT)0.25) / length);
         dct->twid2[i] = cexpi(-(LC3_FLOAT)M_PI_LC3PLUS * i / length);

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -11,14 +11,14 @@
 
 LC3_FLOAT pc_peak_detector(LC3_FLOAT *q_d_prev, LC3_INT32 yLen);
 
-void processPcClassify_fl(LC3_INT32 pitch_present, LC3_INT32 frame_dms, LC3_FLOAT *q_d_prev, LC3_FLOAT *q_old_res, LC3_INT32 yLen, LC3_INT32 spec_inv_idx, LC3_FLOAT stab_fac, LC3_INT32 *bfi)
+void processPcClassify_fl(LC3_INT32 pitch_present, LC3PLUS_FrameDuration frame_dms, LC3_FLOAT *q_d_prev, LC3_FLOAT *q_old_res, LC3_INT32 yLen, LC3_INT32 spec_inv_idx, LC3_FLOAT stab_fac, LC3_INT32 *bfi)
 {
         LC3_INT32 maxPitchBin, xover, i;
         LC3_FLOAT part_nrg, full_nrg;
     
     part_nrg = 0; full_nrg = 0;
     
-    if (spec_inv_idx < (4 * frame_dms / 10))
+    if (spec_inv_idx < (4 * frame_dms * 1.25))
     {
         if (stab_fac < 0.5)
         {
@@ -26,7 +26,7 @@ void processPcClassify_fl(LC3_INT32 pitch_present, LC3_INT32 frame_dms, LC3_FLOA
         } else if (pitch_present == 1)
         {
             maxPitchBin = 8;
-            if (frame_dms == 50)
+            if (frame_dms == LC3PLUS_FRAME_DURATION_5MS)
             {
                 maxPitchBin = 4;
             }

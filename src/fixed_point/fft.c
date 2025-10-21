@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -4007,6 +4007,13 @@ void BASOP_cfft(Word32 *re, Word32 *im, Word16 length, Word16 s, Word16 *scale, 
         *scale = add(*scale, SCALEFACTOR10);
         move16();
         BREAK;
+#  ifdef CR9_C_ADD_1p25MS
+    case 15:
+        fft15(re, im, s);
+        *scale = add(*scale, SCALEFACTOR15);
+        move16();
+        BREAK;
+#  endif
     case 16:
         fft16(re, im, s);
         *scale = add(*scale, SCALEFACTOR16);

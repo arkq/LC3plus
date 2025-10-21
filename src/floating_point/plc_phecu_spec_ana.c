@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -471,8 +471,8 @@ static void plc_phEcu_peak_locator_fxlike(const LC3_INT16 *inp, /* i: vector wit
         {
             tmp = sub(tmp, 1);
         }
-        num_pairs = tmp / 2; // shr(tmp, 1);
-        n_tail_values = sub(tmp, num_pairs * 2); // shl(num_pairs, 1));
+        num_pairs = tmp / 2;  
+        n_tail_values = sub(tmp, num_pairs * 2);  
 
         /* filter  preliminary  sign changes into sensitivity filtered sign changes */
 

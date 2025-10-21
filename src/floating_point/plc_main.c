@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -53,23 +53,29 @@ void processPlcMain_fl(LC3_FLOAT *q_d_fl_c, LC3_FLOAT *syntM_fl_c, LC3PLUS_Dec* 
     {
         switch(decoder->frame_dms)
         {
-                case 25: 
-                    consecutiveLostThreshold  = 16;
+#ifdef FIX_ADDITONAL_1p25_ISSUES
+                case LC3PLUS_FRAME_DURATION_1p25MS: consecutiveLostThreshold = 32;
+                    thresh_tdc_cnt = THRESH_025_DMS_TDC_CNT;
+                    thresh_ns_cnt = THRESH_025_DMS_NS_CNT;
+                    thresh_tdc_ns_cnt = THRESH_025_DMS_TDC_NS_CNT;
+                    break;
+#endif
+                case LC3PLUS_FRAME_DURATION_2p5MS: consecutiveLostThreshold  = 16;
                     thresh_tdc_cnt = THRESH_025_DMS_TDC_CNT;
                     thresh_ns_cnt = THRESH_025_DMS_NS_CNT;
                     thresh_tdc_ns_cnt =  THRESH_025_DMS_TDC_NS_CNT;                  
                     break;
-                case 50: consecutiveLostThreshold  = 8;  
+                case LC3PLUS_FRAME_DURATION_5MS: consecutiveLostThreshold  = 8;  
                     thresh_tdc_cnt = THRESH_050_DMS_TDC_CNT;
                     thresh_ns_cnt = THRESH_050_DMS_NS_CNT;
                     thresh_tdc_ns_cnt =  THRESH_050_DMS_TDC_NS_CNT;                  
                     break;
-                case 75: consecutiveLostThreshold  = 6;
+                case LC3PLUS_FRAME_DURATION_7p5MS: consecutiveLostThreshold  = 6;
                     thresh_tdc_cnt = THRESH_075_DMS_TDC_CNT;
                     thresh_ns_cnt = THRESH_075_DMS_NS_CNT;
                     thresh_tdc_ns_cnt =  THRESH_075_DMS_TDC_NS_CNT;                   
                     break;
-                case 100: consecutiveLostThreshold = 4;  
+                case LC3PLUS_FRAME_DURATION_10MS: consecutiveLostThreshold = 4;  
                     thresh_tdc_cnt = THRESH_100_DMS_TDC_CNT;
                     thresh_ns_cnt = THRESH_100_DMS_NS_CNT;
                     thresh_tdc_ns_cnt =  THRESH_100_DMS_TDC_NS_CNT;
@@ -96,7 +102,7 @@ void processPlcMain_fl(LC3_FLOAT *q_d_fl_c, LC3_FLOAT *syntM_fl_c, LC3PLUS_Dec* 
                 {
                     PlcAdvSetup->plc_fadeout_type = 0;
                 }
-            if (h_DecSetup->rel_pitch_change > REL_PITCH_THRESH && hrmode == 1 && (decoder->frame_dms == 50 || decoder->frame_dms == 25) ){
+            if (h_DecSetup->rel_pitch_change > REL_PITCH_THRESH && hrmode == 1 && (decoder->frame_dms == LC3PLUS_FRAME_DURATION_5MS || decoder->frame_dms == LC3PLUS_FRAME_DURATION_2p5MS) ){
                 PlcAdvSetup->plc_fadeout_type = 2;
             } else 
                 if ( h_DecSetup->concealMethod != 2 ) {
@@ -118,9 +124,9 @@ void processPlcMain_fl(LC3_FLOAT *q_d_fl_c, LC3_FLOAT *syntM_fl_c, LC3PLUS_Dec* 
             
             assert(decoder->fs_idx == floor(decoder->fs / 10000));
             /* phaseECU supports only 10ms framing*/
-            assert(PlcSetup->nbLostCmpt != 0 || decoder->frame_dms == 100);
+            assert(PlcSetup->nbLostCmpt != 0 || decoder->frame_dms == LC3PLUS_FRAME_DURATION_10MS);
             
-            if (decoder->frame_dms != 100)
+            if (decoder->frame_dms != LC3PLUS_FRAME_DURATION_10MS)
             {
                 /* muting, if frame size changed during phaseECU concealment */
                 memset(q_d_fl_c, 0, sizeof(LC3_FLOAT) * decoder->frame_length);
@@ -260,7 +266,7 @@ void processPlcMain_fl(LC3_FLOAT *q_d_fl_c, LC3_FLOAT *syntM_fl_c, LC3PLUS_Dec* 
     }
 
     yLen = MIN(decoder->frame_length, MAX_PLC_LMEM);
-    if (PlcAdvSetup != NULL && (decoder->frame_dms == 100) && (hrmode == 0))
+    if (PlcAdvSetup != NULL && (decoder->frame_dms == LC3PLUS_FRAME_DURATION_10MS) && (hrmode == 0))
         {
             /*  BASOP processPLCspec2shape_fx(prev_bfi, bfi, q_old_d_fx, yLen, plcAd->PhECU_oold_grp_shape_fx, plcAd->PhECU_old_grp_shape_fx);*/
             plc_phEcu_processPLCspec2shape(prev_bfi_plc2, bfi, q_d_fl_c, yLen,

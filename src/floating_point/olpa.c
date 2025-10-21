@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -44,8 +44,8 @@ LC3_INT searchMaxIndice(LC3_FLOAT* in, LC3_INT len)
 }
 
 void processOlpa_fl(LC3_FLOAT* s_12k8, LC3_FLOAT* mem_s12k8, LC3_FLOAT* mem_s6k4, LC3_INT* mem_old_T0, 
-                    LC3_INT* pitch_flag, 
-                    LC3_INT* T0_out, LC3_FLOAT* normcorr_out, LC3_INT len, LC3_INT frame_dms)
+                    LC3_INT* pitch_flag,
+                    LC3_INT* T0_out, LC3_FLOAT* normcorr_out, LC3_INT len, LC3PLUS_FrameDuration frame_dms)
 {
     LC3_FLOAT norm_corr = 0, sum = 0, sum0 = 0, sum1 = 0, sum2 = 0, norm_corr2 = 0, *s6k4;
     LC3_FLOAT buf[LEN_6K4 + MAX_PITCH_6K4 + MAX_LEN], R0[RANGE_PITCH_6K4]; /* constant length */
@@ -54,15 +54,21 @@ void processOlpa_fl(LC3_FLOAT* s_12k8, LC3_FLOAT* mem_s12k8, LC3_FLOAT* mem_s6k4
     len2       = len / 2;
     switch(frame_dms)
     {
-        case 50:
+        case LC3PLUS_FRAME_DURATION_5MS:
             delta = len / 2;
             acflen = len2 * 2;
             break;
 
-        case 25:
+        case LC3PLUS_FRAME_DURATION_2p5MS:
             delta = 3*(len /2);
             acflen = len2*4;
             break;
+#ifdef CR9_C_ADD_1p25MS
+        case LC3PLUS_FRAME_DURATION_1p25MS:
+            delta = 7 * (len / 2);
+            acflen = len2 * 8;
+            break;
+#endif
 
         default:
     delta      = 0;
@@ -82,6 +88,7 @@ void processOlpa_fl(LC3_FLOAT* s_12k8, LC3_FLOAT* mem_s12k8, LC3_FLOAT* mem_s6k4
     move_float(&buf[mem_in_len], R0, len2);
     move_float(buf, mem_s6k4, mem_in_len);
     move_float(mem_s6k4, &buf[len2], mem_in_len);
+
     for (i = MIN_PITCH_6K4; i <= MAX_PITCH_6K4; i++) {
         sum = mac_loop(s6k4, &s6k4[-i], acflen);
         R0[i - MIN_PITCH_6K4] = sum;
@@ -135,10 +142,10 @@ void processOlpa_fl(LC3_FLOAT* s_12k8, LC3_FLOAT* mem_s12k8, LC3_FLOAT* mem_s6k4
 
     switch(frame_dms)
     {
-        case 50:
+        case LC3PLUS_FRAME_DURATION_5MS:
             if (*pitch_flag == 1)
             {
-                *mem_old_T0   = T0;
+                *mem_old_T0 = T0;
                 *pitch_flag = 0;
             }
             else
@@ -147,10 +154,10 @@ void processOlpa_fl(LC3_FLOAT* s_12k8, LC3_FLOAT* mem_s12k8, LC3_FLOAT* mem_s6k4
             }
             break;
 
-        case 25:
+        case LC3PLUS_FRAME_DURATION_2p5MS:
             if (*pitch_flag == 3)
             {
-                *mem_old_T0   = T0;
+                *mem_old_T0 = T0;
                 *pitch_flag = 0;
             }
             else
@@ -158,6 +165,19 @@ void processOlpa_fl(LC3_FLOAT* s_12k8, LC3_FLOAT* mem_s12k8, LC3_FLOAT* mem_s6k4
                 *pitch_flag += 1;
             }
             break;
+#ifdef CR9_C_ADD_1p25MS     
+        case LC3PLUS_FRAME_DURATION_1p25MS:
+            if (*pitch_flag == 7)
+            {
+                *mem_old_T0 = T0;
+                *pitch_flag = 0;
+            }
+            else
+            {
+                *pitch_flag += 1;
+            }
+            break;
+#endif
 
         default:
     *mem_old_T0   = T0;
@@ -165,5 +185,4 @@ void processOlpa_fl(LC3_FLOAT* s_12k8, LC3_FLOAT* mem_s12k8, LC3_FLOAT* mem_s6k4
 
     *T0_out       = T0 * 2.0;
     *normcorr_out = norm_corr;
-
 }

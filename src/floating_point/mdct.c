@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -9,9 +9,9 @@
 
 #include "functions.h"
 
-static const LC3_FLOAT* mdct_window(LC3_INT length, LC3_INT frame_dms, LC3_INT hrmode)
+static const LC3_FLOAT* mdct_window(LC3_INT length, LC3PLUS_FrameDuration frame_dms, LC3_INT hrmode)
 {
-    if (frame_dms == 100) {
+    if (frame_dms == LC3PLUS_FRAME_DURATION_10MS) {
         switch (length) {
         case 80:
             return MDCT_WINS_10ms[hrmode][0];
@@ -29,7 +29,7 @@ static const LC3_FLOAT* mdct_window(LC3_INT length, LC3_INT frame_dms, LC3_INT h
             return NULL;
         }
     }
-    else if (frame_dms == 75) {
+    else if (frame_dms == LC3PLUS_FRAME_DURATION_7p5MS) {
         switch (length) {
         case 60:
             return MDCT_WINS_7_5ms[hrmode][0];
@@ -47,7 +47,7 @@ static const LC3_FLOAT* mdct_window(LC3_INT length, LC3_INT frame_dms, LC3_INT h
             return NULL;
         }
     }
-    else if (frame_dms == 50) {
+    else if (frame_dms == LC3PLUS_FRAME_DURATION_5MS) {
         switch (length) {
         case 40:
             return MDCT_WINS_5ms[hrmode][0];
@@ -65,7 +65,7 @@ static const LC3_FLOAT* mdct_window(LC3_INT length, LC3_INT frame_dms, LC3_INT h
             return NULL;
         }
     }
-    else if (frame_dms == 25) {
+    else if (frame_dms == LC3PLUS_FRAME_DURATION_2p5MS) {
         switch (length) {
         case 20:
             return MDCT_WINS_2_5ms[hrmode][0];
@@ -83,31 +83,56 @@ static const LC3_FLOAT* mdct_window(LC3_INT length, LC3_INT frame_dms, LC3_INT h
             return NULL;
         }
     }
+#ifdef CR9_C_ADD_1p25MS
+    else if (frame_dms == LC3PLUS_FRAME_DURATION_1p25MS) {
+        switch (length) {
+        case 10:
+            return MDCT_WINS_1_25ms[hrmode][0];
+        case 20:
+            return MDCT_WINS_1_25ms[hrmode][1];
+        case 30:
+            return MDCT_WINS_1_25ms[hrmode][2];
+        case 40:
+            return MDCT_WINS_1_25ms[hrmode][3];
+        case 60:
+            return MDCT_WINS_1_25ms[hrmode][4];
+        default:
+            return NULL;
+        }
+    }
+#endif
     return NULL;
 }
 
-void mdct_init(Mdct* mdct, LC3_INT length, LC3_INT frame_dms, LC3_INT fs_idx, LC3_INT hrmode)
+void mdct_init(Mdct* mdct, LC3_INT length, LC3PLUS_FrameDuration frame_dms, LC3_INT fs_idx, LC3_INT hrmode)
 {
-    if (frame_dms == 100) {
-        mdct->leading_zeros = MDCT_la_zeroes[fs_idx];
-    }
-    else if (frame_dms == 75) {
-        mdct->leading_zeros = MDCT_la_zeroes_7_5ms[fs_idx];
-    }
-    else if (frame_dms == 50) {
-        mdct->leading_zeros = MDCT_la_zeroes_5ms[fs_idx];
-    }
-    else if (frame_dms == 25) {
+    switch (frame_dms)
+    {
+#ifdef CR9_C_ADD_1p25MS
+      case LC3PLUS_FRAME_DURATION_1p25MS:
+        mdct->leading_zeros = MDCT_la_zeroes_1_25ms[fs_idx];
+        break;
+#endif
+      case LC3PLUS_FRAME_DURATION_2p5MS:
         mdct->leading_zeros = MDCT_la_zeroes_2_5ms[fs_idx];
-    }
-    else {
+        break;
+      case LC3PLUS_FRAME_DURATION_5MS:
+        mdct->leading_zeros = MDCT_la_zeroes_5ms[fs_idx];
+        break;
+      case LC3PLUS_FRAME_DURATION_7p5MS:
+        mdct->leading_zeros = MDCT_la_zeroes_7_5ms[fs_idx];
+        break;
+      case LC3PLUS_FRAME_DURATION_10MS:
+        mdct->leading_zeros = MDCT_la_zeroes[fs_idx];
+        break;
+      case LC3PLUS_FRAME_DURATION_UNDEFINED:
         assert(!"invalid frame_ms");
     }
 
     mdct->length     = length;
     mdct->mem_length = length - mdct->leading_zeros;
     mdct->window     = mdct_window(length, frame_dms, hrmode);
-    mdct->mem        = calloc(sizeof(*mdct->mem), mdct->mem_length);
+    mdct->mem        = calloc(mdct->mem_length, sizeof(*mdct->mem));
     dct4_init(&mdct->dct, length);
 }
 

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -23,6 +23,8 @@
 #ifndef LC3PLUS_H
 #define LC3PLUS_H
 
+#include "defines.h" /* Required for CR9_C_ADD_1p25MS */
+
 #ifndef _MSC_VER
 #include <stdint.h>
 #else
@@ -35,7 +37,7 @@ typedef __int32       int32_t;
 #define LC3PLUS_VERSION_INT(major, minor, micro) (((major) << 16) | ((minor) << 8) | (micro))
 
 /*! Version number to ensure header and binary are matching. */
-#define LC3PLUS_VERSION LC3PLUS_VERSION_INT(1, 7, 4)
+#define LC3PLUS_VERSION LC3PLUS_VERSION_INT(1, 8, 0)
 
 /*! Maximum number of supported channels. The actual binary might support
  *  less, use lc3plus_channels_supported() to check. */
@@ -55,6 +57,20 @@ typedef __int32       int32_t;
 #define LC3PLUS_DEC_MAX_SIZE 87528
 
 /*! Error codes returned by functions. */
+
+typedef enum {
+    LC3PLUS_FRAME_DURATION_UNDEFINED = 0,   /* Invalid */
+#ifdef CR9_C_ADD_1p25MS
+    LC3PLUS_FRAME_DURATION_1p25MS = 1,      /* 1.25 ms */
+#endif
+    LC3PLUS_FRAME_DURATION_2p5MS = 2,       /* 2.5 ms  */
+    LC3PLUS_FRAME_DURATION_5MS = 4,         /* 5 ms    */
+    LC3PLUS_FRAME_DURATION_7p5MS = 6,       /* 7.5 ms  */
+    LC3PLUS_FRAME_DURATION_10MS = 8,        /* 10 ms   */
+} LC3PLUS_FrameDuration;
+
+
+
 typedef enum
 {
     LC3PLUS_PLC_ADVANCED = 1  /*!< Enhanced concealment method */
@@ -284,7 +300,7 @@ int lc3plus_enc_get_delay(const LC3PLUS_Enc *encoder);
  *  \param[in]  frame_ms    Frame length in ms.
  *  \return                 LC3PLUS_OK on success or appropriate error code.
  */
-LC3PLUS_Error lc3plus_enc_set_frame_dms(LC3PLUS_Enc *encoder, int frame_ms);
+LC3PLUS_Error lc3plus_enc_set_frame_dms(LC3PLUS_Enc *encoder, LC3PLUS_FrameDuration frame_ms);
 
 
 /*! Set encoder Low-frequency effect moded. deactivates LTPF, TNS, NF
@@ -446,7 +462,7 @@ int lc3plus_dec_get_delay(const LC3PLUS_Dec* decoder);
  *  \param[in]  frame_ms    Frame length in ms.
  *  \return                 LC3PLUS_OK on success or appropriate error code.
  */
-LC3PLUS_Error lc3plus_dec_set_frame_dms(LC3PLUS_Dec *decoder, int frame_ms);
+LC3PLUS_Error lc3plus_dec_set_frame_dms(LC3PLUS_Dec *decoder, LC3PLUS_FrameDuration frame_ms);
 
 
 /*! Free memory allocated within LC3plus decoder struct.

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -104,7 +104,7 @@ static const char *const USAGE_MESSAGE =
     "  -dc NUM                 0: Don't use delay compensation\n"
     "                          1: Compensate delay in decoder (default)\n"
     "                          2: Split delay equally between encoder and decoder\n"
-    "  -frame_ms               NUM Frame length in ms. NUM must be 10 (default), 7.5, 5 or 2.5.\n"
+    "  -frame_ms               NUM Frame length in ms. NUM must be 10 (default), 7.5, 5, 2.5 or 1.25.\n"
     "  -bandwidth NUM|FILE     Select audio bandwidth limitation via value in Hz or switching file.\n"
     "                          NUM can be any integer value describing the bandwidth; max NUM=20000 Hz\n"
     "  -q                      Disable frame counter printout\n"
@@ -205,6 +205,24 @@ int main(int ac, char **av)
     /* exit handler to clean up resources */
     atexit(cleanup);
 
+    LC3PLUS_FrameDuration frameDuration = LC3PLUS_FRAME_DURATION_10MS;
+    switch ((int) (arg.frame_ms*100))
+    {
+#ifdef CR9_C_ADD_1p25MS
+          case 125:
+            frameDuration = LC3PLUS_FRAME_DURATION_1p25MS; break;
+#endif
+          case 250:
+            frameDuration = LC3PLUS_FRAME_DURATION_2p5MS; break;
+          case 500:
+            frameDuration = LC3PLUS_FRAME_DURATION_5MS; break;
+          case 750:
+            frameDuration = LC3PLUS_FRAME_DURATION_7p5MS; break;
+          case 1000:
+            frameDuration = LC3PLUS_FRAME_DURATION_10MS; break;
+          case LC3PLUS_FRAME_DURATION_UNDEFINED:
+            assert(0);
+    }
 
     if (!arg.decoder_only)
     {
@@ -231,15 +249,16 @@ int main(int ac, char **av)
             );
         exit_if(err, ERROR_MESSAGE[err]);
         
-
-        err = lc3plus_enc_set_frame_dms(encoder, (int) (arg.frame_ms * 10));
+        err = lc3plus_enc_set_frame_dms(encoder, frameDuration);
         exit_if(err, ERROR_MESSAGE[err]);
 
         err = lc3plus_enc_set_ep_mode(encoder, (LC3PLUS_EpMode)arg.epmode);
         exit_if(err, ERROR_MESSAGE[err]);
 
-        err = lc3plus_enc_set_bitrate(encoder, arg.bitrate);
-        exit_if(err, ERROR_MESSAGE[err]);
+        if ( !arg.bitrate_file ) {
+            err = lc3plus_enc_set_bitrate(encoder, arg.bitrate);
+            exit_if(err, ERROR_MESSAGE[err]);
+        }
 
         delay        = arg.dc ? lc3plus_enc_get_delay(encoder) / arg.dc : 0;
         nSamples     = lc3plus_enc_get_input_samples(encoder);
@@ -275,14 +294,28 @@ int main(int ac, char **av)
 #endif
             );
         exit_if(err, ERROR_MESSAGE[err]);
-        
+      
+        switch ((int) (arg.frame_ms*100))
+        {
+#ifdef CR9_C_ADD_1p25MS
+          case 125:
+            frameDuration = LC3PLUS_FRAME_DURATION_1p25MS; break;
+#endif
+          case 250:
+            frameDuration = LC3PLUS_FRAME_DURATION_2p5MS; break;
+          case 500:
+            frameDuration = LC3PLUS_FRAME_DURATION_5MS; break;
+          case 750:
+            frameDuration = LC3PLUS_FRAME_DURATION_7p5MS; break;
+          case 1000:
+            frameDuration = LC3PLUS_FRAME_DURATION_10MS; break;
+          case LC3PLUS_FRAME_DURATION_UNDEFINED:
+            assert(0);
+        }
 
-
-
-        err = lc3plus_dec_set_frame_dms(decoder, (int) (arg.frame_ms * 10));
+        err = lc3plus_dec_set_frame_dms(decoder, frameDuration);
         exit_if(err, ERROR_MESSAGE[err]);
 
-        
         err = lc3plus_dec_set_ep_enabled(decoder, arg.epmode != 0);
         exit_if(err, ERROR_MESSAGE[err]);
 
@@ -334,10 +367,19 @@ int main(int ac, char **av)
                     !channel_decoder_debug_file_error_report,
                 "Error creating channel decoder debug files!");
     }
+    
+    scratch_size = (MAX(lc3plus_dec_get_scratch_size(decoder), lc3plus_enc_get_scratch_size(encoder))+0x3) & ~3; // round up to 32-bit
 
-    scratch_size = MAX(lc3plus_dec_get_scratch_size(decoder), lc3plus_enc_get_scratch_size(encoder));
     scratch      = malloc(scratch_size);
     exit_if(!scratch, "Failed to allocate scratch memory!");
+
+#ifndef NO_SCRATCH_STATS
+    UWord32 *sc32 = (UWord32*)scratch;
+    for( i = 0; i < scratch_size>>2; i++)
+    {
+        sc32[i] = 0xDEADCAFE;
+    }
+#endif
 
 #ifdef STAMEM_COUNT
     Sta_Mem_Add("Encoder", encoder_size);
@@ -602,9 +644,45 @@ int main(int ac, char **av)
 
     free(encoder);
     free(decoder);
+
+#ifndef NO_SCRATCH_STATS
+    Word32 usedScratch = 0;
+    Word32 unusedScratch = 0;
+    Word32 fragmentedScratch = 0;
+    Word32 maxUsedScratchIndex = 0;
+
+    // initial continuous block:
+    while(0xDEADCAFE != sc32[usedScratch])
+    {
+        usedScratch++;
+    }
+    maxUsedScratchIndex = usedScratch;
+    // later scratch usage:
+    for( i = usedScratch; i < scratch_size>>2; i++)
+    {
+        if(0xDEADCAFE == sc32[i])
+        {
+            unusedScratch++;
+        }
+        else
+        {
+            fragmentedScratch++;
+            maxUsedScratchIndex = i;
+        }
+    }
+    printf("\nScratch statistics (granularity: 4 bytes):\n");
+    printf("Scratch allocated: %d bytes\n", scratch_size);
+    printf("Scratch used (initial continuous block): %d bytes\n", usedScratch*4);
+    printf("Scratch used (fragmented later usage): %d bytes\n", fragmentedScratch*4);
+    printf("Scratch used (initial continuous block + fragmented later usage): %d bytes\n", (usedScratch+fragmentedScratch)*4);
+    printf("Scratch gap: %d bytes\n", ((maxUsedScratchIndex+1-usedScratch-fragmentedScratch)*4));
+    printf("Scratch unused: %d bytes\n", unusedScratch*4);
+    printf("Scratch occupied: %d bytes\n\n", (maxUsedScratchIndex+1)*4);
+#endif
+
     free(scratch);
 
-#if WMOPS
+#ifdef WMOPS
     BASOP_end;
 #else
     BASOP_end_noprint;
@@ -908,7 +986,8 @@ static FILE *open_bitstream_writer(const char *file, uint32_t samplerate, int bi
     if (f_use)
     {
         uint16_t header[10] = {0xcc1c,        sizeof(header), samplerate / 100,
-                              bitrate / 100, channels,       (uint16_t)(frame_ms * 100),
+                              bitrate / 100, channels,       
+                              (uint16_t)(frame_ms * 100),
                               epmode > 0 ? 1 : 0,   signal_len,     signal_len >> 16, hrmode};
         fwrite(&header, sizeof(header), 1, f_use);
     }
@@ -924,6 +1003,7 @@ static FILE *open_bitstream_reader(const char *file, unsigned int *samplerate, i
     FILE *f     = fopen(file, "rb");
     FILE *f_use = f;
     FILE *f_cfg = NULL;
+    int32_t tmp_return_val;
 
     if (g192)
     {
@@ -935,7 +1015,7 @@ static FILE *open_bitstream_reader(const char *file, unsigned int *samplerate, i
     if (f_use)
     {
         uint16_t header[10] = {0};
-        fread(header, sizeof(header), 1, f_use);
+        tmp_return_val = fread(header, sizeof(header), 1, f_use);
         
         if (header[0] != 0xcc1c)
         {
@@ -959,6 +1039,7 @@ static FILE *open_bitstream_reader(const char *file, unsigned int *samplerate, i
         }
     }
 
+    (void) tmp_return_val;
     safe_fclose(f_cfg);
     return f;
 }
@@ -1090,6 +1171,7 @@ static int16_t loopy_read16(FILE *f)
     int8_t tmp8 = -8;
 #endif
     int16_t tmp = 0;
+    int32_t tmp_return_val;
 #ifdef READ_G192FER
     static int16_t format_start_check = -1;
 #endif
@@ -1122,14 +1204,14 @@ static int16_t loopy_read16(FILE *f)
         if (fread(&tmp, sizeof(tmp), 1, f) != 1)
         {
             fseek(f, 0, SEEK_SET);
-            fread(&tmp, sizeof(tmp), 1, f);
+            tmp_return_val = fread(&tmp, sizeof(tmp), 1, f);
         }
     }
 #else 
     if (fread(&tmp, sizeof(tmp), 1, f) != 1)
     {
         fseek(f, 0, SEEK_SET);
-        fread(&tmp, sizeof(tmp), 1, f);
+        tmp_return_val = fread(&tmp, sizeof(tmp), 1, f);
     }
 #endif 
 
@@ -1180,18 +1262,23 @@ static int16_t loopy_read16(FILE *f)
 
     ASSERT(tmp == 1 || tmp == 0);
 #endif 
- 
+    
+    (void) tmp_return_val;
     return tmp;
 }
 
 static int64_t loopy_read64(FILE *f)
 {
     int64_t tmp = 0;
+    int32_t tmp_return_val;
+
     if (fread(&tmp, sizeof(tmp), 1, f) != 1)
     {
         fseek(f, 0, SEEK_SET);
-        fread(&tmp, sizeof(tmp), 1, f);
+        tmp_return_val = fread(&tmp, sizeof(tmp), 1, f);
     }
+    
+    (void) tmp_return_val;
     return tmp;
 }
 

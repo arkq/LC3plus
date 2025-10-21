@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -229,11 +229,11 @@ void processQuantizeSpec_fl(LC3_FLOAT x[], LC3_FLOAT gain, LC3_INT xq[], LC3_INT
         c = (c & 15) * 16 + t;
     }
 
-    *nbits = (bits + 2047) >> 11; // Exactly same as ceil((LC3_FLOAT)*nbits / 2048.0);
+    *nbits = (bits + 2047) >> 11; /*  same as ceil((LC3_FLOAT)*nbits / 2048.0);*/
 
     if (mode >= 0)
     {
-        *nbits2 = (bits2 + 2047) >> 11;  //ceil((LC3_FLOAT)*nbits2 / 2048.0);
+        *nbits2 = (bits2 + 2047) >> 11;  /* ceil((LC3_FLOAT)*nbits2 / 2048.0); */
     }
     else
     {

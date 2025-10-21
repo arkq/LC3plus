@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -16,13 +16,18 @@ void processResidualCoding_fx(Word16 x_e, Word32 x[],
                               Word16 gain_e, Word16 L_spec,
                               Word16 targetBits, Word16 nBits, UWord8 *resBits, Word16 *numResBits
                               , Word16 hrmode
+#if defined (CR9_C_ADD_1p25MS)
+                              , LC3PLUS_FrameDuration frame_dms                      
+#endif
 )
 {
 
     Counter i;
     Word16  s, n, m;
     Word32  L_tmp;
+#if defined (CR9_C_ADD_1p25MS) || defined (ENABLE_HR_MODE)
     Word16  iter = 0;
+#endif
     Counter idx;
     Word16 N_nz = 0;
     Word16 n1, n2;
@@ -143,6 +148,18 @@ void processResidualCoding_fx(Word16 x_e, Word32 x[],
         s = add(s, 16);
         gain = round_fx(gain);
 
+#if defined (CR9_C_ADD_1p25MS)
+        Word16 iter_exit, exit_iter = 0;
+        IF (sub(frame_dms, LC3PLUS_FRAME_DURATION_1p25MS) == 0)
+        {
+            iter_exit = 3; move16();
+        } ELSE {
+            iter_exit = 1; move16();
+        }
+        
+        FOR (iter = 0; iter < iter_exit; iter++)
+        {
+#endif
         FOR (i = 0; i < L_spec; i++)
         {
             IF (xq[i] != 0)
@@ -158,10 +175,20 @@ void processResidualCoding_fx(Word16 x_e, Word32 x[],
                 n = add(n, 1);
                 IF (sub(n, m) == 0)
                 {
+#if defined (CR9_C_ADD_1p25MS)
+                    exit_iter = 1;
+#endif
                     BREAK;
                 }
             }
         }
+#if defined (CR9_C_ADD_1p25MS)
+            IF (exit_iter)
+            {
+                BREAK;
+            }
+        }
+#endif
     }
     *numResBits = n;
     move16();
@@ -177,6 +204,9 @@ void processResidualCoding_fx(Word16 x_e, Word32 x[],
                               Word16 xq[], 
                               Word16 gain, Word16 gain_e, Word16 L_spec,
                               Word16 targetBits, Word16 nBits, UWord8 *resBits, Word16 *numResBits
+#if defined (CR9_C_ADD_1p25MS)
+                              , LC3PLUS_FrameDuration frame_dms                      
+#endif
 )
 {
 
@@ -204,6 +234,18 @@ void processResidualCoding_fx(Word16 x_e, Word32 x[],
 
     s = sub(add(15, gain_e), x_e);
     {
+#if defined (CR9_C_ADD_1p25MS)
+        Word16 iter_exit, exit_iter = 0, iter = 0;
+        IF (sub(frame_dms, LC3PLUS_FRAME_DURATION_1p25MS) == 0)
+        {
+            iter_exit = 3; move16();
+        } ELSE {
+            iter_exit = 1; move16();
+        }
+        
+        FOR (iter = 0; iter < iter_exit; iter++)
+        {
+#endif
         FOR (i = 0; i < L_spec; i++)
         {
             IF (xq[i] != 0)
@@ -222,10 +264,20 @@ void processResidualCoding_fx(Word16 x_e, Word32 x[],
                 n = add(n, 1);
                 IF (sub(n, m) == 0)
                 {
+#if defined (CR9_C_ADD_1p25MS)
+                    exit_iter = 1;
+#endif
                     BREAK;
                 }
             }
         }
+#if defined (CR9_C_ADD_1p25MS)
+        IF (exit_iter)
+        {
+            BREAK;
+        }
+        }
+#endif
     }
     *numResBits = n;
     move16();

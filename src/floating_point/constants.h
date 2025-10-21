@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -13,6 +13,45 @@
 #include "defines.h"
 #include "structs.h"
 
+#ifdef CR9_C_ADD_1p25MS_LRSNS 
+extern const LC3_FLOAT lrsns_st1A_topTab_1bitNoDC[2 * 16];
+extern const LC3_INT16 lrsns_ltp_bits[8];
+
+/*  BASOP table SNSLR st1B_idx search variables */
+extern const LC3_INT16 st1SCF0_7_base5_32x8_Q11[32 * 8];         /* legacy 10ms quantized BASOP SNS stage1 LF tables 32x8=256 values */
+extern const LC3_INT16 st1SCF8_15_base5_32x8_Q11[32 * 8];        /* legacy 10ms quntized BASOP  SNS stage1 HF tables 32x8=256 values */
+
+/* LRSNS st1B, tables to construct from  legacy BASOP st1(LF,HF) tables */
+extern const LC3_INT16 lrsns_st1B_merged170orderSortedSegmCnt[4];
+extern const LC3_INT16 lrsns_st1B_merged170orderSortedSegmCum[5];
+extern const LC3_INT16 lrsns_st1B_merged170orderSort12bitIdx[170];
+
+
+/* LRSNS tables to construct st1C from  Word8in Q7 and a Q4 scalefactor */
+#ifdef LRSNS_CBC_NO_LTPF_DEPENDENCY
+extern const LC3_FLOAT * lrsns_st1CTrainedMapMeans[2];
+#else 
+extern const LC3_FLOAT * lrsns_st1CTrainedMapMeans[3];
+#endif
+extern const LC3_INT8 lrsns_st1C_Both_Word8[170 * 16];
+ 
+extern const LC3_INT16 lrsns_st1C_Both_scaleQ4_7p4bits_fx[2];
+extern const LC3_INT16 lrsns_st1C_Both_inv_scaleQ15_7p4bits_fx[2];
+
+#endif /* CR9_C_ADD_1p25MS_LRSNS */
+
+#ifdef CR9_C_ADD_1p25MS_LRSNS
+
+extern  const LC3_FLOAT lrsns_gains_Q11[3][8]; /* both enc and dec */
+
+extern const LC3_INT16  signs_fix[SNSLR_N_FIXENV];
+extern const LC3_INT16  env_Qs[SNSLR_N_FIXENV];
+extern const LC3_FLOAT  env_Qscale[SNSLR_N_FIXENV];
+extern const LC3_FLOAT  shift_en_norm_factors[SNSLR_N_FIXENV][SNSLR_N_FIXENV_SHIFTS];
+extern const LC3_INT32* env_ptrs[SNSLR_N_FIXENV];
+#endif 
+
+extern const LC3_FLOAT *sns_preemph_adaptMaxTilt_all[6];
 /* DCT */
 extern const Complex dct2_16[16];
 
@@ -28,7 +67,7 @@ extern const LC3_FLOAT sns_W[6];
 extern const LC3_FLOAT *sns_preemph_all[6];
 extern const LC3_FLOAT sns_LFCB[8][32];
 extern const LC3_FLOAT sns_HFCB[8][32];
-extern const LC3_INT   pvq_enc_A[16][11];
+extern const LC3_UINT32 pvq_enc_A[16][11];
 extern const LC3_FLOAT idct_lookup[M][M];
 
 /* 12.8 kHz resampler */
@@ -111,6 +150,11 @@ extern const LC3_INT bands_number_2_5ms_HR[6];
 extern const LC3_INT BW_cutoff_bin_all_2_5ms[MAX_BW_BANDS_NUMBER];
 extern const LC3_INT bands_number_2_5ms[5];
 
+#ifdef CR9_C_ADD_1p25MS
+extern const LC3_INT bands_number_1_25ms[5];
+extern const LC3_INT BW_cutoff_bin_all_1_25ms[];
+#endif
+
 extern const LC3_INT  BW_warp_idx_start_16k_5ms[4];
 extern const LC3_INT  BW_warp_idx_stop_16k_5ms[4];
 extern const LC3_INT  BW_warp_idx_start_24k_5ms[4];
@@ -166,6 +210,19 @@ extern const LC3_FLOAT MDCT_WINDOW_480_5ms[480];
 extern const LC3_FLOAT* MDCT_WINS_5ms[2][6];
 extern const LC3_INT    MDCT_la_zeroes_5ms[6];
 
+#ifdef CR9_C_ADD_1p25MS
+extern const LC3_FLOAT MDCT_WINDOW_80_1_25ms[20];
+extern const LC3_FLOAT MDCT_WINDOW_160_1_25ms[40];
+extern const LC3_FLOAT MDCT_WINDOW_240_1_25ms[60];
+extern const LC3_FLOAT MDCT_WINDOW_320_1_25ms[80];
+extern const LC3_FLOAT MDCT_WINDOW_480_1_25ms[120];
+extern const LC3_FLOAT* MDCT_WINS_1_25ms[2][6];
+extern const LC3_INT    MDCT_la_zeroes_1_25ms[6];
+#ifdef NEW_SIGNALLING_SCHEME_1p25
+extern const LC3_INT16 lrsns_ltp_bits[8];
+#endif
+#endif /* CR9_C_ADD_1p25MS */
+
 extern const LC3_FLOAT* MDCT_WINS_7_5ms[2][6];
 extern const LC3_INT32 MDCT_la_zeroes_7_5ms[6];
 
@@ -174,7 +231,16 @@ extern const LC3_INT MDCT_WINDOWS_LENGTHS_7_5ms[6];
 extern const LC3_INT MDCT_WINDOWS_LENGTHS_5ms[6];
 extern const LC3_INT MDCT_WINDOWS_LENGTHS_2_5ms[6];
 
+#ifdef CR9_C_ADD_1p25MS
+extern const LC3_INT MDCT_WINDOWS_LENGTHS_1_25ms[6];
+#endif
+
 /* Per band energy */
+#ifdef CR9_C_ADD_1p25MS
+extern const LC3_INT* ACC_COEFF_PER_BAND_1_25ms[5];
+extern const LC3_INT* ACC_COEFF_PER_BAND_PLC_1_25ms[5];
+#endif
+
 extern const LC3_INT* ACC_COEFF_PER_BAND[6];
 extern const LC3_INT* ACC_COEFF_PER_BAND_HR[6];
 

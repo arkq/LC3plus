@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -28,7 +28,7 @@ void ProcessingIMDCT(
     Word16       wLen,      /* i:   window length */
     Word16       N,         /* i:   block size */
     Word16       memLen,    /* i:   overlap add buffer size */
-    Word16       frame_dms, /* i:   frame size in ms */
+    LC3PLUS_FrameDuration       frame_dms, /* i:   frame size in ms */
     Word16     concealMethod,     /* i:   concealment method */
     Word16     bfi,               /* i:   bad frame indicator */
     Word16     prev_bfi,          /* i:   previous bad frame indicator */
@@ -82,18 +82,24 @@ void ProcessingIMDCT(
         {
             SWITCH (frame_dms)
             {
-            case 25:
+#ifdef CR9_C_ADD_1p25MS
+            case LC3PLUS_FRAME_DURATION_1p25MS:
+                max_bw = MAX_BW >> 3; move16();
+                BREAK;
+#endif
+            case LC3PLUS_FRAME_DURATION_2p5MS:
                 max_bw = MAX_BW >> 2; move16();
                 BREAK;
-            case 50:
+            case LC3PLUS_FRAME_DURATION_5MS:
                 max_bw = MAX_BW >> 1; move16();
                 BREAK;
-            case 75:
+            case LC3PLUS_FRAME_DURATION_7p5MS:
                 max_bw = (MAX_BW >> 2) * 3; move16();
                 BREAK;
-            case 100:
+            case LC3PLUS_FRAME_DURATION_10MS:
                 max_bw = MAX_BW; move16();
                 BREAK;
+            case LC3PLUS_FRAME_DURATION_UNDEFINED: assert(0);
             }
         }
         
@@ -120,7 +126,7 @@ void ProcessingIMDCT(
             y_s  = sub(y_s, 1);
             *y_e = sub(*y_e, y_s + 3); /* mdct window is scaled by pow(2,x) */
             /* N<=20 only happens for 2.5ms frames in NB */
-            if (sub(N, 20) <= 0)
+            if (sub(N, 30) <= 0)
             {
                 *y_e = add(*y_e, 2);
             }

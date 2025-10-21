@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -21,26 +21,14 @@
    the restrict keyword only gives a improvelent if more than one pointers are
    passed to a function. also note that the MSVC __restrict behaves differently
    from c99, the restrict property is not transferred to aliases.
+*/
 
-   alloca is a bit problematic because behavior is not defined in case of stack
-   overflow. most probably the program will crash. it might be possible to catch
-   those errors but it depends on compiler support. msvc has a safer _malloca
-   but gcc has nothing similar. */
 #if defined _MSC_VER || defined __INTEL_COMPILER
-#include <malloc.h>
-#define ALLOCA(size) _alloca(size)
-#define restrict __restrict
-#define inline __inline
+  #define restrict __restrict
+  #define inline __inline
 #elif defined __GNUC__ || defined __clang__
-#define ALLOCA(size) __builtin_alloca(size)
-#define restrict __restrict__
-#define inline __inline
-#elif defined __TI_COMPILER_VERSION__
-#include <assert.h>
-#define ALLOCA(size) (assert(0 && "ALLOCA is not present for your compiler"), NULL)
-#warn "no stack allocation for you compiler"
-#else
-#error "no stack allocation for your compiler"
+  #define restrict __restrict__
+  #define inline __inline
 #endif
 
 

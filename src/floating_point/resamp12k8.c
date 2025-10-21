@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -10,11 +10,11 @@
 #include "functions.h"
 
 void process_resamp12k8_fl(LC3_FLOAT x[], LC3_INT x_len, LC3_FLOAT mem_in[], LC3_INT mem_in_len, LC3_FLOAT mem_50[], LC3_FLOAT mem_out[],
-                           LC3_INT mem_out_len, LC3_FLOAT y[], LC3_INT* y_len, LC3_INT fs_idx, LC3_INT frame_dms, LC3_INT fs)
+                           LC3_INT mem_out_len, LC3_FLOAT y[], LC3_INT* y_len, LC3_INT fs_idx, LC3PLUS_FrameDuration frame_dms, LC3_INT fs)
 {
     
 
-    LC3_INT   len_12k8, N12k8, i, k;
+    LC3_INT   len_12k8 = 0, N12k8, i, k;
     LC3_FLOAT mac, bufdown[128], buf[120 + MAX_LEN];
     LC3_INT32 index_int, index_frac, resamp_upfac, resamp_delay, resamp_off_int, resamp_off_frac;
     LC3_FLOAT u_11, u_21, u_1, u_2;
@@ -23,18 +23,25 @@ void process_resamp12k8_fl(LC3_FLOAT x[], LC3_INT x_len, LC3_FLOAT mem_in[], LC3
 
     switch (frame_dms)
     {
-        case 25:
+#ifdef CR9_C_ADD_1p25MS
+        case LC3PLUS_FRAME_DURATION_1p25MS:
+            len_12k8 = LEN_12K8 / 8;
+            break;
+#endif
+        case LC3PLUS_FRAME_DURATION_2p5MS:
             len_12k8 = LEN_12K8 / 4;
             break;
-        case 50:
+        case LC3PLUS_FRAME_DURATION_5MS:
             len_12k8 = LEN_12K8 / 2;
             break;
-        case 75:
+        case LC3PLUS_FRAME_DURATION_7p5MS:
             len_12k8 = (LEN_12K8 / 4) * 3;
             break;
-        case 100:
+        case LC3PLUS_FRAME_DURATION_10MS:
             len_12k8 = LEN_12K8;
             break;
+        case LC3PLUS_FRAME_DURATION_UNDEFINED:
+            assert(0);
     }
 
     *y_len = len_12k8;

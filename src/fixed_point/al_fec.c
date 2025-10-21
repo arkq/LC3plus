@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -499,9 +499,9 @@ void fec_encoder(Word16 mode, Word16 epmr, UWord8 *iobuf, Word16 data_bytes, Wor
         int tmp = slot_bytes;
         assert((slot_bytes >= FEC_SLOT_BYTES_MIN && slot_bytes <= FEC_SLOT_BYTES_MAX) &&
                "fec_encoder: slot_bytes out of range");
-        tmp -= mode == 1 ? 1 : n_codewords * (mode - 1);                                 // reed solomon redundancy
-        tmp -= slot_bytes == 40 ? crc1_bytes_by_mode0[mode] : crc1_bytes_by_mode1[mode]; // crc1
-        tmp -= (n_pccw > 0) && (mode > 1) ? crc2_bytes_by_mode[mode] : 0;                // crc2
+        tmp -= mode == 1 ? 1 : n_codewords * (mode - 1);                                 /* reed solomon redundancy */
+        tmp -= slot_bytes == 40 ? crc1_bytes_by_mode0[mode] : crc1_bytes_by_mode1[mode]; /* crc1 */
+        tmp -= (n_pccw > 0) && (mode > 1) ? crc2_bytes_by_mode[mode] : 0;                /* crc2 */
         assert(data_bytes == tmp && "fec_encoder: inconsistent payload size");
         assert(n_codewords - n_pccw >= 6);
     }
@@ -794,6 +794,7 @@ int fec_decoder(UWord8 *iobuf, Word16 slot_bytes, int *data_bytes, Word16 *epmr,
     *data_bytes = fec_get_data_size(mode, ccc_flag, slot_bytes); move32();
     pc_split    = fec_get_n_pc(mode, *n_pccw, slot_bytes);
     n_crc       = get_total_crc_size(slot_bytes, mode, pc_split);
+    UNUSED(n_crc);
 
     /* decoding of first code word */
     redundancy_nibbles = sub(hamming_distance_by_mode0[mode], 1);
@@ -1232,7 +1233,7 @@ FEC_STATIC int rs16_detect_and_correct(UWord8 *iobuf, int n_symb, int n_codeword
                 }
             }
         }
-        assert(n_mode_candidates <= 4); // suppress false gcc warning when OPTIM=3
+        assert(n_mode_candidates <= 4); /* suppress false gcc warning when OPTIM=3 */
         
         /* sort mode candidates by risk */
         FOR (i = 0; i < n_mode_candidates; i++)

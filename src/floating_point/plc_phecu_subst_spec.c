@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -52,7 +52,7 @@ void plc_phEcu_subst_spec(LC3_INT32* plocs, LC3_INT32 n_plocs, LC3_FLOAT* f0est,
         corr_phase[i] = (LC3_FLOAT)2.0 * (LC3_FLOAT)M_PI_LC3PLUS * (f0est[i]/Lprot)*(LC3_FLOAT)t_adv;
     }
 
-    // EVOLVE PHASE -----------------
+    /* EVOLVE PHASE -----------------*/
     
     one_peak_flag_mask = -1;	
     fs_idx = (LC3_INT16)LC3_FLOOR((LC3_FLOAT)Lprot / 160.0);  /* aquire, fs_idx for 10 ms frame sizes */

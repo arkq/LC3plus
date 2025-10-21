@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -22,13 +22,14 @@ static int Dec_LC3PLUS_Channel(LC3PLUS_Dec *decoder, int channel, int bits_per_s
 #ifdef ENABLE_RFRAME
     Word16 rframe = 0;
 #endif
-    Word16 ltpf_idx[3];
+    Word16 ltpf_idx[3] = {0};
     Word16 spec_inv_idx = 0;
     Counter i;
 
     /* Buffers */
     Word16 *int_scf_fx_exp, tns_order[TNS_NUMFILTERS_MAX];
     UWord8 *resBitBuf;
+    Word16 resBitBufLen;
 #ifdef ENABLE_HR_MODE
     Word32 *sqQdec;
 #else
@@ -41,11 +42,26 @@ static int Dec_LC3PLUS_Channel(LC3PLUS_Dec *decoder, int channel, int bits_per_s
     Word32 *  q_d_fx;
     Word8 *   currentScratch;
     DecSetup *h_DecSetup = decoder->channel_setup[channel];
-#ifdef ENABLE_HR_MODE
+
+#ifdef CR9_C_ADD_1p25MS_LRSNS
+    Word16 pitch_rx_fx;
+    Word16 ltpf_rx_fx;
+#endif
+
+#ifdef CR9_C_ADD_1p25MS_LRSNS
+    Word32 scf_q_ip[M];
+#   ifdef ENABLE_HR_MODE
+    //Counter i;
+    Word32* x_fx_ip;
+    Word32 *int_scf_fx_ip;
+#   endif
+#else
+#   ifdef ENABLE_HR_MODE
     Word32 *x_fx_ip;
     Word32 *int_scf_fx_ip;
     Word32 scf_q_ip[M];
-#endif
+#   endif
+#endif /*  CR9_C_ADD_1p25MS_LRSNS  */
 
 #ifdef DYNMEM_COUNT
     struct _dynmem
@@ -73,6 +89,7 @@ static int Dec_LC3PLUS_Channel(LC3PLUS_Dec *decoder, int channel, int bits_per_s
         Word16 *sqQdec;
 #endif
         Word16 *int_scf_fx, *x_fx, *indexes;
+        Word16 resBitBufLen;
         Word32 *L_scf_idx;
         Word32 *q_d_fx;
         Word8 * currentScratch;
@@ -91,12 +108,35 @@ static int Dec_LC3PLUS_Channel(LC3PLUS_Dec *decoder, int channel, int bits_per_s
 
     /* BUFFER INITIALISATION. Some buffers may overlap since they are not used in the whole decoding process */
     q_d_fx    = scratchAlign(scratchBuffer, 0); /* Size = 4 * MAX_LEN bytes */
+
+#ifdef CR9_C_ADD_1p25MS
+    IF (decoder->frame_dms==LC3PLUS_FRAME_DURATION_1p25MS) 
+    {
+        resBitBufLen = 3;
+    }
+    ELSE {
+#endif
+    resBitBufLen = 2;
+#ifdef CR9_C_ADD_1p25MS
+    }
+#endif
+
 #ifdef ENABLE_HR_MODE
     /* allocate memory for residual bits */
     if (decoder->hrmode)
     {
-        resBitBuf = scratchAlign(q_d_fx, sizeof(*q_d_fx) *
+#ifdef CR9_C_ADD_1p25MS
+        IF (decoder->frame_dms==LC3PLUS_FRAME_DURATION_1p25MS) 
+        { 
+            resBitBuf = scratchAlign(q_d_fx, sizeof(*q_d_fx) *
+                                             decoder->frame_length * 3); 
+        }
+        ELSE
+#endif
+        {
+            resBitBuf = scratchAlign(q_d_fx, sizeof(*q_d_fx) *
                                              decoder->frame_length);
+        }
         basop_memset(resBitBuf, 0, sizeof(*resBitBuf) * MAX_RESBITS_LEN);
     }
     else
@@ -105,13 +145,14 @@ static int Dec_LC3PLUS_Channel(LC3PLUS_Dec *decoder, int channel, int bits_per_s
         resBitBuf = scratchAlign(q_d_fx, sizeof(*q_d_fx) *
                                  decoder->frame_length); /* Size = 2 * NPRM_RESQ = 2 * MAX_LEN bytes for
                                                             normal case and 2*MAX_RESBITS_LEN for hrmode */
-        basop_memset(resBitBuf, 0, sizeof(*resBitBuf) * 2 * decoder->frame_length); 
+        
+        basop_memset(resBitBuf, 0, sizeof(*resBitBuf) * resBitBufLen * decoder->frame_length);
     }
-    
+
 #ifdef ENABLE_HR_MODE
         indexes = scratchAlign(resBitBuf, sizeof(*resBitBuf) * MAX_RESBITS_LEN);
 #else
-        indexes = scratchAlign(resBitBuf, sizeof(*resBitBuf) * 2 * decoder->frame_length);
+        indexes = scratchAlign(resBitBuf, sizeof(*resBitBuf) * resBitBufLen * decoder->frame_length);
 #endif
         memset(indexes, 0, sizeof(*indexes) * TNS_NUMFILTERS_MAX * MAXLAG);
 
@@ -134,11 +175,11 @@ static int Dec_LC3PLUS_Channel(LC3PLUS_Dec *decoder, int channel, int bits_per_s
         scratchAlign(q_d_fx, sizeof(*q_d_fx) * decoder->frame_length); /* Size = 2 * (MAX_LEN + MDCT_MEM_LEN_MAX) = 2
                                                                         * MAX_LEN + 1.25 * MAX_LEN = 3.25 * MAX_LEN */
 #endif
-    
+
 #ifdef ENABLE_HR_MODE
     x_fx_ip        = scratchAlign(x_fx, sizeof(*x_fx) * (decoder->frame_length + decoder->stDec_ola_mem_fx_len));
     int_scf_fx_ip  = scratchAlign(x_fx_ip, sizeof(*x_fx_ip) * (decoder->frame_length + decoder->stDec_ola_mem_fx_len));
-    
+
     currentScratch = scratchAlign(int_scf_fx_ip, sizeof(*int_scf_fx_ip) * 2 * MAX_BANDS_NUMBER); /* Size = 4 * MAX_LEN */
 #else
     currentScratch = scratchAlign(x_fx, sizeof(*x_fx) * 4 * MAX_LEN); /* Size = 4 * MAX_LEN */
@@ -170,11 +211,29 @@ static int Dec_LC3PLUS_Channel(LC3PLUS_Dec *decoder, int channel, int bits_per_s
     }
 
     BASOP_sub_start("Entropy dec");
+#ifdef NEW_SIGNALLING_SCHEME_1p25
+    h_DecSetup->ltpfinfo_frame_cntr_fx = add_sat(h_DecSetup->ltpfinfo_frame_cntr_fx, 1);
+    /*ltpfinfo_frame_cntr_fx increased always,  also for bfi=1  */  /* set or reset inside dec_entropy_fx() */
+#endif
+
     IF (sub(bfi, 1) != 0)
     {
         processDecoderEntropy_fx(bs_in, &bp_side, &mask_side, h_DecSetup->total_bits, decoder->yLen, decoder->fs_idx,
                                  decoder->BW_cutoff_bits, &tns_numfilters, &lsbMode, &lastnz, &bfi, tns_order,
-                                 &fac_ns_idx, &gg_idx, &BW_cutoff_idx, ltpf_idx, L_scf_idx, decoder->frame_dms);
+                                 &fac_ns_idx, &gg_idx, &BW_cutoff_idx, ltpf_idx, L_scf_idx, decoder->frame_dms
+#ifdef CR9_C_ADD_1p25MS
+#   ifdef FIX_TX_RX_STRUCT_STEREO
+                                 , h_DecSetup->ltpf_rx_status, &h_DecSetup->ltpf_mem_continuation
+#   else
+                                 , decoder->ltpf_rx_status, &decoder->ltpf_mem_continuation
+#    endif
+#    ifdef NEW_SIGNALLING_SCHEME_1p25
+                                 ,
+                                 &h_DecSetup->ltpfinfo_frame_cntr_fx
+#    endif
+#endif
+                                );
+
         BW_cutoff_idx_nf = BW_cutoff_idx;
         move16();
     }
@@ -192,7 +251,7 @@ static int Dec_LC3PLUS_Channel(LC3PLUS_Dec *decoder, int channel, int bits_per_s
                              , decoder->hrmode
 #endif
         );
-        
+
 #ifdef ENABLE_RFRAME
         test();test();
         IF (sub(rframe, 1) == 0 && zero_frame == 0 && sub(bfi, 1) != 0)
@@ -202,24 +261,31 @@ static int Dec_LC3PLUS_Channel(LC3PLUS_Dec *decoder, int channel, int bits_per_s
             Word16 max_bw_stopband = BW_cutoff_bin_all[BW_cutoff_idx];
             SWITCH (decoder->frame_dms)
             {
-            case 25:
-                max_bw_stopband  = shr_pos(max_bw_stopband, 2);
-                BREAK;
-            case 50:
-                max_bw_stopband  = shr_pos(max_bw_stopband, 1);
-                BREAK;
-            case 75:
-                max_bw_stopband = add(shr_pos(max_bw_stopband, 2), add(shr_pos(max_bw_stopband, 2), shr_pos(max_bw_stopband, 2)));
-                BREAK;
-            case 100:
-                BREAK;
+#ifdef CR9_C_ADD_1p25MS
+              case LC3PLUS_FRAME_DURATION_1p25MS:
+                  max_bw_stopband  = shr_pos(max_bw_stopband, 3);
+                  BREAK;
+#endif
+              case LC3PLUS_FRAME_DURATION_2p5MS:
+                  max_bw_stopband  = shr_pos(max_bw_stopband, 2);
+                  BREAK;
+              case LC3PLUS_FRAME_DURATION_5MS:
+                  max_bw_stopband  = shr_pos(max_bw_stopband, 1);
+                  BREAK;
+              case LC3PLUS_FRAME_DURATION_7p5MS:
+                  max_bw_stopband = add(shr_pos(max_bw_stopband, 2), add(shr_pos(max_bw_stopband, 2), shr_pos(max_bw_stopband, 2)));
+                  BREAK;
+              case LC3PLUS_FRAME_DURATION_10MS:
+                  BREAK;
+              case LC3PLUS_FRAME_DURATION_UNDEFINED:
+                  assert(0);
             }
-            
+
             spec_inv_idx = s_max(lastnz, max_bw_stopband);
             move16();
         }
 #endif
-        
+
         IF (bfi == 0)
         {
             processAriDecoderScaling_fx(sqQdec, decoder->yLen, q_d_fx, &q_fx_exp);
@@ -228,8 +294,27 @@ static int Dec_LC3PLUS_Channel(LC3PLUS_Dec *decoder, int channel, int bits_per_s
     BASOP_sub_end(); /* Ari dec */
 
     BASOP_sub_start("SnsQuantScfDec");
+
     IF (sub(bfi, 1) != 0)
+#ifdef  CR9_C_ADD_1p25MS_LRSNS
     {
+        IF(sub(decoder->frame_dms, LC3PLUS_FRAME_DURATION_1p25MS) == 0)
+        {
+            pitch_rx_fx = ltpf_idx[0]; move16();
+
+#ifdef  LRSNS_CBC_NO_LTPF_DEPENDENCY
+            ltpf_rx_fx = 0;           move16(); /* CB_C with binary means ,  not dependent on LTPF activation */
+#else
+            ltpf_rx_fx  = ltpf_idx[1]; move16();/*  CB_C, with ternary means  dependent on LTPF activation */
+#endif
+            snsQuantScfDecLR_fx(L_scf_idx, scf_q_ip, scf_q, pitch_rx_fx, ltpf_rx_fx, currentScratch); /*  9,12,29,30,  bits decoding and 2 pitch info bits  */
+#ifdef ENABLE_HR_MODE
+            downshift_w32_arr(scf_q_ip /* Q26 */, scf_q/* Q11 */, 26 - 11, M);  /* W16Q11 version required for PLC  */
+#endif
+        }
+        ELSE
+#endif   /* CR9_C_ADD_1p25MS_LRSNS */
+        {
         /* currentScratch Size = 96 bytes */
 #ifdef ENABLE_HR_MODE
         processSnsQuantizeScfDecoder_fx(L_scf_idx, scf_q_ip, currentScratch);
@@ -238,6 +323,9 @@ static int Dec_LC3PLUS_Channel(LC3PLUS_Dec *decoder, int channel, int bits_per_s
         processSnsQuantizeScfDecoder_fx(L_scf_idx, scf_q, currentScratch);
 #endif
     }
+#ifdef  CR9_C_ADD_1p25MS_LRSNS
+}
+#endif
     BASOP_sub_end();
 
     BASOP_sub_start("PLC::ComputeStabFac");
@@ -267,6 +355,22 @@ static int Dec_LC3PLUS_Channel(LC3PLUS_Dec *decoder, int channel, int bits_per_s
     }
     BASOP_sub_end();
 
+#ifdef FIX_PLC_CONFORM_ISSUES
+#ifdef CR9_C_ADD_1p25MS
+    IF( sub( bfi, 1 ) == 0 )
+    {
+#ifdef FIX_TX_RX_STRUCT_STEREO
+        h_DecSetup->ltpf_rx_status[0] = 0;
+        h_DecSetup->ltpf_rx_status[1] = 0;
+#else
+        decoder->ltpf_rx_status[0] = 0;
+        decoder->ltpf_rx_status[1] = 0;
+#endif
+    }
+#endif
+#endif
+
+
     IF (sub(bfi, 1) != 0)
     {
         BASOP_sub_start("Residual dec");
@@ -274,16 +378,23 @@ static int Dec_LC3PLUS_Channel(LC3PLUS_Dec *decoder, int channel, int bits_per_s
 #ifdef ENABLE_HR_MODE
                                    , decoder->hrmode
 #endif
+#if defined (CR9_C_ADD_1p25MS)
+                                   , decoder->frame_dms
+#endif
         );
         BASOP_sub_end();
 
         BASOP_sub_start("Noisefill");
         /* currentScratch Size = 2 * MAX_LEN bytes */
+#ifdef CR9_C_ADD_1p25MS
         IF (zero_frame == 0)
+#else
+        IF (zero_frame == 0)
+#endif
         {
             processNoiseFilling_fx(q_d_fx, nf_seed, q_fx_exp, fac_ns_idx, BW_cutoff_idx_nf, decoder->frame_dms,
                                    h_DecSetup->prev_fac_ns_fx, spec_inv_idx, currentScratch
-#ifdef ENABLE_HR_MODE 
+#ifdef ENABLE_HR_MODE
                                    , decoder->hrmode
 #endif
             );
@@ -294,6 +405,9 @@ static int Dec_LC3PLUS_Channel(LC3PLUS_Dec *decoder, int channel, int bits_per_s
         processApplyGlobalGain_fx(q_d_fx, &q_fx_exp, decoder->yLen, gg_idx, h_DecSetup->quantizedGainOff);
         BASOP_sub_end();
 
+#ifdef CR9_C_ADD_1p25MS
+        if (tns_numfilters > 0) {
+#endif
         BASOP_sub_start("Tns_dec");
         /* currentScratch Size = 48 bytes */
         processTnsDecoder_fx(indexes, q_d_fx, decoder->yLen, tns_order, &q_fx_exp, BW_cutoff_idx, decoder->frame_dms,
@@ -303,6 +417,9 @@ static int Dec_LC3PLUS_Channel(LC3PLUS_Dec *decoder, int channel, int bits_per_s
 #endif
         );
         BASOP_sub_end();
+#ifdef CR9_C_ADD_1p25MS
+        }
+#endif
 
 #ifdef ENABLE_HR_MODE
         BASOP_sub_start("SnsInterpScfDec");
@@ -328,7 +445,7 @@ static int Dec_LC3PLUS_Channel(LC3PLUS_Dec *decoder, int channel, int bits_per_s
         /* end int_scf_fx */
 #endif /* ENABLE_HR_MODE */
     }
-    
+
     /* x_fx_ip will be used to store h_DecSetup->stDec_ola_mem_fx returned by PLCmain_fx*/
     /* This will be upshifted to 32 bit overlap buffer outside of the PLCmain function */
 #ifdef ENABLE_HR_MODE
@@ -363,7 +480,7 @@ static int Dec_LC3PLUS_Channel(LC3PLUS_Dec *decoder, int channel, int bits_per_s
                       , decoder->alpha_type_2_table
                       );
     BASOP_sub_end();
-    
+
 #ifdef ENABLE_HR_MODE
     IF(sub(bfi, 1) == 0)
     {
@@ -383,7 +500,7 @@ static int Dec_LC3PLUS_Channel(LC3PLUS_Dec *decoder, int channel, int bits_per_s
             h_DecSetup->ltpf_mem_pitch_int, ltpf_idx[0], q_d_fx, &q_fx_exp, h_DecSetup->q_old_d_fx,
             &h_DecSetup->q_old_fx_exp, decoder->yLen, h_DecSetup->plcAd->stab_fac, decoder->frame_dms,
             &h_DecSetup->plcAd->cum_fading_slow, &h_DecSetup->plcAd->cum_fading_fast, spec_inv_idx
-            , h_DecSetup->plcAd->plc_fadeout_type               
+            , h_DecSetup->plcAd->plc_fadeout_type
         );
     }
     BASOP_sub_end();
@@ -404,7 +521,7 @@ static int Dec_LC3PLUS_Channel(LC3PLUS_Dec *decoder, int channel, int bits_per_s
                     , decoder->hrmode
 #endif
     );
-    
+
 #ifdef ENABLE_HR_MODE
         IF(sub(bfi, 1) != 0 || sub(h_DecSetup->concealMethod, LC3_CON_TEC_NS_STD) == 0 || sub(h_DecSetup->concealMethod, LC3_CON_TEC_NS_ADV) == 0 || sub(h_DecSetup->concealMethod, LC3_CON_TEC_FREQ_MUTING) == 0)
         {
@@ -440,11 +557,23 @@ static int Dec_LC3PLUS_Channel(LC3PLUS_Dec *decoder, int channel, int bits_per_s
                             &h_DecSetup->ltpf_mem_pitch_int, &h_DecSetup->ltpf_mem_pitch_fr, &h_DecSetup->ltpf_mem_gain,
                             &h_DecSetup->ltpf_mem_active, h_DecSetup->ltpf_scale_fac_idx, bfi,
                             h_DecSetup->concealMethod,
-                            h_DecSetup->plc_damping, &h_DecSetup->ltpf_mem_scale_fac_idx,               
+                            h_DecSetup->plc_damping, &h_DecSetup->ltpf_mem_scale_fac_idx,
                             &h_DecSetup->rel_pitch_change, decoder->hrmode, decoder->frame_dms,
-                            currentScratch);
+                            currentScratch
+#ifdef CR9_C_ADD_1p25MS
+#ifdef FIX_TX_RX_STRUCT_STEREO
+                            ,&h_DecSetup->ltpf_mem_continuation, &h_DecSetup->ltpf_mem_pitch_int_prev,
+                            &h_DecSetup->ltpf_mem_pitch_fr_prev, &h_DecSetup->ltpf_mem_beta_idx_prev, &h_DecSetup->ltpf_mem_gain_prev,
+                            &h_DecSetup->ltpf_mem_active_prev, &h_DecSetup->ltpf_pitch_stability_counter
+#else
+                            , &decoder->ltpf_mem_continuation, &decoder->ltpf_mem_pitch_int_prev,
+                            &decoder->ltpf_mem_pitch_fr_prev, &decoder->ltpf_mem_beta_idx_prev, &decoder->ltpf_mem_gain_prev,
+                            &decoder->ltpf_mem_active_prev, &decoder->ltpf_pitch_stability_counter
+#endif
+#endif
+                           );
     BASOP_sub_end();
-    
+
 #ifdef ENABLE_HR_MODE
     IF (!(decoder->hrmode))
     {
@@ -454,7 +583,7 @@ static int Dec_LC3PLUS_Channel(LC3PLUS_Dec *decoder, int channel, int bits_per_s
         }
     }
 #endif
-    
+
     BASOP_sub_start("Output scaling");
     {
         scale  = sub(sub(31 + 16, bits_per_sample), q_fx_exp);
@@ -562,6 +691,7 @@ LC3PLUS_Error Dec_LC3PLUS(LC3PLUS_Dec *decoder, UWord8 *input, int num_bytes, vo
         {
             decoder->epmr = 12;
             out_bfi       = 0;
+            decoder->error_report = 0;
 
             for (ch = 0; ch < decoder->channels; ch++)
             {
@@ -571,10 +701,16 @@ LC3PLUS_Error Dec_LC3PLUS(LC3PLUS_Dec *decoder, UWord8 *input, int num_bytes, vo
 
                 channel_bfi = bfi;
 
-                decoder->error_report =
+                Word32 chan_error_report =
                     fec_decoder(input, fec_num_bytes, &lc3_num_bytes, &channel_epmr, decoder->combined_channel_coding,
                                 &decoder->n_pccw, &channel_bfi, &decoder->be_bp_left, &decoder->be_bp_right,
                                 &decoder->n_pc, &decoder->m_fec, scratch);
+                
+                if (chan_error_report < 0 || decoder->error_report < 0) {
+                    decoder->error_report = -1; move16();
+                } else {
+                    decoder->error_report = add(decoder->error_report, chan_error_report);
+                }
 
                 BASOP_sub_end();
 

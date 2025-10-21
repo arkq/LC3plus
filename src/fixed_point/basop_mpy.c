@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -30,6 +30,32 @@ Word32 Mpy_32_16_0(Word32 x, Word16 y)
   return (z);
 }
 #endif
+
+/* Is this port necessary ? */
+#ifdef CR9_C_ADD_1p25MS_LRSNS 
+#  if !defined(__arm__) && !defined(__hexagon__)
+/*#define Mpy_32_16_0_DEFINED */
+/*
+Word32 Mpy_32_16_0(Word32 x, Word16 y)
+{
+    Word32 z;
+
+    z = L_shr(L_add(Mpy_32_16(x, y), 1), 1);
+
+    return (z);
+}
+*/
+
+
+
+Word32 Mpy_32_16_0_0(Word32 x, Word16 y)
+{
+    Word32 z;
+    z = L_shr_pos(Mpy_32_16(x, y), 1);   /* stay downshifted,  no rounding,  to exactly match a single SMULWB */
+    return (z);
+}
+#endif
+#endif 
 
 Word32 Mpy_32_16(Word32 x, Word16 y)
 {

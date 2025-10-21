@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -144,16 +144,16 @@ int main(int ac, char **av)
 #endif
 
     /* Setup Decoder */
-    decoder_size = lc3plus_dec_get_size(sampleRate, nChannels, (LC3PLUS_PlcMode)arg.plcMeth);
+    decoder_size = lc3plus_dec_get_size(sampleRate, nChannels, (LC3PLUS_PlcMode)LC3PLUS_PLC_ADVANCED);
     decoder      = malloc(decoder_size);
-    err          = lc3plus_dec_init(decoder, sampleRate, nChannels, (LC3PLUS_PlcMode)arg.plcMeth
+    err          = lc3plus_dec_init(decoder, sampleRate, nChannels, (LC3PLUS_PlcMode)LC3PLUS_PLC_ADVANCED
 #ifdef ENABLE_HR_MODE
                                     , arg.hrmode
 #endif
                                    );
     exit_if(err, ERROR_MESSAGE[err]);
 
-    err = lc3plus_dec_set_frame_dms(decoder, (int)(arg.frame_ms * 10));
+    err = lc3plus_dec_set_frame_dms(decoder, (int)( (arg.frame_ms * 100) / 125 ));
     exit_if(err, ERROR_MESSAGE[err]);
 
     err = lc3plus_dec_set_ep_enabled(decoder, arg.epmode != 0);
@@ -245,7 +245,7 @@ int main(int ac, char **av)
     free(decoder);
     free(scratch);
 
-#if WMOPS
+#ifdef WMOPS
     BASOP_end;
 #else
     BASOP_end_noprint;
@@ -608,7 +608,18 @@ LC3PLUS_Error channel_coder_pack(LC3PLUS_Dec *decoder, UWord8 *bytes, int num_by
         nbbits        = shl_pos(h_DecSetup->targetBytes, 3);
         processDecoderEntropy_fx(bytes, &bp_side, &mask_side, nbbits, decoder->yLen, decoder->fs_idx,
                                  decoder->BW_cutoff_bits, &tns_numfilters, &lsbMode, &lastnz, &ch_bfi, tns_order,
-                                 &fac_ns_idx, &gg_idx, &gg_idx, ltpf_idx, L_scf_idx, decoder->frame_dms);
+                                 &fac_ns_idx, &gg_idx, &gg_idx, ltpf_idx, L_scf_idx, decoder->frame_dms
+#ifdef CR9_C_ADD_1p25MS 
+#ifdef FIX_TX_RX_STRUCT_STEREO                
+                                 , h_DecSetup->ltpf_rx_status, &h_DecSetup->ltpf_mem_continuation
+#    ifdef NEW_SIGNALLING_SCHEME_1p25   
+                                 , &h_DecSetup->ltpfinfo_frame_cntr_fx
+#    endif
+#else
+                                , decoder->ltpf_rx_status, &decoder->ltpf_mem_continuation
+#endif 
+#endif 
+                                );
         channel_bfi = ch_bfi;
 
         processAriDecoder_fx(bytes, &bp_side, &mask_side, nbbits, decoder->yLen, decoder->fs_idx,
@@ -732,8 +743,19 @@ LC3PLUS_Error channel_coder_unpack(LC3PLUS_Dec *decoder, UWord8 *input_bytes, in
             nbbits        = shl_pos(*lc3_num_bytes, 3);
             processDecoderEntropy_fx(input_bytes, &bp_side, &mask_side, nbbits, decoder->yLen, decoder->fs_idx,
                                      decoder->BW_cutoff_bits, &tns_numfilters, &lsbMode, &lastnz, &ch_bfi, tns_order,
-                                     &fac_ns_idx, &gg_idx, &gg_idx, ltpf_idx, L_scf_idx, decoder->frame_dms);
-            // BW_cutoff_idx_nf = BW_cutoff_idx;  move16();
+                                     &fac_ns_idx, &gg_idx, &gg_idx, ltpf_idx, L_scf_idx, decoder->frame_dms
+#ifdef CR9_C_ADD_1p25MS           
+#ifdef FIX_TX_RX_STRUCT_STEREO                      
+                                    , decoder->channel_setup[ch]->ltpf_rx_status, &decoder->channel_setup[ch]->ltpf_mem_continuation
+#    ifdef NEW_SIGNALLING_SCHEME_1p25   
+                                 , &h_DecSetup->ltpfinfo_frame_cntr_fx
+#    endif
+#else
+                                    , decoder->ltpf_rx_status, ,&decoder->ltpf_mem_continuation
+#endif
+#endif   
+                                    );
+            
             channel_bfi = ch_bfi;
         }
 

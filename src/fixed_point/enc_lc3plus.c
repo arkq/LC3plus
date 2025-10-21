@@ -1,14 +1,13 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
 ******************************************************************************/
-
+#include <stdio.h>
 #include "functions.h"
-#include <stdio.h>  // ToDo: probably to be removed
 
 static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_sample, Word32 *s_in, UWord8 *bytes,
                             Word8 *scratchBuffer, int bfi_ext)
@@ -36,7 +35,7 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
                       Word32 * s_in_scaled;
                       Word16 * s_in_scaled_lp;
                       UWord8 * resBits;
-                      Word16 ltpf_idx[3]; 
+                      Word16 ltpf_idx[3];
                       EncSetup * h_EncSetup;
                       Word8 * currentScratch;
                       Word16 hrmode;
@@ -52,12 +51,53 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
                       Word16 * scf, *scf_q; Word16 * codingdata; Word16 * s_in_scaled; UWord8 * resBits;
                       Word8 * currentScratch; Word16 ltpf_idx[3]; EncSetup * h_EncSetup;);
 #endif /* ENABLE_HR_MODE */
-    
+
+#ifdef CR9_C_ADD_1p25MS_LRSNS
+    Word16 envelope_bits_fx;
+    Word16 pitch_rx_fx;
+    Word16 ltpf_rx_fx;
+    Word16 lrsns_st1C_in_use ;
+    Word16 ltptx_lowest_bit_lim;
+#endif
+
+#ifdef CR9_C_ADD_1p25MS_LRSNS
+    envelope_bits_fx = -1;  /*later move up to Dynmem() struct area */
+#endif
     h_EncSetup = encoder->channel_setup[channel];
-    
-#ifdef ENABLE_HR_MODE  
+
+#ifdef ENABLE_HR_MODE
     hrmode = encoder->hrmode;
 #endif
+
+ 
+#ifndef FIX_1p25_GG_EST_TUPLES 
+   
+#if defined (FIX_BASOP_ENC_QUANTIZE_1P25MS_512KBPS)   
+        /* make sure the initial allocated d_fx buffer size is a multiple of 4 */
+        /* ms_mode   Fs    frame_length  frame_ylen     misc             */
+        /* 1.25ms  16 kHz  20/2=10         same          2-tuples      */
+        /* 1.25ms  24kHz   30/2=15        same           2-tuples action in estimate_global_gain() */
+        /* 1.25ms  32kHz   40/2=10        same           2-tuples     */
+        /* 1.25ms  48kHz   60/3=20        50/3=16.66      3-tuples, 60/3 =15 allocated , separate action  in estimate_global_gain(),  50==60*40/48 */
+        /* 2.5 ms  8 kHz   20/4=5         same            4-tuples    */
+
+        Word16 lg_4  = shr(encoder->frame_length, 2);
+        Word16 rem_4 = sub(encoder->frame_length, shl(lg_4, 2));
+        if (rem_4 != 0 && sub(encoder->frame_length, encoder->yLen) == 0)
+        {
+            lg_4 = add(lg_4, 1); /* add one quadruple */
+            ASSERT(encoder->frame_dms == LC3PLUS_FRAME_DURATION_1p25MS);
+            ASSERT(MAX_LEN >= lg_4 * 4 ); /* "en" size in estimate_global_gain_fx() */
+        }
+#  ifdef         FIX_BASOP_1p25_NEW_GG_EST3 
+        if(encoder->frame_dms == LC3PLUS_FRAME_DURATION_1p25MS && (sub(encoder->frame_length, 30) <= 0))   /* WB and SSWB */
+        {
+            ASSERT(MAX_LEN >= 2 + lg_4 * 4); /*make sure that there are 2 extra tail coeffs  in d_fx*/
+        }
+#  endif 
+#endif
+#endif
+
 
     BASOP_sub_start("Encoder");
 
@@ -65,6 +105,14 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
     d_fx      = scratchAlign(scratchBuffer, 0); /* Size = 4 * MAX_LEN bytes */
     L_scf_idx = scratchAlign(
         d_fx, sizeof(*d_fx) * s_max(80, encoder->frame_length)); /* Size = 4 * SCF_MAX_PARAM -> aligned to 32 bytes */
+
+#ifdef FIX_1p25_GG_EST_TUPLES 
+    if (encoder->frame_dms == LC3PLUS_FRAME_DURATION_1p25MS)
+    {
+        ASSERT(MAX(80, encoder->frame_length) >= ((GG_1p25_MAX_TUPLES - 1) + encoder->yLen));
+        /*make sure that there are  extra tail coeffs in d_fx for Global gain estimation routine */
+    }
+#endif
     indexes  = scratchAlign(L_scf_idx,
                            sizeof(*L_scf_idx) * SCF_MAX_PARAM); /* Size = 2 * TNS_NUMFILTERS_MAX * MAXLAG = 32 bytes */
 
@@ -73,7 +121,7 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
 #else
     q_d_fx16 = scratchAlign(indexes, sizeof(*indexes) * (TNS_NUMFILTERS_MAX * MAXLAG)); /* Size = 2 * MAX_LEN bytes */
 #endif /* ENABLE_HR_MODE */
-    
+
 #ifdef ENABLE_HR_MODE
     codingdata =
         scratchAlign(q_d_fx24, sizeof(*q_d_fx24) * s_max(80, encoder->frame_length)); /* Size = 3 * MAX_LEN bytes */
@@ -81,7 +129,7 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
     codingdata =
         scratchAlign(q_d_fx16, sizeof(*q_d_fx16) * s_max(80, encoder->frame_length)); /* Size = 3 * MAX_LEN bytes */
 #endif
-    
+
 #ifdef ENABLE_HR_MODE
     ener_fx     = scratchAlign(q_d_fx24, 0); /* Size = 4 * MAX_BANDS_NUMBER = 256 bytes */
     s_in_scaled = scratchAlign(q_d_fx24, 0); /* Size = 2 * MAX_LEN bytes */
@@ -89,7 +137,7 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
     ener_fx     = scratchAlign(q_d_fx16, 0); /* Size = 4 * MAX_BANDS_NUMBER = 256 bytes */
     s_in_scaled = scratchAlign(q_d_fx16, 0); /* Size = 2 * MAX_LEN bytes */
 #endif
-    
+
 #ifdef ENABLE_HR_MODE
     s_in_scaled_lp = (Word16 *)s_in_scaled;
 #endif
@@ -158,7 +206,7 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
     /* currentScratch Size = 4 * MAX_LEN */
     processMdct_fx(s_in_scaled, h_EncSetup->x_exp, encoder->frame_length,
 #ifdef ENABLE_HR_MODE
-                   hrmode, 
+                   hrmode,
 #endif
                    encoder->W_fx, encoder->W_size,
                    h_EncSetup->stEnc_mdct_mem, encoder->stEnc_mdct_mem_len, d_fx, &d_fx_exp, currentScratch);
@@ -169,7 +217,7 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
     /* currentScratch Size = 2.25 * MAX_LEN bytes */
 #ifdef ENABLE_HR_MODE
     downshift_w32_arr(s_in_scaled, s_in_scaled_lp, 16, encoder->frame_length); /* s_in_scaled is no longer required */
-    
+
     process_resamp12k8_fx(s_in_scaled_lp, encoder->frame_length, h_EncSetup->r12k8_mem_in, encoder->r12k8_mem_in_len,
                           h_EncSetup->r12k8_mem_50, h_EncSetup->r12k8_mem_out, encoder->r12k8_mem_out_len, s_12k8,
                           &s_12k8_len, encoder->fs_idx, encoder->frame_dms, currentScratch
@@ -187,8 +235,8 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
     BASOP_sub_start("Olpa");
     /* currentScratch Size = 392 bytes */
     process_olpa_fx(&h_EncSetup->olpa_mem_s6k4_exp, h_EncSetup->olpa_mem_s12k8, h_EncSetup->olpa_mem_s6k4, &pitch,
-                    s_12k8, s_12k8_len, &normcorr, &h_EncSetup->olpa_mem_pitch, 
-                    &h_EncSetup->pitch_flag,                  
+                    s_12k8, s_12k8_len, &normcorr, &h_EncSetup->olpa_mem_pitch,
+                    &h_EncSetup->pitch_flag,
                     h_EncSetup->resamp_exp, encoder->frame_dms, currentScratch);
     BASOP_sub_end();
 
@@ -196,10 +244,22 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
     /* currentScratch Size = 512 bytes */
     process_ltpf_coder_fx(&ltpf_bits, pitch, h_EncSetup->ltpf_enable, &h_EncSetup->ltpf_mem_in_exp,
                           h_EncSetup->ltpf_mem_in, encoder->ltpf_mem_in_len, ltpf_idx, s_12k8, s_12k8_len,
-                          &h_EncSetup->ltpf_mem_normcorr, &h_EncSetup->ltpf_mem_mem_normcorr, normcorr,
+                          h_EncSetup->ltpf_mem_normcorr, &h_EncSetup->ltpf_mem_mem_normcorr, normcorr,
                           &h_EncSetup->ltpf_mem_ltpf_on, &h_EncSetup->ltpf_mem_pitch, h_EncSetup->resamp_exp,
                           encoder->frame_dms, currentScratch
                           , encoder->hrmode
+ 
+#ifdef CR9_C_ADD_1p25MS
+#ifdef FIX_TX_RX_STRUCT_STEREO
+#    ifdef NEW_SIGNALLING_SCHEME_1p25
+                          ,&h_EncSetup->Tx_ltpf
+#    else
+                          ,h_EncSetup->Tx_ltpf
+#    endif
+#else
+                          , encoder->Tx_ltpf
+#endif
+#endif
 );
     BASOP_sub_end();
 
@@ -212,7 +272,7 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
     attack_detector_fx(encoder, h_EncSetup, s_in_scaled, sub(h_EncSetup->x_exp, 15), currentScratch);
 #endif
     BASOP_sub_end();
-    
+
     /* begin ener_fx */
     BASOP_sub_start("PerBandEnergy");
     /* currentScratch Size = 160 bytes */
@@ -271,14 +331,43 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
     /* currentScratch Size = 512 bytes */
     processSnsComputeScf_fx(ener_fx, ener_fx_exp, encoder->fs_idx, encoder->bands_number, scf,
                             h_EncSetup->attdec_detected, encoder->attdec_damping, currentScratch, encoder->sns_damping
+#ifdef CR9_C_ADD_1p25MS
+                            , encoder->frame_dms, normcorr, &encoder->LT_normcorr
+#endif
     );
+
     BASOP_sub_end();
 
+
+#ifdef CR9_C_ADD_1p25MS_LRSNS
+    IF(sub(encoder->frame_dms, LC3PLUS_FRAME_DURATION_1p25MS) == 0)
+    {
+        pitch_rx_fx = ltpf_idx[0];  /* pitch_rx status flag   */
+        ltpf_rx_fx = ltpf_idx[1];    /* ltpf_activation  used in  snslr_st1C mode   */
+
+
+        BASOP_sub_start("EncLC3_SnsQuantScfEncLR_fx");
+        envelope_bits_fx = snsQuantScfEncLR_fx(
+            scf,             /*  input scf is always Word16 Q11 (both for ENABLE_HR and DISABLE_HR) */
+            L_scf_idx,       /* output:  to send to enc_entropy_fx() */
+            scf_q,           /* output:  Word32(for ENABLE_HR)   or Word16 (for DISABLE_HR ) */
+            pitch_rx_fx, ltpf_rx_fx, /* input: pitch information to st1C */
+            currentScratch);
+        BASOP_sub_end();
+
+    }
+    ELSE
+    {
+        BASOP_sub_start("SnsQuantScfEnc38bit");
+        processSnsQuantizeScfEncoder_fx(scf, L_scf_idx, scf_q, currentScratch);
+        BASOP_sub_end();
+    }
+#else
     BASOP_sub_start("SnsQuantScfEnc");
     /* currentScratch Size = 500 bytes */
-        
     processSnsQuantizeScfEncoder_fx(scf, L_scf_idx, scf_q, currentScratch);
     BASOP_sub_end();
+#endif /*  CR9_C_ADD_1p25MS_LRSNS */
 
     BASOP_sub_start("SnsInterpScfEnc");
     /* currentScratch Size = 128 bytes */
@@ -300,7 +389,11 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
     BASOP_sub_start("Tns_enc");
     /* currentScratch Size = 2 * MAX_LEN + 220 */
 
+#ifdef CR9_C_ADD_1p25MS
+    IF (h_EncSetup->lfe == 0 && encoder->frame_dms > LC3PLUS_FRAME_DURATION_1p25MS)
+#else
     IF (h_EncSetup->lfe == 0)
+#endif
     {
     processTnsCoder_fx(&(h_EncSetup->tns_bits), indexes, d_fx, BW_cutoff_idx, tns_order, &tns_numfilters,
                        h_EncSetup->enable_lpc_weighting, encoder->nSubdivisions, encoder->frame_dms,
@@ -308,13 +401,18 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
 #ifdef ENABLE_HR_MODE
                        , encoder->hrmode
 #endif
-                       , encoder->near_nyquist_flag   
+                       , encoder->near_nyquist_flag
     );
         }
     ELSE
     {
         tns_numfilters = 1;
         move16();
+#ifdef CR9_C_ADD_1p25MS
+        IF (encoder->frame_dms == LC3PLUS_FRAME_DURATION_1p25MS) {
+            tns_numfilters = 0; move16();
+        }
+#endif
         tns_order[0] = 0;
         move16();
         h_EncSetup->tns_bits = tns_numfilters;
@@ -326,20 +424,59 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
     /* currentScratch Size = 4 * MAX_LEN bytes */
     h_EncSetup->targetBitsQuant = sub(h_EncSetup->targetBitsInit, add(h_EncSetup->tns_bits, ltpf_bits));
 
+#  ifdef CR9_C_ADD_1p25MS_LRSNS
+    IF( sub(encoder->frame_dms, LC3PLUS_FRAME_DURATION_1p25MS) == 0 )
+    {    /* adjust(==reduce) target bits based on the selected LRSNS-VQ  bitrate  */
+
+        h_EncSetup->targetBitsQuant = add(h_EncSetup->targetBitsQuant, 38);    /*  legacy 38bits was already pre-subtracted  in h_EncSetup->targetBitsInit setup  */
+        ASSERT(envelope_bits_fx >= 9 && envelope_bits_fx <= 30);
+        h_EncSetup->targetBitsQuant = sub(h_EncSetup->targetBitsQuant, envelope_bits_fx); /*  9,10, 29,30, subtract  actual LRSNS bitrate  */
+    }
+#  endif
+
     test();
+#ifdef  CR9_C_ADD_1p25MS_LRSNS
+    /* incoming (state based)  ltpf_bits for tranmission set in function ltpf_coder_fx()  */
+    test(); test();
+    lrsns_st1C_in_use = 0;      move16();
+    /* LRSNS stage1C use 10 bits  and ltp/ltpf active flags ,  i.e. one can thus not always disable/steal the ltp/ltpf flags  */
+    if ( (sub(encoder->frame_dms, LC3PLUS_FRAME_DURATION_1p25MS) == 0) && (sub(envelope_bits_fx, 10) == 0) && (L_sub(L_scf_idx[0], 170L) > 0)  )
+    {
+        ASSERT(L_scf_idx[0] < (2 * 170) && (L_scf_idx[1] != 0) );
+        lrsns_st1C_in_use = 1;             move16();
+    }
+
+    ltptx_lowest_bit_lim = 1;   move16();
+    if ( sub(encoder->frame_dms, LC3PLUS_FRAME_DURATION_1p25MS) == 0 )
+    {
+        ltptx_lowest_bit_lim = lrsns_ltp_bits_fx[0];     move16();
+    }
+    test(); test(); test(); test();
+
+    /* allow cut away of LTP-active, ltpf-active, lag-index (including phase A, B) info when possible and not actually in use by LRSNS-VQ */
+
+    IF((h_EncSetup->targetBitsQuant < 0) && (sub(ltpf_bits, ltptx_lowest_bit_lim) > 0) && (lrsns_st1C_in_use == 0))
+#else
     IF (h_EncSetup->targetBitsQuant < 0 && sub(ltpf_bits, 1) > 0)
+#endif
     {
         /* Disable LTPF */
         h_EncSetup->ltpf_mem_ltpf_on = 0;  move16();
         ltpf_idx[1]                  = 0;  move16();
+#ifdef CR9_C_ADD_1p25MS_LRSNS
+        ASSERT( (ltpf_bits-ltptx_lowest_bit_lim) > 0 );
+        h_EncSetup->targetBitsQuant = add(h_EncSetup->targetBitsQuant, sub(ltpf_bits, ltptx_lowest_bit_lim)); move16(); /* subtract saving */
+        ltpf_bits = ltptx_lowest_bit_lim;  move16();
+#else
         ltpf_bits                    = 1;  move16();
         h_EncSetup->targetBitsQuant  = sub(h_EncSetup->targetBitsInit, add(h_EncSetup->tns_bits, ltpf_bits));
+#endif
     }
-        
+
 #ifdef ENABLE_HR_MODE
     Word32 gain32;
 #endif
-        
+
     processEstimateGlobalGain_fx(d_fx, d_fx_exp, encoder->yLen, h_EncSetup->targetBitsQuant,
 #ifdef ENABLE_HR_MODE
                                  &gain32,
@@ -352,17 +489,21 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
                                  currentScratch
 #ifdef ENABLE_HR_MODE
                                  , encoder->hrmode, h_EncSetup->regBits, encoder->frame_dms
+#else
+#if defined(FIX_BOTH_1p25_TEST_NEW_GG_EST2) || defined (FIX_1p25_GG_EST_TUPLES) 
+                                 ,  encoder->frame_dms
+#endif 
 #endif
     );
     BASOP_sub_end();
     /* begin q_d_fx16 */
-        
+
     BASOP_sub_start("Quant. 1");
 #ifdef ENABLE_HR_MODE
     processQuantizeSpec_fx(d_fx, d_fx_exp, gain32, gain_e, q_d_fx24, encoder->yLen, h_EncSetup->targetBitsQuant,
                            h_EncSetup->targetBitsAri, &h_EncSetup->mem_specBits, &nBits, encoder->fs_idx, &lastnz,
                            codingdata, &lsbMode, -1, encoder->hrmode);
-        
+
 #else
     processQuantizeSpec_fx(d_fx, d_fx_exp, gain, gain_e, q_d_fx16, encoder->yLen, h_EncSetup->targetBitsQuant,
                            h_EncSetup->targetBitsAri, &h_EncSetup->mem_specBits, &nBits, encoder->fs_idx, &lastnz,
@@ -417,6 +558,9 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
 #ifdef ENABLE_HR_MODE
                                  , encoder->hrmode
 #endif
+#if defined (CR9_C_ADD_1p25MS)
+                                 , encoder->frame_dms
+#endif
         );
     }
     ELSE
@@ -448,11 +592,19 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
         move16();
     }
     BASOP_sub_end();
-    
+
     BASOP_sub_start("Entropy cod");
     processEncoderEntropy(bytes, &bp_side, &mask_side, h_EncSetup->targetBitsAri, h_EncSetup->targetBytes,
                           encoder->yLen, encoder->BW_cutoff_bits, tns_numfilters, lsbMode, lastnz, tns_order,
-                          fac_ns_idx, quantizedGain, BW_cutoff_idx, ltpf_idx, L_scf_idx, bfi_ext, encoder->fs_idx);
+                          fac_ns_idx, quantizedGain, BW_cutoff_idx, ltpf_idx, L_scf_idx, bfi_ext, encoder->fs_idx
+#ifdef CR9_C_ADD_1p25MS
+#ifdef FIX_TX_RX_STRUCT_STEREO
+                          , encoder->frame_dms, &h_EncSetup->Tx_ltpf
+#else
+                          , encoder->frame_dms, &encoder->Tx_ltpf
+#endif
+#endif
+                         );
     BASOP_sub_end();
 
     BASOP_sub_start("Ari cod");
@@ -471,31 +623,31 @@ static void Enc_LC3PLUS_Channel(LC3PLUS_Enc *encoder, int channel, int bits_per_
     IF (encoder->combined_channel_coding == 0 && h_EncSetup->n_pc > 0)
     {
         BASOP_sub_start("Reorder Ari dec");
-        
+
 #ifdef ENABLE_HR_MODE
         Word32 *xbuf = (Word32 *) scratchAlign(scratchBuffer, 0);
-        
+
         processAriDecoder_fx(bytes, &bp_side, &mask_side, h_EncSetup->total_bits, encoder->yLen, encoder->fs_idx,
                              h_EncSetup->enable_lpc_weighting, tns_numfilters, lsbMode, lastnz, &gain, tns_order,
                              fac_ns_idx, quantizedGain, encoder->frame_dms, h_EncSetup->n_pc, 0,
                              shr_pos(h_EncSetup->total_bits, 3), 1, &gain, &b_left, &gain,
                              xbuf,
-                             &gain, resBits, indexes, &gain, 
+                             &gain, resBits, indexes, &gain,
                              currentScratch
                              , encoder->hrmode
         );
 #else
-        
+
         processAriDecoder_fx(bytes, &bp_side, &mask_side, h_EncSetup->total_bits, encoder->yLen, encoder->fs_idx,
                              h_EncSetup->enable_lpc_weighting, tns_numfilters, lsbMode, lastnz, &gain, tns_order,
                              fac_ns_idx, quantizedGain, encoder->frame_dms, h_EncSetup->n_pc, 0,
                              shr_pos(h_EncSetup->total_bits, 3), 1, &gain, &b_left, &gain,
                              codingdata,
-                             &gain, resBits, indexes, &gain, 
+                             &gain, resBits, indexes, &gain,
                              currentScratch
         );
 #endif
-        
+
         BASOP_sub_end(); /* Ari dec */
         processReorderBitstream_fx(bytes, h_EncSetup->n_pccw, h_EncSetup->n_pc, b_left, currentScratch);
     }
@@ -553,4 +705,3 @@ int Enc_LC3PLUS(LC3PLUS_Enc *encoder, void **input, int bits_per_sample, UWord8 
 
     return output_size;
 }
-

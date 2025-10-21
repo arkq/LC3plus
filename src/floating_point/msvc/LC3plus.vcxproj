@@ -163,6 +163,7 @@
     <ClCompile Include="..\ari_codec.c" />
     <ClCompile Include="..\attack_detector.c" />
     <ClCompile Include="..\codec_exe.c" />
+    <ClCompile Include="..\com_entropy.c" />
     <ClCompile Include="..\lc3plus_fft.c" />
     <ClCompile Include="..\plc_compute_stab_fac.c" />
     <ClCompile Include="..\constants.c" />

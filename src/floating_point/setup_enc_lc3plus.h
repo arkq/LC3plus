@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -11,11 +11,19 @@
 #define SETUP_ENC_LC3_FL_H
 
 #include "constants.h"
+#include "lc3plus.h"
 
 /* Channel state and bitrate-derived values go in this struct */
 typedef struct {
     LC3_FLOAT targetBitsOff;
+#ifdef CR9_C_ADD_1p25MS
+    LC3_FLOAT ltpf_mem_normcorr[LEN_MEM_NORMCORR];
+#else
     LC3_FLOAT ltpf_mem_normcorr;
+#endif
+#ifdef FIX_TX_RX_STRUCT_STEREO
+    LC3_INT16 Tx_ltpf;
+#endif
     LC3_FLOAT ltpf_mem_mem_normcorr;
     LC3_FLOAT attdec_filter_mem[2];
     LC3_FLOAT attdec_acc_energy;
@@ -81,8 +89,8 @@ struct LC3PLUS_Enc {
     LC3_INT frame_length; /* audio samples / frame */
     LC3_INT channels;     /* number of channels */
     LC3_INT epmode;       /* error protection mode */
-    LC3_FLOAT frame_ms;   /* frame length in ms (wrong for 44.1) */
-    LC3_INT frame_dms;    /* frame length in ms * 10 (wrong for 44.1) */
+    LC3PLUS_FrameDuration frame_ms;   /* enum for frame length in ms (wrong for 44.1) */
+    LC3PLUS_FrameDuration frame_dms;    /* enum for frame length in ms * 10 (wrong for 44.1) */
     LC3_INT tilt;
     LC3_INT lc3_br_set;
     LC3_INT yLen;
@@ -107,10 +115,14 @@ struct LC3PLUS_Enc {
     LC3_INT  bw_ctrl_active;
     LC3_INT bw_ctrl_cutoff_bin;
     LC3_INT bw_index;
-    LC3_FLOAT sns_damping;
     LC3_INT attdec_nblocks;
-    LC3_FLOAT attdec_damping;
     LC3_INT attdec_hangover_thresh;
+#ifndef FIX_TX_RX_STRUCT_STEREO
+    LC3_INT16 Tx_ltpf;
+#endif
+    LC3_FLOAT  long_term_norm_corr;
+    LC3_FLOAT attdec_damping;
+    LC3_FLOAT sns_damping;
     
     LC3_INT16 combined_channel_coding;
     LC3_INT16 epmr;

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -35,10 +35,13 @@ typedef struct
     Word16  olpa_mem_pitch;
     Word16  pitch_flag;
     Word16  ltpf_mem_in_exp;
-    Word16  ltpf_mem_normcorr;
+    Word16  ltpf_mem_normcorr[LEN_MEM_NORMCORR];
     Word16  ltpf_mem_mem_normcorr;
     Word16  ltpf_mem_ltpf_on;
     Word16  ltpf_mem_pitch;
+#ifdef FIX_TX_RX_STRUCT_STEREO
+    Word16  Tx_ltpf;
+#endif
     Word16  mem_targetBits;
     Word16  mem_specBits;
     Word16  x_exp;
@@ -51,20 +54,20 @@ typedef struct
     Word16  attdec_scaling;
 #ifdef ENABLE_HR_MODE
     Word16 regBits;
-    Word32 resamp_mem32[120] ALIGN_BUFFER_STRUCT;
+    Word32 resamp_mem32[120];
 #else
-    Word32 resamp_mem32[60] ALIGN_BUFFER_STRUCT;
+    Word32 resamp_mem32[60];
 #endif
 #ifdef ENABLE_HR_MODE
-    Word16 r12k8_mem_in[120] ALIGN_BUFFER_STRUCT;
+    Word16 r12k8_mem_in[120];
 #else
-    Word16 r12k8_mem_in[60] ALIGN_BUFFER_STRUCT;
+    Word16 r12k8_mem_in[60];
 #endif
-    Word32 r12k8_mem_50[2] ALIGN_BUFFER_STRUCT;
-    Word16    r12k8_mem_out[44] ALIGN_BUFFER_STRUCT;
-    Word16 olpa_mem_s12k8[3] ALIGN_BUFFER_STRUCT;
-    Word16 olpa_mem_s6k4[LEN_6K4 + MAX_PITCH_6K4 + 16] ALIGN_BUFFER_STRUCT;
-    Word16  ltpf_mem_in[LTPF_MEMIN_LEN + LEN_12K8 + 1] ALIGN_BUFFER_STRUCT;
+    Word32 r12k8_mem_50[2];
+    Word16    r12k8_mem_out[44];
+    Word16 olpa_mem_s12k8[3];
+    Word16 olpa_mem_s6k4[LEN_6K4 + MAX_PITCH_6K4 + 16];
+    Word16  ltpf_mem_in[LTPF_MEMIN_LEN + LEN_12K8 + 1];
     Word16 n_pccw;
     Word16 n_pc;
 
@@ -89,7 +92,7 @@ struct LC3PLUS_Enc
     Word16 frame_length; /* audio samples / frame */
     Word16 channels;     /* number of channels */
     Word16 epmode;       /* error protection mode */
-    Word16 frame_dms;    /* frame length in dms (decimilliseconds, 10^-4)*/
+    LC3PLUS_FrameDuration frame_dms;    /* enum for frame length in steps of 12.5 dms   */
     Word8 lc3_br_set;    /* indicate if bitrate has been set */
 
     Word16 yLen;
@@ -120,6 +123,12 @@ struct LC3PLUS_Enc
     Word16 attdec_hangover_thresh;
     Word16 hrmode;
     Word16 sns_damping;
+#ifdef CR9_C_ADD_1p25MS
+#ifndef FIX_TX_RX_STRUCT_STEREO
+    Word16 Tx_ltpf;
+#endif
+    Word16 LT_normcorr;
+#endif
 };
 
-#endif
+#endif /* SETUP_ENC_LC3_H */

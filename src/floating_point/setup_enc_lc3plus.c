@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -39,7 +39,7 @@ LC3PLUS_Error FillEncSetup(LC3PLUS_Enc* encoder, int samplerate, int channels
     encoder->fs     = CODEC_FS(samplerate);
     encoder->fs_in  = samplerate;
     encoder->fs_idx = FS2FS_IDX(encoder->fs);
-    encoder->frame_dms = 100;
+    encoder->frame_dms = LC3PLUS_FRAME_DURATION_10MS;
 
     if (encoder->fs_idx > 4) {
         encoder->fs_idx = 5;
@@ -48,7 +48,7 @@ LC3PLUS_Error FillEncSetup(LC3PLUS_Enc* encoder, int samplerate, int channels
     encoder->hrmode = hrmode != 0;
 
     encoder->channels          = channels;
-    encoder->frame_ms          = 10;
+    encoder->frame_ms          = LC3PLUS_FRAME_DURATION_10MS;
     encoder->envelope_bits     = 38;
     encoder->global_gain_bits  = 8;
     encoder->noise_fac_bits    = 3;
@@ -95,6 +95,15 @@ void set_enc_frame_params(LC3PLUS_Enc* encoder)
     int       ch = 0;
     EncSetup* setup;
 
+#ifdef CR9_C_ADD_1p25MS
+#ifndef FIX_TX_RX_STRUCT_STEREO
+    encoder->Tx_ltpf            = 0;
+#endif
+#endif
+#ifdef FIX_FLOAT_LT_NORMCORR_INIT 
+    encoder->long_term_norm_corr= (0xFFFF >> 2)/32768.0;
+#endif 
+
     encoder->frame_length       = ceil(encoder->fs * 10 / 1000); /* fs * 0.01*2^6 */
     if (encoder->hrmode == 1)
     {
@@ -127,7 +136,7 @@ void set_enc_frame_params(LC3PLUS_Enc* encoder)
         encoder->BW_cutoff_bits = BW_cutoff_bits_all[encoder->fs_idx];
     }
 
-    if (encoder->frame_ms == 10) {
+    if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_10MS) {
         encoder->la_zeroes = MDCT_la_zeroes[encoder->fs_idx];
         if (encoder->hrmode)
         {
@@ -143,7 +152,7 @@ void set_enc_frame_params(LC3PLUS_Enc* encoder)
         encoder->attdec_damping         = 0.5;
         encoder->attdec_hangover_thresh = 2;
     }
-    else if (encoder->frame_ms == 7.5) {
+    else if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_7p5MS) {
         if (encoder->hrmode)
         {
             encoder->bands_offset = ACC_COEFF_PER_BAND_7_5ms_HR[encoder->fs_idx];
@@ -174,7 +183,7 @@ void set_enc_frame_params(LC3PLUS_Enc* encoder)
         encoder->near_nyquist_index = encoder->bands_number - 4;
         encoder->r12k8_mem_out_len = ceil(2.0 * ((LC3_FLOAT) encoder->frame_length / 2.0 - (LC3_FLOAT) encoder->la_zeroes) * 12800.0 / (LC3_FLOAT) encoder->fs - 8.0);
     }
-    else if (encoder->frame_ms == 5) {
+    else if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_5MS) {
         encoder->frame_length = encoder->frame_length >> 1;
         encoder->yLen /= 2;
         encoder->stEnc_mdct_mem_len = encoder->frame_length - encoder->la_zeroes;
@@ -191,8 +200,11 @@ void set_enc_frame_params(LC3PLUS_Enc* encoder)
             encoder->bands_offset = ACC_COEFF_PER_BAND_5ms[encoder->fs_idx];
         }
         encoder->cutoffBins   = BW_cutoff_bin_all_5ms;
+#ifdef FIX_LTPF_PITCH_MEM_LEN
+        encoder->ltpf_mem_in_len    = LTPF_MEMIN_LEN + LEN_12K8 / 2;
+#endif
     }
-    else if (encoder->frame_ms == 2.5) {
+    else if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_2p5MS) {
         encoder->la_zeroes = MDCT_la_zeroes_2_5ms[encoder->fs_idx];
         if (encoder->hrmode)
         {
@@ -217,12 +229,53 @@ void set_enc_frame_params(LC3PLUS_Enc* encoder)
 
         encoder->nSubdivisions      = 2;
         encoder->near_nyquist_index = encoder->bands_number - 2;
+#ifdef FIX_LTPF_PITCH_MEM_LEN
+        encoder->ltpf_mem_in_len    = LTPF_MEMIN_LEN + (3 * (LEN_12K8 / 4));
+#else
         encoder->ltpf_mem_in_len    = LTPF_MEMIN_LEN + (LEN_12K8 >> 2);
+#endif
     }
+#ifdef CR9_C_ADD_1p25MS
+    else if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_1p25MS) {
+            encoder->la_zeroes = MDCT_la_zeroes_1_25ms[encoder->fs_idx];
+            if (encoder->hrmode)
+            {
+                assert(0);
+            }
+            else
+            {
+                encoder->bands_offset = ACC_COEFF_PER_BAND_1_25ms[encoder->fs_idx];
+            }
+            encoder->cutoffBins   = BW_cutoff_bin_all_1_25ms;
+            encoder->frame_length = encoder->frame_length >> 3;
+            encoder->yLen /= 8;
+            encoder->stEnc_mdct_mem_len = encoder->frame_length - encoder->la_zeroes;
+            if (encoder->hrmode)
+            {
+                assert(0);
+            }
+            else
+            {
+                encoder->bands_number       = bands_number_1_25ms[encoder->fs_idx];
+                encoder->BW_cutoff_bits     = 0;  /* transmit no bw bits */
+                encoder->bw_ctrl_active     = 1;
+            }
+
+            encoder->nSubdivisions      = 2;
+            encoder->near_nyquist_index = encoder->bands_number - 2;
+#ifdef FIX_LTPF_PITCH_MEM_LEN
+            encoder->ltpf_mem_in_len    = LTPF_MEMIN_LEN + (7 * (LEN_12K8 / 8));
+#else
+            encoder->ltpf_mem_in_len    = LTPF_MEMIN_LEN + (LEN_12K8 >> 1) + 16;
+#endif
+            encoder->r12k8_mem_out_len  = 8;
+
+            encoder->attdec_damping     = 32767.0/32768.0;
+    }
+#endif
 
     for (ch = 0; ch < encoder->channels; ch++) {
         setup = encoder->channel_setup[ch];
-
         setup->olpa_mem_pitch = 17;
         setup->pitch_flag = 0;
         if (setup->mdctStruct.mem != NULL) {
@@ -244,32 +297,46 @@ void set_enc_frame_params(LC3PLUS_Enc* encoder)
 LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc* encoder, int bitrate)
 {
     int ch = 0, bitsTmp = 0, minBR = 0, maxBR = 0, totalBytes = 0;
-    LC3_INT channel_bytes = 0, max_bytes = 0;
-
+    LC3_INT channel_bytes = 0;
+    
 #ifdef ENABLE_HR_MODE_FL
+#ifdef CR12_D_FIX_BITRATE_LIMITS
+    LC3_INT fec_slot_bytes_min = 0, check_bytes = 0;
+#else
+    LC3_INT max_bytes = 0;
+#endif
     if (encoder->hrmode)
     {
         switch (encoder->frame_dms)
         {
-        case 25:
+#ifdef CR9_C_ADD_1p25MS
+        case LC3PLUS_FRAME_DURATION_1p25MS:
+            assert(0);
             maxBR = 672000;
             if (encoder->fs == 48000) {minBR = MIN_BR_25MS_48KHZ_HR;}
             else if (encoder->fs == 96000) {minBR = MIN_BR_25MS_96KHZ_HR;}
             else { return LC3PLUS_HRMODE_ERROR;}
             break;
-        case 50:
+#endif
+        case LC3PLUS_FRAME_DURATION_2p5MS:
+            maxBR = 672000;
+            if (encoder->fs == 48000) {minBR = MIN_BR_25MS_48KHZ_HR;}
+            else if (encoder->fs == 96000) {minBR = MIN_BR_25MS_96KHZ_HR;}
+            else { return LC3PLUS_HRMODE_ERROR;}
+            break;
+        case LC3PLUS_FRAME_DURATION_5MS:
             maxBR = 600000;
             if (encoder->fs == 48000) {minBR = MIN_BR_50MS_48KHZ_HR;}
             else if (encoder->fs == 96000) {minBR = MIN_BR_50MS_96KHZ_HR;}
             else { return LC3PLUS_HRMODE_ERROR;}
             break;
-        case  75:
+        case LC3PLUS_FRAME_DURATION_7p5MS:
             maxBR = 500000;
             if      (encoder->fs == 48000) {minBR = MIN_BR_075DMS_48KHZ_HR;}
             else if (encoder->fs == 96000) {minBR = MIN_BR_075DMS_96KHZ_HR;}
             else                           {return LC3PLUS_HRMODE_ERROR;}
             break;      
-        case 100:
+        case LC3PLUS_FRAME_DURATION_10MS:
             maxBR = 500000;
             if (encoder->fs == 48000) {minBR = MIN_BR_100MS_48KHZ_HR;}
             else if (encoder->fs == 96000) {minBR = MIN_BR_100MS_96KHZ_HR;}
@@ -287,11 +354,17 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc* encoder, int bitrate)
 
         switch (encoder->frame_dms)
         {
-        case  25:
+#ifdef CR9_C_ADD_1p25MS
+        case  LC3PLUS_FRAME_DURATION_1p25MS:
+            minBR = MIN_BR_0125DMS;
+            maxBR = MAX_BR_0125DMS;
+            break;
+#endif
+        case  LC3PLUS_FRAME_DURATION_2p5MS:
             minBR = MIN_BR_025DMS;
             maxBR = MAX_BR;
             break;
-        case  50:
+        case  LC3PLUS_FRAME_DURATION_5MS:
             minBR = MIN_BR_050DMS;
             maxBR = MAX_BR;
             /* have additional limitations for 5.0ms */
@@ -301,7 +374,7 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc* encoder, int bitrate)
             default:                                 break;
             }
             break;
-        case  75:
+        case  LC3PLUS_FRAME_DURATION_7p5MS:
             minBR = MIN_BR_075DMS;
             maxBR = MAX_BR_075DMS;
             /* have additional limitations for 7.5ms */
@@ -313,7 +386,7 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc* encoder, int bitrate)
             default:                                 break;
             }
             break;
-        case 100: 
+        case LC3PLUS_FRAME_DURATION_10MS: 
             /* have additional limitations for 10ms */
             minBR = MIN_BR_100DMS;
             maxBR = MAX_BR;
@@ -325,7 +398,8 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc* encoder, int bitrate)
             default:     maxBR = MAX_BR;             break;
             }
             break;
-        default: return LC3PLUS_FRAMEMS_ERROR;
+        case LC3PLUS_FRAME_DURATION_UNDEFINED: 
+            return LC3PLUS_FRAMEMS_ERROR;
         }
         maxBR *= (encoder->fs_in == 44100 ? 441. / 480 : 1);
     }
@@ -344,8 +418,57 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc* encoder, int bitrate)
 
     if (encoder->epmode > 0)
     {
+#ifdef CR12_D_FIX_BITRATE_LIMITS
+#ifdef ENABLE_HR_MODE_FL
+        if (encoder->hrmode){
+            switch( encoder->frame_dms )
+            {
+            case LC3PLUS_FRAME_DURATION_2p5MS:
+                if( encoder->fs_in == 48000){
+                    fec_slot_bytes_min = FEC_SLOT_BYTES_MIN_025DMS_48KHZ_HR;
+                } else {
+                    fec_slot_bytes_min = FEC_SLOT_BYTES_MIN_025DMS_96KHZ_HR;
+                }
+                break;
+            case LC3PLUS_FRAME_DURATION_5MS:
+                if( encoder->fs_in == 48000){
+                    fec_slot_bytes_min = FEC_SLOT_BYTES_MIN_050DMS_48KHZ_HR;
+                } else {
+                    fec_slot_bytes_min = FEC_SLOT_BYTES_MIN_050DMS_96KHZ_HR;
+                }
+                break;
+            case LC3PLUS_FRAME_DURATION_7p5MS:
+                if( encoder->fs_in == 48000){
+                    fec_slot_bytes_min = FEC_SLOT_BYTES_MIN_075DMS_48KHZ_HR;
+                } else {
+                    fec_slot_bytes_min = FEC_SLOT_BYTES_MIN_075DMS_96KHZ_HR;
+                }
+                break;
+            case LC3PLUS_FRAME_DURATION_10MS:
+                if( encoder->fs_in == 48000){
+                    fec_slot_bytes_min = FEC_SLOT_BYTES_MIN_100DMS_48KHZ_HR;
+                } else {
+                    fec_slot_bytes_min = FEC_SLOT_BYTES_MIN_100DMS_96KHZ_HR;
+                }
+                break;
+            default:
+                return LC3PLUS_FRAMEMS_ERROR;
+            }
+        }
+        else 
+#endif
+        {
+            fec_slot_bytes_min = FEC_SLOT_BYTES_MIN;
+        }
+    
+
+        check_bytes = bitrate * encoder->frame_length / ( 8 * encoder->fs_in * encoder->channels );
+        maxBR = FEC_SLOT_BYTES_MAX * ( 8 * encoder->fs_in * encoder->channels ) / encoder->frame_length;
+        if ( check_bytes < fec_slot_bytes_min || bitrate > maxBR )
+#else
         max_bytes = bitrate * encoder->frame_length / (8 * encoder->fs_in * encoder->channels);
         if (max_bytes < FEC_SLOT_BYTES_MIN || max_bytes > FEC_SLOT_BYTES_MAX)
+#endif /* CR12_D_FIX_BITRATE_LIMITS */
         {
             encoder->lc3_br_set = 0;
             return LC3PLUS_BITRATE_ERROR;
@@ -369,7 +492,7 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc* encoder, int bitrate)
         totalBytes = bitrate * encoder->frame_length / (8 * encoder->fs_in);
     }
     
-    if (encoder->frame_dms <= 50)
+    if (encoder->frame_dms <= LC3PLUS_FRAME_DURATION_5MS)
     {
         encoder->tnsMaxOrder = 4;
     } else {
@@ -398,8 +521,8 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc* encoder, int bitrate)
             setup->n_pccw = fec_get_n_pccw(channel_bytes, encoder->epmode, encoder->combined_channel_coding);
             setup->n_pc = fec_get_n_pc(encoder->epmode, setup->n_pccw, channel_bytes);
         }
-        // reduce bandwith to 12kHz if bitrate is low
-        if (encoder->frame_dms == 100 &&
+        /* reduce bandwith to 12kHz if bitrate is low */
+        if (encoder->frame_dms == LC3PLUS_FRAME_DURATION_10MS &&
             ((setup->targetBytes < 40 && encoder->fs == 48000) ||
              (setup->targetBytes < 36 && encoder->fs == 32000)))
         {
@@ -411,12 +534,12 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc* encoder, int bitrate)
             For a second channel with lower targetBytes, bandwidth is overwritten */
             encoder->bandwidth = encoder->bandwidth_preset;
         }
-        encoder->bw_ctrl_cutoff_bin = encoder->bandwidth * encoder->frame_dms / 5000;
+        encoder->bw_ctrl_cutoff_bin = encoder->bandwidth * (encoder->frame_dms * 1.25 * 10) / 5000;
         encoder->bw_index           = (encoder->bandwidth / 4000) - 1;
         setup->total_bits     = setup->targetBytes << 3;
         setup->targetBitsInit = setup->total_bits - encoder->envelope_bits - encoder->global_gain_bits -
                                 encoder->noise_fac_bits - encoder->BW_cutoff_bits -
-                                ceil(LC3_LOGTWO(encoder->frame_length / 2)) - 2 - 1;
+                                getLastNzBits (encoder->frame_length) - 2 - 1;
 
         if (setup->total_bits > 1280) {
             setup->targetBitsInit = setup->targetBitsInit - 1;
@@ -433,30 +556,45 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc* encoder, int bitrate)
         setup->targetBitsAri        = setup->total_bits;
         setup->enable_lpc_weighting = setup->total_bits < 480;
 
-        if (encoder->frame_ms == 7.5) {
+        if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_7p5MS) {
             setup->enable_lpc_weighting = setup->total_bits < 360;
         }
-        if (encoder->frame_ms == 5) {
+        if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_5MS) {
             setup->enable_lpc_weighting = setup->total_bits < 240;
         }
-        if (encoder->frame_ms == 2.5) {
+        if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_2p5MS) {
             setup->enable_lpc_weighting = setup->total_bits < 120;
         }
-
+#ifdef CR9_C_ADD_1p25MS
+        if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_1p25MS) {
+            setup->enable_lpc_weighting = setup->total_bits < 60;
+        }
+#endif
+#ifdef FIX_BOTH_1p25_WB_GLOBGAINOFFSET_NONBE  
+        if (encoder->frame_dms == LC3PLUS_FRAME_DURATION_1p25MS)
+        {
+            setup->quantizedGainOff = calc_GGainOffset_1p25(setup->total_bits, encoder->fs_idx); /* enc/dec common function */
+        }
+        else
+        {
+            setup->quantizedGainOff =
+                -(MIN(115, setup->total_bits / (10 * (encoder->fs_idx + 1))) + 105 + 5 * (encoder->fs_idx + 1));
+        }
+#else 
         setup->quantizedGainOff =
             -(MIN(115, setup->total_bits / (10 * (encoder->fs_idx + 1))) + 105 + 5 * (encoder->fs_idx + 1));
-
+#endif 
         if (encoder->hrmode && encoder->fs_idx == 5)
         {
             setup->quantizedGainOff = MAX(setup->quantizedGainOff, -181);
         }
 
-        if (encoder->frame_ms == 10 && ((encoder->fs_in >= 44100 && setup->targetBytes >= 100) ||
+        if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_10MS && ((encoder->fs_in >= 44100 && setup->targetBytes >= 100) ||
                                         (encoder->fs_in == 32000 && setup->targetBytes >= 81)) && setup->targetBytes < 340 && encoder->hrmode == 0) {
             setup->attack_handling = 1;
 
         }     
-        else if (encoder->frame_dms == 75 && ((encoder->fs_in >= 44100 && setup->targetBytes >= 75) ||
+        else if (encoder->frame_dms == LC3PLUS_FRAME_DURATION_7p5MS && ((encoder->fs_in >= 44100 && setup->targetBytes >= 75) ||
                 (encoder->fs_in == 32000 && setup->targetBytes >= 61)) && setup->targetBytes < 150 && encoder->hrmode == 0)
         {
             setup->attack_handling = 1;
@@ -475,13 +613,18 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc* encoder, int bitrate)
         }
 
         bitsTmp = setup->total_bits;
-        if (encoder->frame_ms == 2.5) {
+#ifdef CR9_C_ADD_1p25MS
+        if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_1p25MS) {
+            bitsTmp = bitsTmp * 8.0 * 0.42;
+        }
+#endif
+        if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_2p5MS) {
             bitsTmp = bitsTmp * 4.0 * (1.0 - 0.4);
         }
-        if (encoder->frame_ms == 5) {
+        if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_5MS) {
             bitsTmp = bitsTmp * 2 - 160;
         }
-        if (encoder->frame_ms == 7.5) {
+        if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_7p5MS) {
             bitsTmp = round(bitsTmp * 10 / 7.5);
         }
 
@@ -506,68 +649,89 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc* encoder, int bitrate)
         } else {
             encoder->sns_damping = 0.6;
             if (encoder->fs_idx >= 4) {
-                if (encoder->frame_ms == 10)
+                if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_10MS)
                 {
                     if (setup->total_bits > 4400) {
                         encoder->sns_damping = 6881.0/32768.0;
                     }
                 }
-                if (encoder->frame_ms == 7.5)
+                if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_7p5MS)
                 {
                     if (setup->total_bits > 3*4400/4) {
                         encoder->sns_damping = 5898.0/32768.0;
                     }
                 }
-                if (encoder->frame_ms == 5)
+                if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_5MS)
                 {
                     if (setup->total_bits > 4600/2) {
                         encoder->sns_damping = 4915.0/32768.0;
                     }
                 }
-                if (encoder->frame_ms == 2.5)
+                if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_2p5MS)
                 {
                     if (setup->total_bits > 4600/4) {
                         encoder->sns_damping = 4915.0/32768.0;
                     }
                 }
+#ifdef CR9_C_ADD_1p25MS
+                if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_1p25MS)
+                {
+                    assert(0);
+                    if (setup->total_bits > 4600/4) {
+                        encoder->sns_damping = 4915.0/32768.0;
+                    }
+                }
+#endif
             }
         }
 
         if (encoder->hrmode && encoder->fs_idx >= 4)
         {
-            int real_rate = setup->targetBytes * 8000 / encoder->frame_ms;
+            int real_rate = setup->targetBytes * 8000 / (encoder->frame_ms * 1.25);
             setup->regBits = real_rate / 12500;
 
             if (encoder->fs_idx == 5)
             {
-                if (encoder->frame_ms == 10)
+                if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_10MS)
                 {
                     setup->regBits +=2;
                 }
-                if (encoder->frame_ms == 7.5)
+                if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_7p5MS)
                 {
                     setup->regBits +=1;
                 }
-                if (encoder->frame_ms == 2.5)
+                if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_2p5MS)
                 {
                     setup->regBits -= 6;
                 }
+#ifdef CR9_C_ADD_1p25MS
+                if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_1p25MS)
+                {
+                    assert(0);
+                }
+#endif
             }
             else
             {
-                if (encoder->frame_ms == 2.5)
+#ifdef CR9_C_ADD_1p25MS
+                if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_1p25MS)
+                {
+                    assert(0);
+                }
+#endif
+                if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_2p5MS)
                 {
                     setup->regBits -= 6;
                 }
-                else if (encoder->frame_ms == 5)
+                else if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_5MS)
                 {
                     setup->regBits += 0;
                 }
-                if (encoder->frame_ms == 7.5)
+                if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_7p5MS)
                 {
                     setup->regBits +=2;
                 }
-                if (encoder->frame_ms == 10)
+                if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_10MS)
                 {
                     setup->regBits += 5;
                 }

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -20,7 +20,7 @@ void processAdjustGlobalGain_fx(Word16 *gg_idx, Word16 gg_idx_min, Word16 gg_idx
                                 Word16 *gain_e,
                                 Word16 target, Word16 nBits, Word16 *gainChange, Word16 fs_idx
 #ifdef ENABLE_HR_MODE
-                                , Word16 hrmode, Word16 frame_dms
+                                , Word16 hrmode, LC3PLUS_FrameDuration frame_dms
 #endif
                                 )
 {
@@ -53,7 +53,7 @@ void processAdjustGlobalGain_fx(Word16 *gg_idx, Word16 gg_idx_min, Word16 gg_idx
 #endif /* DYNMEM_COUNT */
 
 #ifdef ENABLE_HR_MODE
-    IF (sub(frame_dms, 25) == 0)
+    IF (sub(frame_dms, LC3PLUS_FRAME_DURATION_2p5MS) == 0)
     {
         IF (sub(target, 520) < 0)
         {
@@ -64,14 +64,14 @@ void processAdjustGlobalGain_fx(Word16 *gg_idx, Word16 gg_idx_min, Word16 gg_idx
             gg_idx_inc_max = 40; move16();
         }
     }
-    ELSE IF (sub(frame_dms, 50) == 0)
+    ELSE IF (sub(frame_dms, LC3PLUS_FRAME_DURATION_5MS) == 0)
     {
         factor = 2; move16();
         gg_idx_inc_max = 20; move16();
     }
-    ELSE IF (sub(frame_dms, 75) == 0)
+    ELSE IF (sub(frame_dms, LC3PLUS_FRAME_DURATION_7p5MS) == 0)
     {
-        factor = 40265318; move16(); // factor = 1.2 * 2^25
+        factor = 40265318; move16(); /* factor = 1.2 * 2^25 */
         gg_idx_inc_max = 12 ; move16();
     }
     ELSE
@@ -116,12 +116,12 @@ void processAdjustGlobalGain_fx(Word16 *gg_idx, Word16 gg_idx_min, Word16 gg_idx
             IF (sub(nBits, target) > 0)
             {
                 gg_idx_inc = sub(nBits, target);
-                IF (sub(frame_dms, 75) == 0)
+                IF (sub(frame_dms, LC3PLUS_FRAME_DURATION_7p5MS) == 0)
                 {
-                    gg_idx_inc = extract_l(L_shr_pos(Mpy_32_16(factor, gg_idx_inc), 10)); // Mpy_32_16(1.2*2^25, gg_idx_inc), 25 - 15)
+                    gg_idx_inc = extract_l(L_shr_pos(Mpy_32_16(factor, gg_idx_inc), 10));  
                     gg_idx_inc = BASOP_Util_Divide1616_Scale(gg_idx_inc, delta, &gg_idx_inc_s);
                     gg_idx_inc = shr_sat(gg_idx_inc, sub(15, gg_idx_inc_s));
-                    gg_idx_inc = add(gg_idx_inc, 1); // adding 1 instead of 1.2
+                    gg_idx_inc = add(gg_idx_inc, 1);  
                 }
                 ELSE
                 {

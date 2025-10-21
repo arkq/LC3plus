@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -193,6 +193,19 @@ Word16 BASOP_Util_Divide1616_Scale(Word16  x,  /*!< i  : Numerator*/
 /************************************************************************/
 Word32 BASOP_Util_Log2(Word32 x);
 
+#ifdef LOG2_LC_APPROX
+/************************************************************************/
+/*!
+  \brief     Low Complex Binary logarithm with 16 sections and 2nd order polynom 
+
+  \param   x
+
+  \return log2(x)/64
+ */
+ /************************************************************************/
+Word32 BASOP_Util_Log2_LC(Word32 L_x);
+#endif 
+
 /************************************************************************/
 /*!
   \brief     Binary power
@@ -316,14 +329,9 @@ void BASOP_cfft(Word32 *re, Word32 *im, Word16 sizeOfFft, Word16 s, Word16 *scal
 void BASOP_rfftN(Word32 *re, Word16 sizeOfFft, Word16 *scale, Word8 *scratchBuffer);
 void BASOP_irfftN(Word32 *re, Word16 sizeOfFft, Word16 *scale, Word8 *scratchBuffer);
 
-#if WMOPS
-extern BASIC_OP multiCounter[MAXCOUNTERS];
-extern int      currCounter;
-#endif
-
 static __inline void basop_memcpy(void *dst, const void *src, size_t n)
 {
-#if WMOPS
+#ifdef WMOPS
     multiCounter[currCounter].move16 += (UWord32)n / 2;
 #endif
     /* check for overlapping memory */
@@ -333,7 +341,7 @@ static __inline void basop_memcpy(void *dst, const void *src, size_t n)
 
 static __inline void basop_memmove(void *dst, const void *src, size_t n)
 {
-#if WMOPS
+#ifdef WMOPS
     multiCounter[currCounter].move16 += (UWord32)n / 2;
 #endif
     memmove(dst, src, n);
@@ -341,7 +349,7 @@ static __inline void basop_memmove(void *dst, const void *src, size_t n)
 
 static __inline void basop_memset(void *dst, int val, size_t n)
 {
-#if WMOPS
+#ifdef WMOPS
     multiCounter[currCounter].move16 += (UWord32)n / 2;
 #endif
     memset(dst, val, n);

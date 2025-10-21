@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -11,7 +11,7 @@
 
 void process_resamp12k8_fx(Word16 x[], Word16 x_len, Word16 mem_in[], Word16 mem_in_len, Word32 mem_50[],
                            Word16 mem_out[], Word16 mem_out_len, Word16 y[], Word16 *y_len, Word16 fs_idx,
-                           Word16 frame_dms, Word8 *scratchBuffer
+                           LC3PLUS_FrameDuration frame_dms, Word8 *scratchBuffer
                             , Word16 bps
                            )
 {
@@ -28,7 +28,8 @@ void process_resamp12k8_fx(Word16 x[], Word16 x_len, Word16 mem_in[], Word16 mem
     );
 
     buf = (Word16 *)scratchAlign(scratchBuffer, 0); /* Size = 2 * (MAX_LEN + MAX_LEN / 8) bytes */
-
+    len_12k8 = 0;
+    
     /* resamp parameters : {upsample-factor, 120 / upsample-factor, down_sample_int_part, down_sample_frac_part } 
        upsample is to 384 kHz. upsample-facor = 192000 / samp-freq
        Fractional downsample parameters are calculated from : downsample samp-freq to 128000
@@ -44,8 +45,19 @@ void process_resamp12k8_fx(Word16 x[], Word16 x_len, Word16 mem_in[], Word16 mem
     resamp_off_int  = resamp_params[fs_idx][2]; move16();
     resamp_off_frac = resamp_params[fs_idx][3]; move16();
     resamp_filt     = resamp_filts[fs_idx];     move16();
-
-    len_12k8 = LEN_12K8 / 4 * (frame_dms / 25); move16();
+    
+    SWITCH (frame_dms)
+    {
+#ifdef CR9_C_ADD_1p25MS
+        case LC3PLUS_FRAME_DURATION_1p25MS: len_12k8 = 16; BREAK;
+#endif
+        case LC3PLUS_FRAME_DURATION_2p5MS:  len_12k8 = 32; BREAK;
+        case LC3PLUS_FRAME_DURATION_5MS:    len_12k8 = 64; BREAK;
+        case LC3PLUS_FRAME_DURATION_7p5MS:  len_12k8 = 96; BREAK;
+        case LC3PLUS_FRAME_DURATION_10MS:   len_12k8 = 128; BREAK;
+        case LC3PLUS_FRAME_DURATION_UNDEFINED: assert(0);
+    }
+    
     *y_len   = len_12k8;                        move16();
 
     /* Init Input Buffer */

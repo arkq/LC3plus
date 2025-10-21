@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -81,22 +81,57 @@ static void array_calculate(LC3_INT32 *array_tdc, LC3_INT32 *array_ns, int lengt
     *counter_ns = counter_loc_ns;
 }
 
-static void plc_xcorr_lc(LC3_FLOAT *pcmbufHist, LC3_INT32 max_len_pcm_plc, LC3_INT32 pitch_int, LC3_INT32 framelength, LC3_INT32 frame_dms, LC3_INT32 fs, LC3_FLOAT *xcorr);
+static void plc_xcorr_lc(LC3_FLOAT *pcmbufHist, LC3_INT32 max_len_pcm_plc, LC3_INT32 pitch_int, LC3_INT32 framelength, LC3PLUS_FrameDuration frame_dms, LC3_INT32 fs, LC3_FLOAT *xcorr);
 static void spectral_centroid_lc(LC3_FLOAT *gains, LC3_INT32 tilt, const LC3_INT *bands_offset, LC3_INT32 bands_number, LC3_INT32 framelength, LC3_INT32 fs, LC3_FLOAT *sc);
 
 void processPlcClassify_fl(LC3_INT plcMeth, LC3_INT *concealMethod, LC3_INT32 *nbLostCmpt, LC3_INT32 bfi,
-                           LC3_FLOAT *xcorr, LC3_INT32 framelength, LC3_INT32 frame_dms, LC3_INT32 pitch_int,
+                           LC3_FLOAT *xcorr, LC3_INT32 framelength, LC3PLUS_FrameDuration frame_dms, LC3_INT32 pitch_int,
                            LC3_INT32 fs, const LC3_INT *band_offsets, LC3_INT32 bands_number, LC3_INT32 tilt, PlcAdvSetup *plcAd
                            , LC3_INT32 hrmode
 )
 {
         LC3_FLOAT sc, class;
         int fs_idx_tmp;
+#ifdef CR13_C_RESET_CLASSIFIER_AFTER_BAD_FRAMES
+    LC3_INT16 resetClassifierThreshold = 0;
+    LC3_INT16 updateStatistics = 0;
+#endif
 
     if (plcAd)
     {
         *xcorr = 0;
     }
+    
+#ifdef CR13_C_RESET_CLASSIFIER_AFTER_BAD_FRAMES
+    switch (frame_dms)
+    {
+#ifdef CR9_C_ADD_1p25MS
+        case LC3PLUS_FRAME_DURATION_1p25MS:
+            resetClassifierThreshold = 16;
+            break;
+#endif
+        case LC3PLUS_FRAME_DURATION_2p5MS:
+            resetClassifierThreshold = 8;
+            break;
+        case LC3PLUS_FRAME_DURATION_5MS:
+            resetClassifierThreshold = 4;
+            break;
+        case LC3PLUS_FRAME_DURATION_7p5MS:
+            resetClassifierThreshold = 3;
+            break;
+        case LC3PLUS_FRAME_DURATION_10MS:
+            resetClassifierThreshold = 2;
+            break;
+        case LC3PLUS_FRAME_DURATION_UNDEFINED: assert(0);
+    }
+    
+    if (plcAd->numberOfGoodFrames > resetClassifierThreshold)
+    {
+        updateStatistics = 1;
+    } else {
+        updateStatistics = 0;
+    }
+#endif
     
     fs_idx_tmp = FS2FS_IDX(fs);
     /* Save statistics for 24 kHz, 48 kHz and 96 kHz */
@@ -124,34 +159,70 @@ void processPlcClassify_fl(LC3_INT plcMeth, LC3_INT *concealMethod, LC3_INT32 *n
                 
                 if (class <= 0)
                 {
-                    if (frame_dms == 100 && hrmode == 0)
+                    if (frame_dms == LC3PLUS_FRAME_DURATION_10MS && hrmode == 0)
                     {
                         *concealMethod = 2; /* PhaseEcu selected */
-                        array_insert_and_shift(plcAd->plc_longterm_advc_tdc, 0, plcAd->longterm_analysis_counter_max, &plcAd->overall_counter, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
-                        array_insert_and_shift(plcAd->plc_longterm_advc_ns, 0, plcAd->longterm_analysis_counter_max, NULL, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
+                        
+#ifdef CR13_C_RESET_CLASSIFIER_AFTER_BAD_FRAMES
+                        if (updateStatistics == 1)
+#endif
+                        {
+                            array_insert_and_shift(plcAd->plc_longterm_advc_tdc, 0, plcAd->longterm_analysis_counter_max, &plcAd->overall_counter, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
+                            array_insert_and_shift(plcAd->plc_longterm_advc_ns, 0, plcAd->longterm_analysis_counter_max, NULL, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
+                        }
                     }
                     else
                     {
-                        array_insert_and_shift(plcAd->plc_longterm_advc_tdc, 0, plcAd->longterm_analysis_counter_max, &plcAd->overall_counter, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
-                        array_insert_and_shift(plcAd->plc_longterm_advc_ns, 0, plcAd->longterm_analysis_counter_max, NULL, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
+#ifdef CR13_C_RESET_CLASSIFIER_AFTER_BAD_FRAMES
+                        if (updateStatistics == 1)
+#endif
+                        {
+                            array_insert_and_shift(plcAd->plc_longterm_advc_tdc, 0, plcAd->longterm_analysis_counter_max, &plcAd->overall_counter, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
+                            array_insert_and_shift(plcAd->plc_longterm_advc_ns, 0, plcAd->longterm_analysis_counter_max, NULL, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
+                        }
                     }
                 }
                 else {
-                    array_insert_and_shift(plcAd->plc_longterm_advc_tdc, 1, plcAd->longterm_analysis_counter_max, &plcAd->overall_counter, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
-                    array_insert_and_shift(plcAd->plc_longterm_advc_ns, 0, plcAd->longterm_analysis_counter_max, NULL, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
+#ifdef CR13_C_RESET_CLASSIFIER_AFTER_BAD_FRAMES
+                    if (updateStatistics == 1)
+#endif
+                    {
+                        array_insert_and_shift(plcAd->plc_longterm_advc_tdc, 1, plcAd->longterm_analysis_counter_max, &plcAd->overall_counter, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
+                        array_insert_and_shift(plcAd->plc_longterm_advc_ns, 0, plcAd->longterm_analysis_counter_max, NULL, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
+                    }
                 }
             }
             else
             {
                 *concealMethod = 4; /* Noise Substitution */
-                array_insert_and_shift(plcAd->plc_longterm_advc_tdc, 0, plcAd->longterm_analysis_counter_max, &plcAd->overall_counter, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
-                array_insert_and_shift(plcAd->plc_longterm_advc_ns, 1, plcAd->longterm_analysis_counter_max, NULL, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
+                
+#ifdef CR13_C_RESET_CLASSIFIER_AFTER_BAD_FRAMES
+                if (updateStatistics == 1)
+#endif
+                {
+                    array_insert_and_shift(plcAd->plc_longterm_advc_tdc, 0, plcAd->longterm_analysis_counter_max, &plcAd->overall_counter, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
+                    array_insert_and_shift(plcAd->plc_longterm_advc_ns, 1, plcAd->longterm_analysis_counter_max, NULL, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
+                }
             }
             
-            array_calculate(plcAd->plc_longterm_advc_tdc, plcAd->plc_longterm_advc_ns, plcAd->longterm_analysis_counter_max_bytebuffer, &plcAd->longterm_counter_plcTdc, &plcAd->longterm_counter_plcNsAdv, plcAd->longterm_analysis_counter_max);
-            update_bit_and_byte_positions(plcAd->longterm_analysis_counter_max_bytebuffer, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
+#ifdef CR13_C_RESET_CLASSIFIER_AFTER_BAD_FRAMES
+            if (updateStatistics == 1)
+#endif
+            {
+                array_calculate(plcAd->plc_longterm_advc_tdc, plcAd->plc_longterm_advc_ns, plcAd->longterm_analysis_counter_max_bytebuffer, &plcAd->longterm_counter_plcTdc, &plcAd->longterm_counter_plcNsAdv, plcAd->longterm_analysis_counter_max);
+                update_bit_and_byte_positions(plcAd->longterm_analysis_counter_max_bytebuffer, &plcAd->longterm_counter_byte_position, &plcAd->longterm_counter_bit_position);
+            }
         }
     }
+    
+#ifdef CR13_C_RESET_CLASSIFIER_AFTER_BAD_FRAMES
+    if (bfi == 1)
+    {
+        plcAd->numberOfGoodFrames = 0;
+    } else {
+        plcAd->numberOfGoodFrames = plcAd->numberOfGoodFrames + 1;
+    }
+#endif
 }
 
 static void spectral_centroid_lc(LC3_FLOAT *gains, LC3_INT32 tilt, const LC3_INT *band_offsets, LC3_INT32 bands_number, LC3_INT32 framelength, LC3_INT32 fs, LC3_FLOAT *sc)
@@ -232,7 +303,7 @@ static void spectral_centroid_lc(LC3_FLOAT *gains, LC3_INT32 tilt, const LC3_INT
 }
 
 static void plc_xcorr_lc(LC3_FLOAT *pcmbufHist, LC3_INT32 max_len_pcm_plc, LC3_INT32 pitch_int, LC3_INT32 framelength,
-                         LC3_INT32 frame_dms, LC3_INT32 fs, LC3_FLOAT *xcorr)
+                         LC3PLUS_FrameDuration frame_dms, LC3_INT32 fs, LC3_FLOAT *xcorr)
 {
         LC3_INT32 max_corr_len, pitch_min, corr_len, min_corr_len, pcm_max_corr_len, range1Start, range2Start, i;
         LC3_FLOAT norm_w, norm_w_t;
@@ -250,7 +321,7 @@ static void plc_xcorr_lc(LC3_FLOAT *pcmbufHist, LC3_INT32 max_len_pcm_plc, LC3_I
         pcm_max_corr_len = max_len_pcm_plc - pitch_int;
 
         min_corr_len = 2 * pitch_min;              /* at least 5 ms (=2*pitchmin*) corr length */
-        max_corr_len = framelength*100/frame_dms;  /* maximum 10 ms */
+        max_corr_len = framelength*100/(frame_dms*1.25*10);  /* maximum 10 ms */
         max_corr_len = MIN( max_corr_len, pcm_max_corr_len );
 
         corr_len = MIN( max_corr_len, pitch_int ); /* pitch_int is prefered, but maximum 10ms or left pcm buf size */

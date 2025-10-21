@@ -3,7 +3,7 @@
 # ================================================================
 
 #******************************************************************************
-#                        ETSI TS 103 634 V1.5.1                               *
+#                        ETSI TS 103 634 V1.6.1                               *
 #              Low Complexity Communication Codec Plus (LC3plus)              *
 #                                                                             *
 # Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -31,6 +31,8 @@ from multiprocessing import Process, Queue
 import datetime
 import platform
 import struct
+import argparse
+import pandas as pd
 
 rdict = {"freq":0, "thd": 0, "snr": 0}
 
@@ -102,7 +104,7 @@ def get_op_string(op):
     return '_'.join([ops['test_mode'],ops['frame_ms'],ops['fs'],ops['bitrate']])
 
 
-def measure_thd_plus_n(call_string_enc, call_string_dec, freq, op):
+def measure_thd_plus_n(call_string_enc, call_string_dec, freq, op, encdec):
     y = generate_sinusoid(freq, op['fs'], 1, -3)
     infile = op['wav_folder'] + '/' + "sin_{}Hz.wav".format(freq)
     operation_point = get_op_string(op)
@@ -125,8 +127,13 @@ def measure_thd_plus_n(call_string_enc, call_string_dec, freq, op):
         log = call(sox_cmd)
         log = call('mv %s %s' % (tmp, infile))
 
-    log = call(call_string_enc.format(infile=infile, bitstream=bitstream))
-    log = call(call_string_dec.format(bitstream=bitstream, outfile=outfile))
+    if encdec:
+        call_string_enc = call_string_enc.replace('-E ','')
+        #print(f"call string enc: {call_string_enc}")
+        log = call(call_string_enc.format(infile=infile, bitstream=outfile))
+    else:
+        log = call(call_string_enc.format(infile=infile, bitstream=bitstream))
+        log = call(call_string_dec.format(bitstream=bitstream, outfile=outfile))
 
     if op['bps'] == 32:
         tmp = '%s.tmp.wav' % (outfile)
@@ -185,12 +192,72 @@ def result_to_html(html, op_result, op, png_path):
     return (html + new_row, op_status)
 
 
-def measure_thd_plus_n_parallel(call_string_enc, call_string_dec, freq, op):
-    freq, thd, snr = measure_thd_plus_n(call_string_enc, call_string_dec, freq, op)
-    rdict["thd"] = thd
-    rdict["snr"] = snr
-    rdict["freq"] = freq
+def measure_thd_plus_n_parallel(call_string_enc, call_string_dec, freq, op, encdec):
+    try:
+        freq, thd, snr = measure_thd_plus_n(call_string_enc, call_string_dec, freq, op, encdec)
+        rdict["thd"] = thd
+        rdict["snr"] = snr
+        rdict["freq"] = freq
+    except OSError as e:
+        rdict["error"] = e
     q.put(rdict.copy())
+
+def write_csv(op, freqs, tvec, svec, csv_folder):
+    csv_filename = 'data_{}_{}ms_{}kHz_{:.1f}kbps.csv'.format(
+        op['test_mode'], op['frame_ms'], op['fs']//1000, op['bitrate']/1000)
+        
+    data = {
+        'Frequency (Hz)': freqs,
+        'THD+N (dB)': tvec,
+        'SNR (dB)': svec
+    }
+    
+    df = pd.DataFrame(data)
+
+    if not os.path.isdir(csv_folder):
+        os.makedirs(csv_folder)
+
+    df.to_csv(csv_folder+'/'+csv_filename, index=False)
+    print('Data written to {}'.format(csv_folder+'/'+csv_filename))
+
+
+def append_csv(op, freqs, tvec, svec, csv_file):
+    hrmode = 1 if 'hrmode' in globals['test_encoder'] else 0
+    # op['frame_ms'], op['fs'], op['bitrate']
+
+    # Create a mask for frequencies equal to 1000 Hz
+    mask = freqs == 1000
+
+    # Filter the data based on the mask
+    freqs_1kHz = freqs[mask]
+    tvec_1kHz = tvec[mask]
+    svec_1kHz = svec[mask]
+
+    if not freqs_1kHz:
+        print('No data to write for frequency 1000 Hz.')
+        return
+    
+    if os.path.isfile(csv_file):
+        mode = 'a'  # Append mode
+        header = False  
+    else:
+        mode = 'w'  # Write mode
+        header = True
+
+    data = {
+        'hrmode': [hrmode],
+        'frame_ms': [op['frame_ms']],
+        'samplerate': [op['fs']],
+        'bitrate': [op['bitrate']],
+        'THD+N': [tvec_1kHz],
+        'SNR': [svec_1kHz]
+    }
+    
+    df = pd.DataFrame(data)
+
+    # Append data to the CSV file
+    df.to_csv(csv_file, mode=mode, header=header, index=False)
+    print('Data appended to {}'.format(csv_file))
 
 
 def plot(op, freqs, tvec, svec, png_folder):
@@ -217,24 +284,24 @@ def parse_globals(config):
     missing_keys = set(GLOBAL_KEYS) - set(config['globals'].keys())
     if bool(missing_keys):
         print('Global key "{}" missing.'.format(list(missing_keys)[0]))
-        exit()
+        exit(1)
 
     globals = {}
     for key in GLOBAL_KEYS:
         globals[key] = config['globals'][key]
 
-    if not os.path.isfile(globals['reference_encoder'].split(' ')[0]):
+    if not os.path.isfile(globals['reference_encoder'].strip(' ').split(' ')[0]) and os.system('which ' + globals['reference_encoder'].strip(' ').split(' ')[0]) != 0:
         print('reference_encoder "{}" not found.'.format(globals['reference_encoder']))
-        exit()
-    if not os.path.isfile(globals['reference_decoder'].split(' ')[0]):
+        exit(1)
+    if not os.path.isfile(globals['reference_decoder'].strip(' ').split(' ')[0]) and os.system('which ' + globals['reference_decoder'].strip(' ').split(' ')[0]) != 0:
         print('reference_decoder "{}" not found.'.format(globals['reference_decoder']))
-        exit()
-    if not os.path.isfile(globals['test_encoder'].split(' ')[0]):
+        exit(1)
+    if not os.path.isfile(globals['test_encoder'].strip(' ').split(' ')[0]) and os.system('which ' + globals['test_encoder'].strip(' ').split(' ')[0]) != 0:
         print('test_encoder "{}" not found.'.format(globals['test_encoder']))
-        exit()
-    if not os.path.isfile(globals['test_decoder'].split(' ')[0]):
+        exit(1)
+    if not os.path.isfile(globals['test_decoder'].strip(' ').split(' ')[0]) and os.system('which ' + globals['test_decoder'].strip(' ').split(' ')[0]) != 0:
         print('test_decoder "{}" not found.'.format(globals['test_decoder']))
-        exit()
+        exit(1)
 
     if not 'freq_grid' in config['globals'].keys(): 
         globals['freq_grid'] = 'linlog'
@@ -250,9 +317,12 @@ def parse_globals(config):
         print('Using frequency grid with linear spacing in log domain with {} points'.format(globals['freq_grid_steps']))
     elif globals['freq_grid'] == 'onethirdoctave':
         print('Using frequency grid of one-third octave spacing')
+    elif type(eval(globals['freq_grid'])) == list:
+        print('Using predefined frequency set {}'.format(globals['freq_grid']))
     else:
+        print(globals['freq_grid'])
         print('Frequency grid {} unkown, use linlog or onethirdoctave'.format(globals['freq_grid']))
-        exit()
+        exit(1)
 
     if not 'bps' in config['globals'].keys(): 
         globals['bps'] = 24
@@ -280,7 +350,8 @@ def parse_op(line):
 
     if op['test_mode'] not in ['encode', 'decode', 'encdec']:
         print('Mode must be (encode|decode|encdec)!')
-        exit()
+        exit(1)
+
     return op
 
 
@@ -307,13 +378,17 @@ def select_threshold(test_mode, xxx_threshold):
 if platform.system() == 'Darwin':
     multiprocessing.set_start_method('fork')
 q = Queue()
+
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
+    parser = argparse.ArgumentParser(description="measures SNR and THD+N values from a given configuration file.")
+    parser.add_argument('conf_path', nargs='?', help="Path to the configuration file")
+    parser.add_argument('--encdec', action='store_true',default=False, help="runs only encode decode mode with one binary call")
+    args = parser.parse_args()
+
+    if not args.conf_path:
         usage("not enough input arguments")
-
-    if sys.argv[1] == '-h':
-        usage("Printing help")
-
+    else:
+        conf_path = args.conf_path
     conf_path = sys.argv[1]
     if not os.path.isfile(conf_path):
         usage('could not find {}'.format(conf_path))
@@ -339,29 +414,43 @@ if __name__ == "__main__":
     if os.path.isdir(wav_folder):
         print('removing wave folder from previous run: {}'.format(wav_folder))
         shutil.rmtree(wav_folder)
+    if os.path.isdir('csv_'+cfg_file_name):
+        print('removing csv folder from previous run: {}'.format('csv_'+cfg_file_name))
+        shutil.rmtree('csv_'+cfg_file_name)
     os.makedirs(wav_folder)
     # parse [tests] config
     tests = config['tests']['configs']
     test_status = 'passed'
     for line in tests.split('\n'):
         op = parse_op(line)
+        if args.encdec:
+            if op['test_mode'] != 'encdec':
+                print('skipping non encdec mode')
+                continue
         print_op_status(op)
        
         if globals['freq_grid'] == 'linlog':
             # n point log space
             nSteps = int (globals['freq_grid_steps'])
-            stepSize = (m.log10(op['fs']/2) - 1) / nSteps
-            freqs = [10**(n*stepSize+1) for n in range(nSteps)]
-            index_1k = m.floor ((m.log10(1000)-1)/stepSize)
-            if freqs[index_1k] != 1000:
-                freqs.insert (index_1k+1, 1000)
-                index_1k = index_1k + 1
+            if nSteps == 0:
+                freqs = [1000]
+                index_1k = 0
+            else:
+                stepSize = (m.log10(op['fs']/2) - 1) / nSteps
+                freqs = [10**(n*stepSize+1) for n in range(nSteps)]
+                index_1k = m.floor ((m.log10(1000)-1)/stepSize)
+                if freqs[index_1k] != 1000:
+                    freqs.insert (index_1k+1, 1000)
+                    index_1k = index_1k + 1
 
         elif globals['freq_grid'] == 'onethirdoctave':
             # one-third octave steps
             max_steps = int (m.log10(op['fs']/2)*10)
             freqs = [10 ** (0.1 * ((n+12))) for n in range(max_steps-12+1)]
             index_1k = int (m.log10(1000)*10) - 12
+        elif type(eval(globals['freq_grid'])) == list:
+            freqs = [1000] + eval(globals['freq_grid'])
+            index_1k = 0
         else:
             exit ('unknow frequency grid')
         
@@ -387,7 +476,7 @@ if __name__ == "__main__":
 
         try:
             for freq in freqs:
-                p = Process(target = measure_thd_plus_n_parallel, args=(call_string_enc, call_string_dec, freq, op))
+                p = Process(target = measure_thd_plus_n_parallel, args=(call_string_enc, call_string_dec, freq, op, args.encdec))
                 p.start()
                 plist.append(p)
                 cores_in_use = cores_in_use + 1
@@ -395,6 +484,9 @@ if __name__ == "__main__":
                     for p in plist:
                         p.join()
                         rdict = q.get()
+                        if 'error' in rdict.keys(): 
+                            print(str(rdict["error"]))
+                            sys.exit(1)
                         rdictlist.append(rdict.copy())
                         cores_in_use = cores_in_use - 1
                         print("freq: {:9.3f}  SNR: {:6.2f}  THD: {:6.2f}".format(rdict["freq"], rdict["snr"], rdict["thd"]))
@@ -423,7 +515,8 @@ if __name__ == "__main__":
         if globals['plot']:
             # plot figure
             png_path = plot(op, freqs, tvec, svec, 'png_'+cfg_file_name)
-        
+        write_csv(op, freqs, tvec, svec, 'csv_'+cfg_file_name)
+        append_csv(op, freqs, tvec, svec, 'csv_'+cfg_file_name+'/data_1khz.csv')
         html, op_status = result_to_html(html, op_result, op, png_path)
         if op_status == 'failed':
             test_status = 'failed'
@@ -433,4 +526,6 @@ if __name__ == "__main__":
     with open(html_file_name,'w') as fid:
         fid.writelines(html)
     print('results saved in {}'.format(html_file_name))
+    if test_status == 'failed':
+        exit(1)
     #shutil.rmtree(wav_folder)

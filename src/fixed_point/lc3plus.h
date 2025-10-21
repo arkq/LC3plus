@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -23,7 +23,7 @@
  */
 
 #ifndef LC3PLUS_H
-#define LC3PLUS_H 
+#define LC3PLUS_H
 
 #ifndef _MSC_VER
 #include <stdint.h>
@@ -36,7 +36,7 @@ typedef __int32 int32_t;
 #define LC3PLUS_VERSION_INT(major, minor, micro) (((major) << 16) | ((minor) << 8) | (micro))
 
 /*! Version number to ensure header and binary are matching. */
-#define LC3PLUS_VERSION LC3PLUS_VERSION_INT(1, 7, 4)
+#define LC3PLUS_VERSION LC3PLUS_VERSION_INT(1, 8, 0)
 
 /*! Maximum number of supported channels. The actual binary might support
  *  less, use lc3plus_channels_supported() to check. */
@@ -56,6 +56,9 @@ typedef __int32 int32_t;
 #define LC3PLUS_MAX_BYTES 870
 #endif
 
+
+
+
 /*! Maximum size needed to store encoder state. */
 #ifdef ENABLE_HR_MODE
 #define LC3PLUS_ENC_MAX_SIZE 12628
@@ -70,6 +73,18 @@ typedef __int32 int32_t;
 #define LC3PLUS_DEC_MAX_SIZE 28446
 #endif
 
+#ifdef LRSNS_MORE_SCRATCH 
+
+#ifdef ENABLE_HR_MODE
+#  define LC3PLUS_ENC_MAX_SCRATCH_SIZE (2*32767)
+#  define LC3PLUS_DEC_MAX_SCRATCH_SIZE (2*32767)
+#else
+#  define LC3PLUS_ENC_MAX_SCRATCH_SIZE (2*32767)
+#  define LC3PLUS_DEC_MAX_SCRATCH_SIZE (2*32767)
+#endif
+
+#else 
+
 /*! Maximum scratch size needed by lc3plus_enc16() or lc3plus_enc24().*/
 #ifdef ENABLE_HR_MODE
 #  define LC3PLUS_ENC_MAX_SCRATCH_SIZE 45624
@@ -83,6 +98,20 @@ typedef __int32 int32_t;
 #else
 #define LC3PLUS_DEC_MAX_SCRATCH_SIZE 27474
 #endif
+
+#endif
+
+typedef enum {
+    LC3PLUS_FRAME_DURATION_UNDEFINED = 0,   /* Invalid */
+#ifdef CR9_C_ADD_1p25MS
+    LC3PLUS_FRAME_DURATION_1p25MS = 1,      /* 1.25 ms */
+#endif
+    LC3PLUS_FRAME_DURATION_2p5MS = 2,       /* 2.5 ms  */
+    LC3PLUS_FRAME_DURATION_5MS = 4,         /* 5 ms    */
+    LC3PLUS_FRAME_DURATION_7p5MS = 6,       /* 7.5 ms  */
+    LC3PLUS_FRAME_DURATION_10MS = 8,        /* 10 ms   */
+} LC3PLUS_FrameDuration;
+
 /*! Decoder packet loss concealment mode */
 typedef enum
 {
@@ -319,7 +348,7 @@ int lc3plus_enc_get_delay(const LC3PLUS_Enc *encoder);
  *  \param[in]  frame_ms    Frame length in ms.
  *  \return                 LC3PLUS_OK on success or appropriate error code.
  */
-LC3PLUS_Error lc3plus_enc_set_frame_dms(LC3PLUS_Enc *encoder, int frame_ms);
+LC3PLUS_Error lc3plus_enc_set_frame_dms(LC3PLUS_Enc *encoder, LC3PLUS_FrameDuration frame_ms);
 
 /*! Set error protection mode. The default is LC3PLUS_EP_OFF. It is possible to switch between
  *  different modees during encoding. Dynamic switching is only allowed between LC3PLUS_EP_ZERO,
@@ -463,7 +492,7 @@ int lc3plus_dec_get_delay(const LC3PLUS_Dec *decoder);
  *  \param[in]  frame_ms    Frame length in ms.
  *  \return                 LC3PLUS_OK on success or appropriate error code.
  */
-LC3PLUS_Error lc3plus_dec_set_frame_dms(LC3PLUS_Dec *decoder, int frame_ms);
+LC3PLUS_Error lc3plus_dec_set_frame_dms(LC3PLUS_Dec *decoder, LC3PLUS_FrameDuration frame_ms);
 
 /*! Enable or disable error protection. Default value is 0 (disabled). If error protection is
  *  enabled, the decoder expects that the frames were encoded with error protection mode
@@ -517,4 +546,4 @@ int lc3plus_dec_get_error_report(const LC3PLUS_Dec *decoder);
 int lc3plus_dec_get_epok_flags(const LC3PLUS_Dec *decoder);
 
 /*! \} */
-#endif /* LC3plus */
+#endif /* LC3PLUS_H */

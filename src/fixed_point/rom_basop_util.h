@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -167,4 +167,4 @@ extern const UWord16 rs16_elp_deg3_table[256];
 extern const Word32 invSqrtTab[(128 + 2)];
 #endif
 
-#endif
+#endif /* __BASOP_UTIL_ROM_H__ */

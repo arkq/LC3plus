@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -498,11 +498,12 @@ void fec_encoder(LC3_INT16 mode, LC3_INT16 epmr, LC3_UINT8 *iobuf, LC3_INT16 dat
         
         assert((slot_bytes >= FEC_SLOT_BYTES_MIN && slot_bytes <= FEC_SLOT_BYTES_MAX) &&
                "fec_encoder: slot_bytes out of range");
-        tmp -= mode == 1 ? 1 : n_codewords * (mode - 1);                                 // reed solomon redundancy
-        tmp -= slot_bytes == 40 ? crc1_bytes_by_mode0[mode] : crc1_bytes_by_mode1[mode]; // crc1
-        tmp -= (n_pccw > 0) && (mode > 1) ? crc2_bytes_by_mode[mode] : 0;                // crc2
+        tmp -= mode == 1 ? 1 : n_codewords * (mode - 1);                                 /* reed solomon redundancy */
+        tmp -= slot_bytes == 40 ? crc1_bytes_by_mode0[mode] : crc1_bytes_by_mode1[mode]; /* crc1 */
+        tmp -= (n_pccw > 0) && (mode > 1) ? crc2_bytes_by_mode[mode] : 0;                /* crc2 */
         assert(data_bytes == tmp && "fec_encoder: inconsistent payload size");
         assert(n_codewords - n_pccw >= 6);
+        (void)tmp;
     }
 
     /* data preproc: re-ordering and hash extension */
@@ -1192,7 +1193,7 @@ FEC_STATIC LC3_INT32 rs16_detect_and_correct(LC3_UINT8 *iobuf, LC3_INT32 n_symb,
         }
         }
     }
-    assert(n_mode_candidates <= 4); // suppress false gcc warning when OPTIM=3
+    assert(n_mode_candidates <= 4); /*  suppress false gcc warning when OPTIM=3 */
     
     /* sort mode candidates by risk */
     for (i = 0; i < n_mode_candidates; i++)

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -31,7 +31,7 @@ void processApplyGlobalGain_fx(Word32 x[], Word16 *x_e, Word16 xLen, Word16 glob
 #ifdef ENABLE_HR_MODE
     /* 1 / (28 * log 2) is 0x797D in Q18, L_shl_pos by 7 results in Q25 tmp32 */
     /* round(2^31 / (28 * log10(2))) = 254778081 */
-    //tmp32 = L_shl_pos(Mpy_32_16(254778081, add(global_gain_idx, global_gain_off)), 9);
+   
     Word32  mh;
     UWord16 ml;
 

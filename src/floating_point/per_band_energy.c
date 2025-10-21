@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -9,7 +9,7 @@
 
 #include "functions.h"
 
-void processPerBandEnergy_fl(LC3_INT bands_number, const LC3_INT* acc_coeff_per_band, LC3_INT16 hrmode, LC3_INT16 frame_dms, LC3_FLOAT* d2, LC3_FLOAT* d)
+void processPerBandEnergy_fl(LC3_INT bands_number, const LC3_INT* acc_coeff_per_band, LC3_INT16 hrmode, LC3PLUS_FrameDuration frame_dms, LC3_FLOAT* d2, LC3_FLOAT* d)
 {
     LC3_INT   i, j, start, stop, maxBwBin;
     LC3_FLOAT sum;
@@ -28,15 +28,24 @@ void processPerBandEnergy_fl(LC3_INT bands_number, const LC3_INT* acc_coeff_per_
     }
     switch (frame_dms)
     {
-    case 25:
+#ifdef CR9_C_ADD_1p25MS
+    case LC3PLUS_FRAME_DURATION_1p25MS:
+        maxBwBin = maxBwBin >> 3;
+        break;
+#endif
+    case LC3PLUS_FRAME_DURATION_2p5MS:
         maxBwBin = maxBwBin >> 2;
         break;
-    case 50:
+    case LC3PLUS_FRAME_DURATION_5MS:
         maxBwBin = maxBwBin >> 1;
         break;
-    case 75:
+    case LC3PLUS_FRAME_DURATION_7p5MS:
         maxBwBin = (maxBwBin >> 2) * 3;
         break;
+    case LC3PLUS_FRAME_DURATION_10MS:
+        break;
+    case LC3PLUS_FRAME_DURATION_UNDEFINED:
+        assert(0);
     }
 
     for (i = 0; i < bands_number; i++) {

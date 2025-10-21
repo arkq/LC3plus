@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -16,7 +16,7 @@ static Word32 FIRLattice(Word16 order, const Word16 *parCoeff /*Q15*/, Word32 *s
 /*************************************************************************/
 
 void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cutoff_idx, Word16 order[],
-                        Word16 *numfilters, Word16 enable_lpc_weighting, Word16 nSubdivisions, Word16 frame_dms,
+                        Word16 *numfilters, Word16 enable_lpc_weighting, Word16 nSubdivisions, LC3PLUS_FrameDuration frame_dms,
                         Word16 maxLen, Word8 *scratchBuffer
 #ifdef ENABLE_HR_MODE
                         , Word16 hrmode
@@ -49,6 +49,10 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
     move16();
     *numfilters = 1;
     move16();
+    subdiv_startfreq = 0; 
+    move16();
+    subdiv_stopfreq  = 0; 
+    move16();
 
 #ifdef ENABLE_HR_MODE
     if (hrmode)
@@ -64,7 +68,15 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
 
     SWITCH (frame_dms)
     {
-    case 25:
+#ifdef CR9_C_ADD_1p25MS
+    case LC3PLUS_FRAME_DURATION_1p25MS:
+        *bits    = 0;
+        order[0] = 0;
+        order[1] = 0;
+        *numfilters = 0;
+        goto tns_exit;
+#endif
+    case LC3PLUS_FRAME_DURATION_2p5MS:
         startfreq[0] = 3;
         move16();
         
@@ -88,7 +100,7 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
         maxOrder = 4;
         move16();
         BREAK;
-    case 50:
+    case LC3PLUS_FRAME_DURATION_5MS:
         startfreq[0] = 6;
         move16();
         
@@ -111,7 +123,7 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
         xLen     = shr_pos(xLen, 1);
         maxOrder = 4;
         BREAK;
-    case 75:
+    case LC3PLUS_FRAME_DURATION_7p5MS:
         startfreq[0] = 9;
         move16();
         subdiv_startfreq = tns_subdiv_startfreq_7_5ms[BW_cutoff_idx];
@@ -122,7 +134,7 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
         xLen     = add(tmp, add(tmp, tmp));
         maxOrder = 8;
         BREAK;
-    default: /* 100 */
+    case LC3PLUS_FRAME_DURATION_10MS:
         startfreq[0] = 12;
         move16();
         
@@ -143,9 +155,10 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
             move16();
         }
         BREAK;
+    case LC3PLUS_FRAME_DURATION_UNDEFINED: assert(0);
     }
 
-    IF (sub(BW_cutoff_idx, 3) >= 0 && frame_dms >= 50)
+    IF (sub(BW_cutoff_idx, 3) >= 0 && frame_dms >= LC3PLUS_FRAME_DURATION_5MS)
     {
         *numfilters  = 2;
         startfreq[1] = shr_pos(xLen, 1);
@@ -193,10 +206,14 @@ void processTnsCoder_fx(Word16 *bits, Word16 indexes[], Word32 x[], Word16 BW_cu
 
             SWITCH (frame_dms)
             {
-            case 25: facs_e = add(facs_e, 1); BREAK;
-            case 50: facs_e = add(facs_e, 1); BREAK;
-            case 75: BREAK;
-            case 100: BREAK;
+#ifdef CR9_C_ADD_1p25MS
+            case LC3PLUS_FRAME_DURATION_1p25MS: assert(0);
+#endif
+            case LC3PLUS_FRAME_DURATION_2p5MS: facs_e = add(facs_e, 1); BREAK;
+            case LC3PLUS_FRAME_DURATION_5MS: facs_e = add(facs_e, 1); BREAK;
+            case LC3PLUS_FRAME_DURATION_7p5MS: BREAK;
+            case LC3PLUS_FRAME_DURATION_10MS: BREAK;
+            case LC3PLUS_FRAME_DURATION_UNDEFINED: assert(0);
             }
 
             tmp   = sub(1, shl_pos(tmp, 1));       /* exponent of autocorrelation */
@@ -311,6 +328,10 @@ tns_disabled:
             order[j] = 0;
         }
     }
+    
+#ifdef CR9_C_ADD_1p25MS
+tns_exit:
+#endif
 
     Dyn_Mem_Deluxe_Out();
 }

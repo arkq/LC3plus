@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -17,7 +17,7 @@ static Word32 TDC_L_Dot_product(const Word16 x[], const Word16 y[], const Word16
 static void   TDC_highPassFiltering_fx(const Word16 L_buffer, Word16 exc2[], const Word16 l_fir_fer,
                                        const Word16 *hp_filt);
 static Word32 TDC_calcGainp(Word16 x[], Word16 y[], Word16 lg);
-static void   TDC_calcGainc(Word16 *exc, Word16 Q_exc, Word16 old_fpitch, Word16 lg, Word16 frame_dms, Word16 lp_gainp, Word32 *lp_gainc);
+static void   TDC_calcGainc(Word16 *exc, Word16 Q_exc, Word16 old_fpitch, Word16 lg, LC3PLUS_FrameDuration frame_dms, Word16 lp_gainp, Word32 *lp_gainc);
 static void   TDC_random_fx(Word16 *seed, Word16 lg, Word16 *y);
 static Word16 TDC_preemph(Word16 *x, const Word16 fac, const Word16 lg);
 static void   TDC_LPC_residu_fx(const Word16 *a, Word16 *x, Word16 *y, Word16 lg, Word16 m);
@@ -25,7 +25,23 @@ static void   TDC_deemph_fx(const Word16 *x, Word16 *y, const Word16 fac, const 
 static void   TDC_LPC_synthesis_fx(const Word16 sh, const Word16 a[], const Word16 x[], Word16 y[], const Word16 lg,
                                    const Word16 m);
 static void   TDC_normalize_energy_fx(Word16 *gain, Word16 *gain_exp, const Word16 *x, const Word16 lg);
- 
+
+#ifdef FIX_TDC_BURST_ERROR
+const Word16 beforeNextIncArray_fx[5][8] = {
+                                            { 0, 0, 0, 0, 0, 0, 0, 1 },
+                                            { 0, 0, 0, 1, 0, 0, 0, 1 },
+                                            { 0, 1, 0, 1, 0, 1, 0, 1 },
+                                            { 0, 1, 1, 1, 0, 1, 1, 1 },
+                                            { 1, 1, 1, 1, 1, 1, 1, 1 }
+};
+const Word16 nextIncArray_fx[5][8] = {
+                                        { 1, 0, 0, 0, 0, 0, 0, 0 },
+                                        { 1, 0, 0, 0, 1, 0, 0, 0 },
+                                        { 1, 0, 1, 0, 1, 0, 1, 0 },
+                                        { 1, 0, 1, 1, 1, 0, 1, 1 },
+                                        { 1, 1, 1, 1, 1, 1, 1, 1 }
+};
+#else
 const Word16 beforeNextIncArray_fx[4][4] = {{0,0,0,1},
                                           {0,1,0,1},
                                           {0,1,1,1},
@@ -34,7 +50,9 @@ const Word16  nextIncArray_fx[4][4] = {{1,0,0,0},
                                     {1,0,1,0},
                                     {1,0,1,1},
                                     {1,1,1,1}};
-static Word16 type_2_alpha_long(Word16 nbLostFramesInRow, Word16 frame_dms);
+#endif
+
+static Word16 type_2_alpha_long(Word16 nbLostFramesInRow, LC3PLUS_FrameDuration frame_dms);
 static Word16 powWord16rest(Word16 base, Word16 exp, Word16 rest);
 
 /*****************************************************************************/
@@ -70,14 +88,14 @@ static Word16 powWord16rest(Word16 base, Word16 exp, Word16 rest);
  */
 void processTimeDomainConcealment_Apply_fx(const Word16 pitch_int, const Word16 preemphFac_fx, const Word16 *A_fx,
                                            const Word16 lpc_order, const Word16 *pcmbufHist_fx, const Word16 frame_length,
-                                           const Word16 frame_dms, const Word16 fs_idx, const Word16 nbLostFramesInRow,
+                                           const LC3PLUS_FrameDuration frame_dms, const Word16 fs_idx, const Word16 nbLostFramesInRow,
                                            const Word16 overlap, const Word16 stabFac_fx, Word16 *fract,
                                            Word16 *seed_fx, 
                                            Word32 *gain_c_fx, Word16 *synth_fx, Word16 *Q_syn, Word16 *alpha, Word16 max_len_pcm_plc,
                                            Word16 harmonicBuf_fx[MAX_PITCH], Word16 synthHist_fx[M], Word16 *const harmonicBuf_Q,
                                            Word8 *scratchBuffer
                                            , UWord8 plc_fadeout_type
-                                           , Word16 * alpha_type_2_table
+                                           ,Word16 * alpha_type_2_table
 )
 {
     Counter       i;
@@ -126,14 +144,54 @@ void processTimeDomainConcealment_Apply_fx(const Word16 pitch_int, const Word16 
 
     /* len of output signal */
     len = add(frame_length, overlap);
+  
+    int frame_dms_val = 0;
+    SWITCH (frame_dms)
+    {
+#ifdef FIX_TDC_BURST_ERROR
+#ifdef CR9_C_ADD_1p25MS
+        case LC3PLUS_FRAME_DURATION_1p25MS: frame_dms_val = 1; break;
+#endif
+        case LC3PLUS_FRAME_DURATION_2p5MS: frame_dms_val = 2; break;
+        case LC3PLUS_FRAME_DURATION_5MS: frame_dms_val = 4; break;
+        case LC3PLUS_FRAME_DURATION_7p5MS: frame_dms_val = 6; break;
+        case LC3PLUS_FRAME_DURATION_10MS: frame_dms_val = 8; break;
+        case LC3PLUS_FRAME_DURATION_UNDEFINED: assert(0);
+        default: assert( 0 );
+#else
+#ifdef CR9_C_ADD_1p25MS
+        case LC3PLUS_FRAME_DURATION_1p25MS: frame_dms_val = 125; break;
+#endif
+        case LC3PLUS_FRAME_DURATION_2p5MS: frame_dms_val = 250; break;
+        case LC3PLUS_FRAME_DURATION_5MS: frame_dms_val = 500; break;
+        case LC3PLUS_FRAME_DURATION_7p5MS: frame_dms_val = 750; break;
+        case LC3PLUS_FRAME_DURATION_10MS: frame_dms_val = 1000; break;
+        case LC3PLUS_FRAME_DURATION_UNDEFINED: assert(0);
+#endif
+    }
 
+#ifdef FIX_TDC_BURST_ERROR
+    nbLostFramesInRow_mod = sub( nbLostFramesInRow, 1 ) & 0x0007;
+    nbLostCmpt_loc = L_add(L_shr(L_mult0(frame_dms_val, sub(nbLostFramesInRow, 1)), 3), 1);
+    if (sub(frame_dms_val, 1) == 0)
+    {
+        frame_dms_idx = 0;
+    }
+    else
+    {
+        frame_dms_idx = shr(frame_dms, 1);
+    }
+    beforeNextInc = beforeNextIncArray_fx[frame_dms_idx][nbLostFramesInRow_mod];
+    nextInc       = nextIncArray_fx[frame_dms_idx][nbLostFramesInRow_mod];
+#else
     nbLostFramesInRow_mod = sub(nbLostFramesInRow, 1) & 0x0003;
     
-    frame_dms_idx  = mult(frame_dms, 0x051F);
+    frame_dms_idx  = mult(frame_dms_val/10, 0x051F);
     nbLostCmpt_loc = add(shr(L_mult0(frame_dms_idx, sub(nbLostFramesInRow, 1)), 2), 1);
     frame_dms_idx  = sub(frame_dms_idx, 1);
     beforeNextInc = beforeNextIncArray_fx[frame_dms_idx][nbLostFramesInRow_mod]; move16();
     nextInc       = nextIncArray_fx      [frame_dms_idx][nbLostFramesInRow_mod]; move16();
+#endif
 
     IF (sub(nbLostCmpt_loc, plc_fadeout_len / 10) > 0)
     {
@@ -327,10 +385,14 @@ void processTimeDomainConcealment_Apply_fx(const Word16 pitch_int, const Word16 
     {
       SWITCH (frame_dms)
       {
-      case  25: *alpha = mult(*alpha, PLC34_ATTEN_FAC_025_FX); BREAK;
-      case  50: *alpha = mult(*alpha, PLC34_ATTEN_FAC_025_FX); BREAK;
-      case  75: *alpha = mult(*alpha, PLC34_ATTEN_FAC_075_FX); BREAK;
-      case 100: *alpha = mult(*alpha, PLC34_ATTEN_FAC_100_FX); BREAK;
+#ifdef CR9_C_ADD_1p25MS
+      case LC3PLUS_FRAME_DURATION_1p25MS: *alpha = mult(*alpha, PLC34_ATTEN_FAC_125_FX); BREAK;
+#endif
+      case  LC3PLUS_FRAME_DURATION_2p5MS: *alpha = mult(*alpha, PLC34_ATTEN_FAC_025_FX); BREAK;
+      case  LC3PLUS_FRAME_DURATION_5MS: *alpha = mult(*alpha, PLC34_ATTEN_FAC_025_FX); BREAK;
+      case  LC3PLUS_FRAME_DURATION_7p5MS: *alpha = mult(*alpha, PLC34_ATTEN_FAC_075_FX); BREAK;
+      case LC3PLUS_FRAME_DURATION_10MS: *alpha = mult(*alpha, PLC34_ATTEN_FAC_100_FX); BREAK;
+      case LC3PLUS_FRAME_DURATION_UNDEFINED: assert(0);
       }
     }
     if (sub(nbLostCmpt_loc, 5) > 0)
@@ -500,6 +562,15 @@ void processTimeDomainConcealment_Apply_fx(const Word16 pitch_int, const Word16 
     mem_deemph = shl_sat(pcmbufHist_fx[max_len_pcm_plc - 1], *Q_syn);
     TDC_deemph_fx(synth_tmp_fx, synth_fx, preemphFac_fx, len, mem_deemph);
 
+#ifdef CR12_B_STOP_DC_RINGING_NO
+    if ((gain_h_fx == 0) && (g_fx == 0))
+    {
+        for (i = 0; i < len; i++)
+        {
+            synth_fx[i] = 0;
+        }
+    }
+#endif
     /*----------------------------------------------------------*
      * Fade to zero                                             *
      *----------------------------------------------------------*/
@@ -666,7 +737,7 @@ static void TDC_highPassFiltering_fx(const Word16 L_buffer, Word16 exc2[], const
  * Returns:
  *   void
  */
-static void TDC_calcGainc(Word16 *exc, Word16 Q_exc, Word16 old_fpitch, Word16 lg, Word16 frame_dms, Word16 lp_gainp, Word32 *lp_gainc)
+static void TDC_calcGainc(Word16 *exc, Word16 Q_exc, Word16 old_fpitch, Word16 lg, LC3PLUS_FrameDuration frame_dms, Word16 lp_gainp, Word32 *lp_gainc)
 {
     Dyn_Mem_Deluxe_In(
         Word16  tmp16, tmp_e, tmp2_e;
@@ -683,7 +754,7 @@ static void TDC_calcGainc(Word16 *exc, Word16 Q_exc, Word16 old_fpitch, Word16 l
         L_tmp = L_mac0_sat(L_tmp, tmp16, tmp16); /*Q3*/
     }
 
-    IF (sub(frame_dms, 100) < 0)
+    IF (sub(frame_dms, LC3PLUS_FRAME_DURATION_10MS) < 0)
     {
         L_tmp_max = L_deposit_l(0);
         FOR (i = 0; i < lg; i++)
@@ -743,7 +814,14 @@ static Word32 TDC_calcGainp(Word16 x[], Word16 y[], Word16 lg)
     FOR (i = 0; i < lg; i += 2)
     {
         L_tmp1 = L_mac0_sat(L_tmp1, x[i], y[i]);
+#ifdef FIX_PLC_CONFORM_ISSUES
+        IF (i + 1 < lg) 
+        {
+#endif
         L_tmp2 = L_mac0_sat(L_tmp2, x[i + 1], y[i + 1]);
+#ifdef FIX_PLC_CONFORM_ISSUES
+        }
+#endif
     }
     tcorr  = L_add(L_shr_pos(L_tmp1, 1), L_shr_pos(L_tmp2, 1));
     Q_corr = norm_l(tcorr);
@@ -755,7 +833,14 @@ static Word32 TDC_calcGainp(Word16 x[], Word16 y[], Word16 lg)
     FOR (i = 0; i < lg; i += 2)
     {
         L_tmp1 = L_mac0_sat(L_tmp1, y[i], y[i]);
+#ifdef FIX_PLC_CONFORM_ISSUES
+        IF (i + 1 < lg) 
+        {
+#endif
         L_tmp2 = L_mac0_sat(L_tmp2, y[i + 1], y[i + 1]);
+#ifdef FIX_PLC_CONFORM_ISSUES
+        }
+#endif
     }
     tener  = L_add(L_shr_pos(L_tmp1, 1), L_shr_pos(L_tmp2, 1));
     Q_ener = norm_l(tener);
@@ -1109,32 +1194,32 @@ static void TDC_normalize_energy_fx(Word16 *gain, Word16 *gain_exp, const Word16
     Dyn_Mem_Deluxe_Out();
 }
 
-static Word16 type_2_alpha_long(Word16 nbLostFramesInRow, Word16 frame_dms)
+static Word16 type_2_alpha_long(Word16 nbLostFramesInRow, LC3PLUS_FrameDuration frame_dms)
 {   
     Word16 n_help;
     Word32 n_shift;
 
-    if (nbLostFramesInRow <= 3*(100.0/frame_dms)){
-        n_help = (nbLostFramesInRow + (100/frame_dms) - 1) * frame_dms;
+    if (nbLostFramesInRow <= 3*(100.0/(frame_dms*1.25*10))){
+        n_help = (nbLostFramesInRow + (100/(frame_dms*1.25*10)) - 1) * (frame_dms*1.25*10);
         return powWord16rest(31129,n_help/100,n_help%100);
     }
     else {
-        n_shift = (nbLostFramesInRow - 3*(100/frame_dms)) * 50/frame_dms;
-        n_help = (n_shift + (100/frame_dms) - 1) * frame_dms;
+        n_shift = (nbLostFramesInRow - 3*(100/(frame_dms*1.25*10))) * 50/(frame_dms*1.25*10);
+        n_help = (n_shift + (100/(frame_dms*1.25*10)) - 1) * (frame_dms*1.25*10);
         return powWord16rest(22937,n_help/100,n_help%100);
     }
 }
 
-Word16 type_2_fadeout_fx(Word16 nbLostFramesInRow, Word16 frame_dms)
+Word16 type_2_fadeout_fx(Word16 nbLostFramesInRow, LC3PLUS_FrameDuration frame_dms)
 {   
     Word16 n_help;
-    Word16 selector = PLC_FADEOUT_TYPE_2_SELECTOR * 2 * (100/frame_dms);
+    Word16 selector = PLC_FADEOUT_TYPE_2_SELECTOR * 2 * (100/(frame_dms*1.25*10));
 
     if (selector >= nbLostFramesInRow){
         return type_2_alpha_long(nbLostFramesInRow, frame_dms);
     }
     else {
-        n_help = (nbLostFramesInRow + (100/frame_dms) - 1) * frame_dms;
+        n_help = (nbLostFramesInRow + (100/(frame_dms*1.25*10)) - 1) * (frame_dms*1.25*10);
         return powWord16rest(16383,n_help/100, n_help%100);
     } 
 }

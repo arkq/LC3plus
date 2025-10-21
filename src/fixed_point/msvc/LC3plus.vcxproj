@@ -88,7 +88,7 @@
     <ClCompile>
       <Optimization>Disabled</Optimization>
       <AdditionalIncludeDirectories>..\basic_op;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>X_DEBUG;WIN32;   X_NO_POST_REL_CHANGES;ETSI_RELEASE;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>X_DEBUG;WIN32;   X_NO_POST_REL_CHANGES;ETSI_RELEASE;_DEBUG;_CONSOLE;%(PreprocessorDefinitions);x_DISABLE_HR_MODE</PreprocessorDefinitions>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <PrecompiledHeader />
@@ -110,7 +110,7 @@
     <ClCompile>
       <Optimization>Disabled</Optimization>
       <AdditionalIncludeDirectories>..\basic_op;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>X_DEBUG;WIN32;   X_NO_POST_REL_CHANGES;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>X_DEBUG;WIN32;   X_NO_POST_REL_CHANGES;_DEBUG;_CONSOLE;%(PreprocessorDefinitions);X_DISABLE_HR_MODE</PreprocessorDefinitions>
       <MinimalRebuild>false</MinimalRebuild>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
@@ -207,6 +207,7 @@
     <ClCompile Include="..\basop_mpy.c" />
     <ClCompile Include="..\basop_util.c" />
     <ClCompile Include="..\codec_exe.c" />
+    <ClCompile Include="..\com_entropy.c" />
     <ClCompile Include="..\constants.c" />
     <ClCompile Include="..\cutoff_bandwidth.c" />
     <ClCompile Include="..\dct2_fx.c" />
@@ -266,6 +267,7 @@
     <ClCompile Include="..\residual_decoding_fx.c" />
     <ClCompile Include="..\rom_basop_util.c" />
     <ClCompile Include="..\scale_signal24_fx.c" />
+    <ClCompile Include="..\setup_com_lc3plus.c" />
     <ClCompile Include="..\setup_dec_lc3plus.c" />
     <ClCompile Include="..\setup_enc_lc3plus.c" />
     <ClCompile Include="..\sns_compute_scf_fx.c" />

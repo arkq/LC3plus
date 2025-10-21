@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -14,7 +14,7 @@
 
 
 void processNoiseFilling_fx(Word32 xq[], Word16 nfseed, Word16 xq_e, Word16 fac_ns_idx, Word16 BW_cutoff_idx,
-                            Word16 frame_dms, Word16 fac_ns_pc, Word16 spec_inv_idx, Word8 *scratchBuffer
+                            LC3PLUS_FrameDuration frame_dms, Word16 fac_ns_pc, Word16 spec_inv_idx, Word8 *scratchBuffer
 #ifdef ENABLE_HR_MODE
                             , Word16 hrmode
 #endif
@@ -27,6 +27,8 @@ void processNoiseFilling_fx(Word32 xq[], Word16 nfseed, Word16 xq_e, Word16 fac_
         Word32  L_tmp, L_tmp_neg, L_tmp_pc, L_tmp_neg_pc;
     );
 
+    noisefillwidth = 0; move16();
+    noisefillstart = 0; move16();
     ind = (Word16 *)scratchAlign(scratchBuffer, 0); /* Size = 2 * MAX_LEN bytes */
 
     c = 0;                                move16();
@@ -46,25 +48,33 @@ void processNoiseFilling_fx(Word32 xq[], Word16 nfseed, Word16 xq_e, Word16 fac_
 
     SWITCH (frame_dms)
     {
-    case 25:
+#ifdef CR9_C_ADD_1p25MS
+    case LC3PLUS_FRAME_DURATION_1p25MS:
+        N              = shr_pos(N, 3);
+        noisefillwidth = NOISEFILLWIDTH_1_25MS;
+        noisefillstart = NOISEFILLSTART_1_25MS;
+        BREAK;
+#endif
+    case LC3PLUS_FRAME_DURATION_2p5MS:
         N              = shr_pos(N, 2);
         noisefillwidth = NOISEFILLWIDTH_2_5MS;
         noisefillstart = NOISEFILLSTART_2_5MS;
         BREAK;
-    case 50:
+    case LC3PLUS_FRAME_DURATION_5MS:
         N              = shr_pos(N, 1);
         noisefillwidth = NOISEFILLWIDTH_5MS;
         noisefillstart = NOISEFILLSTART_5MS;
         BREAK;
-    case 75:
+    case LC3PLUS_FRAME_DURATION_7p5MS:
         N              = add(shr_pos(N, 2), add(shr_pos(N, 2), shr_pos(N, 2)));
         noisefillwidth = NOISEFILLWIDTH_7_5MS;
         noisefillstart = NOISEFILLSTART_7_5MS;
         BREAK;
-    default: /* 100 */
+    case LC3PLUS_FRAME_DURATION_10MS:
         noisefillwidth = NOISEFILLWIDTH;
         noisefillstart = NOISEFILLSTART;
         BREAK;
+    case LC3PLUS_FRAME_DURATION_UNDEFINED: assert(0);
     }
 
     nzeros = -2 * noisefillwidth - 1; move16();

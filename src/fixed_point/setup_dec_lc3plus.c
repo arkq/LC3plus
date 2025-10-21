@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -78,14 +78,7 @@ int alloc_decoder(LC3PLUS_Dec *decoder, int samplerate, int channels)
 #else
     q_old_res_fx = balloc(decoder, &size, sizeof(*setup->q_old_res_fx) * MIN(max_len, MAX_BW));
 #endif
-        
-/*        longterm_analysis_counter_max = PLC_LONGTERM_ANALYSIS_MS * (100.0f / 25.0f);*/
-/*        assert(longterm_analysis_counter_max == (PLC_LONGTERM_ANALYSIS_MS * (100 /25)));  */ /* test integer division for compatibility */  
-/*        longterm_analysis_counter_max_bytebuffer = floor(longterm_analysis_counter_max / 30.0);  */
-/*        assert(longterm_analysis_counter_max_bytebuffer == (longterm_analysis_counter_max / 30)); */ /* test integer division for compatibility */ 
 
-/*        longterm_analysis_counter_max = (longterm_analysis_counter_max_bytebuffer+1) * 30;  */
-        
         longterm_analysis_counter_max = plc_fadeout_param_maxlen[0];
         longterm_analysis_counter_max_bytebuffer = plc_fadeout_param_maxbytes[0];
         
@@ -151,7 +144,7 @@ LC3PLUS_Error FillDecSetup(LC3PLUS_Dec *decoder, int samplerate, int channels, L
     decoder->fs_out = samplerate;
     decoder->fs_idx = FS2FS_IDX(decoder->fs);
     decoder->channels  = channels;
-    decoder->frame_dms = 100;
+    decoder->frame_dms = LC3PLUS_FRAME_DURATION_10MS;
     decoder->plcMeth   = plc_mode;
     {
         decoder->BW_cutoff_bits = BW_cutoff_bits_all[decoder->fs_idx];
@@ -168,10 +161,31 @@ LC3PLUS_Error FillDecSetup(LC3PLUS_Dec *decoder, int samplerate, int channels, L
         setup->plc_damping            = 32767;
         setup->ltpf_mem_scale_fac_idx = -1;
         move16();
+        
+#  ifdef CR9_C_ADD_1p25MS
+#    ifdef CR9_C_ADD_1p25MS_LRSNS
+        setup->ltpfinfo_frame_cntr_fx = -32768; move16();
+#    endif 
+#  endif
+
+        #  ifdef CR9_C_ADD_1p25MS
+        #    if 0
+                /*  @FhG  @alex  ToAddhere channel dependent ::  setup->ltpf_mem_continuation = 0;  */
+        #    endif 
+        #    ifdef CR9_C_ADD_1p25MS_LRSNS
+                setup->ltpfinfo_frame_cntr_fx = -32768; move16();
+        #    endif 
+        #  endif
 
         setup->pc_seed = 24607;
         setup->ns_seed      = 24607;
         setup->ns_cum_alpha = 32767;
+
+#  ifdef CR9_C_ADD_1p25MS
+#    ifdef NEW_SIGNALLING_SCHEME_1p25
+        setup->ltpfinfo_frame_cntr_fx = -32768; move16();
+#    endif 
+#  endif
 
     int i = 0;
     /* 0 = 0kHz  1= 8kHz, 2= 16 kHz   3= 24 , 4 = 32  5=40 6=48kHz */
@@ -194,13 +208,12 @@ LC3PLUS_Error FillDecSetup(LC3PLUS_Dec *decoder, int samplerate, int channels, L
         mult(decoder->frame_length,
          (Word16)(32768.0 / 99.0)); /* truncation needed , i.e no rounding can be applied here */
     /* idx=frame/80,  0=8kHZ, 1=16kHz, 2=24 kHz, 3=32 kHz 5=*, 4=48 */
-
     setup->plcAd->max_len_pcm_plc     = DYN_MAX_LEN_PCM_PLC(decoder->fs);
     
     if ((decoder->hrmode == 0) && (samplerate <= 48000))
     {
         setup->plcAd->PhECU_frame_ms = (Word16)(
-            decoder->frame_dms * 0.1); /* needed in PLCUpdate and PLC main functions, adjusted in first frame */
+            decoder->frame_dms * 1.25 * 10 * 0.1); /* needed in PLCUpdate and PLC main functions, adjusted in first frame */
         setup->plcAd->PhECU_seed_fx = 21845;
         setup->plcAd->PhECU_LprotOrg_fx =
             shl_pos(oneMsTab[setup->plcAd->PhECU_fs_idx_fx], 4); /* 16 *1ms = 1.6 *framelength */
@@ -250,6 +263,15 @@ void set_dec_frame_params(LC3PLUS_Dec *decoder)
 {
     Word16 tmp = 0;
     Word16 n;
+
+#ifndef FIX_TX_RX_STRUCT_STEREO
+#ifdef CR9_C_ADD_1p25MS
+    decoder->ltpf_rx_status[0] = 0;
+    decoder->ltpf_rx_status[1] = 0;
+    decoder->ltpf_mem_continuation = 0;
+    decoder->ltpf_mem_active_prev = 0;
+#endif
+#endif
     
     decoder->frame_length = extract_l(L_shr_pos(Mpy_32_16(decoder->fs, 20972), 6)); /* fs * 0.01*2^6 */
     
@@ -262,7 +284,61 @@ void set_dec_frame_params(LC3PLUS_Dec *decoder)
 
     SWITCH (decoder->frame_dms)
     {
-    case 25:
+#ifdef CR9_C_ADD_1p25MS
+    case LC3PLUS_FRAME_DURATION_1p25MS:
+        decoder->frame_length         = shr_pos(decoder->frame_length, 3);
+        decoder->la_zeroes            = 0;
+        decoder->stDec_ola_mem_fx_len = sub(decoder->frame_length, decoder->la_zeroes);
+        decoder->BW_cutoff_bits       = 0;
+#    ifdef ENABLE_HR_MODE
+        if (decoder->hrmode)
+        {
+            assert(0);
+        }
+        else
+#    endif
+        {
+            decoder->bands_number = bands_number_1_25ms[decoder->fs_idx];
+            decoder->bands_offset = bands_offset_1_25ms[decoder->fs_idx];
+            decoder->W_fx         = LowDelayShapes_n960_1_25ms[decoder->fs_idx];
+            decoder->W_size       = LowDelayShapes_n960_len_1_25ms[decoder->fs_idx];
+            decoder->yLen         = s_min(MAX_BW >> 3, decoder->frame_length);            
+        }
+        
+#ifdef ENABLE_HR_MODE
+        if (decoder->hrmode)
+        {
+            assert(0);           
+        }
+        else
+#endif
+        {
+            decoder->bands_number = bands_number_1_25ms[decoder->fs_idx];
+            decoder->bands_offset = bands_offset_1_25ms[decoder->fs_idx];
+            decoder->W_fx         = LowDelayShapes_n960_1_25ms[decoder->fs_idx];
+            decoder->W_size       = LowDelayShapes_n960_len_1_25ms[decoder->fs_idx];
+            decoder->yLen         = s_min(MAX_BW >> 3, decoder->frame_length);
+            decoder->BW_cutoff_bits = -1;
+        }
+#ifdef FIX_PLC_CONFORM_ISSUES
+        if (decoder->fs_idx == 0 || decoder->frame_length <= 20)
+#else
+        if (decoder->fs_idx == 0)
+#endif
+        {
+            int ch;
+            for (ch = 0; ch < decoder->channels; ch++)
+            {
+                DecSetup *setup = decoder->channel_setup[ch];
+                if (setup->plcAd != NULL)
+                {
+                    setup->plcAd->tdc_lpc_order = 8;
+                }
+            }
+        }
+        BREAK;
+#endif
+    case LC3PLUS_FRAME_DURATION_2p5MS:
         decoder->frame_length         = shr_pos(decoder->frame_length, 2);
         decoder->la_zeroes    = LowDelayShapes_n960_la_zeroes_2_5ms[decoder->fs_idx];
         decoder->stDec_ola_mem_fx_len = sub(decoder->frame_length, decoder->la_zeroes);
@@ -286,7 +362,11 @@ void set_dec_frame_params(LC3PLUS_Dec *decoder)
             decoder->yLen         = s_min(MAX_BW >> 2, decoder->frame_length);            
         }
         
+#ifdef FIX_PLC_CONFORM_ISSUES
+        if (decoder->fs_idx == 0 || decoder->frame_length <= 20)
+#else
         if (decoder->fs_idx == 0)
+#endif
         {
             int ch;
             for (ch = 0; ch < decoder->channels; ch++)
@@ -299,7 +379,7 @@ void set_dec_frame_params(LC3PLUS_Dec *decoder)
             }
         }
         BREAK;
-    case 50:
+    case LC3PLUS_FRAME_DURATION_5MS:
         decoder->frame_length         = shr_pos(decoder->frame_length, 1);
         decoder->la_zeroes    = LowDelayShapes_n960_la_zeroes_5ms[decoder->fs_idx];
         decoder->stDec_ola_mem_fx_len = sub(decoder->frame_length, decoder->la_zeroes);
@@ -324,7 +404,7 @@ void set_dec_frame_params(LC3PLUS_Dec *decoder)
         }
         BREAK;
         
-    case 75:
+    case LC3PLUS_FRAME_DURATION_7p5MS:
         tmp                           = shr_pos(decoder->frame_length, 2);
         decoder->frame_length         = add(tmp, add(tmp, tmp));
         decoder->la_zeroes            = LowDelayShapes_n960_la_zeroes_7_5ms[decoder->fs_idx];
@@ -349,7 +429,7 @@ void set_dec_frame_params(LC3PLUS_Dec *decoder)
         }
         BREAK;
         
-    case 100:
+    case LC3PLUS_FRAME_DURATION_10MS:
         decoder->la_zeroes            = LowDelayShapes_n960_la_zeroes[decoder->fs_idx];
         decoder->stDec_ola_mem_fx_len = sub(decoder->frame_length, decoder->la_zeroes);
         decoder->bands_number         = 64;
@@ -371,6 +451,8 @@ void set_dec_frame_params(LC3PLUS_Dec *decoder)
             decoder->yLen         = s_min(MAX_BW, decoder->frame_length);
         }
         BREAK;
+    case LC3PLUS_FRAME_DURATION_UNDEFINED:
+        assert(0);
     }
 
     {
@@ -380,15 +462,17 @@ void set_dec_frame_params(LC3PLUS_Dec *decoder)
             DecSetup *setup = decoder->channel_setup[ch];
             if (setup->plcAd != NULL)
             { /*only set  if plcAd was actually allocated */
-                setup->plcAd->longterm_analysis_counter_max = plc_fadeout_param_maxlen[(decoder->frame_dms / 25) - 1];
-                setup->plcAd->longterm_analysis_counter_max_bytebuffer = plc_fadeout_param_maxbytes[(decoder->frame_dms / 25) - 1];
+                int idx = (decoder->frame_dms * 1.25 * 10 / 25) - 1;
+                setup->plcAd->longterm_analysis_counter_max = plc_fadeout_param_maxlen[idx];
+                setup->plcAd->longterm_analysis_counter_max_bytebuffer = plc_fadeout_param_maxbytes[idx];
+
                 setup->plcAd->PhECU_frame_ms = (Word16)(
-                    decoder->frame_dms *
+                    decoder->frame_dms * 1.25 * 10 *
                     0.1); /* needed in processPLCupdate_fx(),  now set properly set in first frame /second time  */
             }
         }
     }
-    FOR (n=0; n < PLC_FADEOUT_TYPE_1_IN_MS*10/decoder->frame_dms;n++){
+    FOR (n=0; n < PLC_FADEOUT_TYPE_1_IN_MS*10/(decoder->frame_dms*1.25*10);n++){
         decoder->alpha_type_2_table[n] = type_2_fadeout_fx(n, decoder->frame_dms);
     }
 }
@@ -397,7 +481,7 @@ LC3PLUS_Error update_dec_bitrate(LC3PLUS_Dec *decoder, int ch, Word16 nBytes)
 {
     int tmp = 0, totalBits = 0;
     int channel_bytes = 0;
-    int minBytes, maxBytes;
+    int minBytes = 0, maxBytes = 0;
 
     DecSetup *setup = decoder->channel_setup[ch];
     channel_bytes   = nBytes;
@@ -407,23 +491,29 @@ LC3PLUS_Error update_dec_bitrate(LC3PLUS_Dec *decoder, int ch, Word16 nBytes)
     {
         SWITCH (decoder->frame_dms)
         {
-        case 25:
-            maxBytes = 210;
-            minBytes = MIN_NBYTES;
-            BREAK;
-        case 50:
-            maxBytes = 375;
-            minBytes = MIN_NBYTES;
-            BREAK;
-        case 75:
-            maxBytes = 625;
-            minBytes = MIN_NBYTES;
-            BREAK;
-        case 100:
-            maxBytes = 625;
-            minBytes = MIN_NBYTES;
-            BREAK;
-        default: return LC3PLUS_HRMODE_ERROR;
+#ifdef CR9_C_ADD_1p25MS
+            case LC3PLUS_FRAME_DURATION_1p25MS:
+                maxBytes = 210;
+                minBytes = MIN_NBYTES;
+                BREAK;
+#endif
+            case LC3PLUS_FRAME_DURATION_2p5MS:
+                maxBytes = 210;
+                minBytes = MIN_NBYTES;
+                BREAK;
+            case LC3PLUS_FRAME_DURATION_5MS:
+                maxBytes = 375;
+                minBytes = MIN_NBYTES;
+                BREAK;
+            case LC3PLUS_FRAME_DURATION_7p5MS:
+                maxBytes = 625;
+                minBytes = MIN_NBYTES;
+                BREAK;
+            case LC3PLUS_FRAME_DURATION_10MS:
+                maxBytes = 625;
+                minBytes = MIN_NBYTES;
+                BREAK;
+            case LC3PLUS_FRAME_DURATION_UNDEFINED: return LC3PLUS_HRMODE_ERROR;
         }
     }
     else
@@ -442,9 +532,24 @@ LC3PLUS_Error update_dec_bitrate(LC3PLUS_Dec *decoder, int ch, Word16 nBytes)
     move16();
     setup->total_bits           = shl(setup->targetBytes, 3);
     setup->enable_lpc_weighting = (setup->total_bits < 480);
+
+
+#ifdef FIX_BOTH_1p25_WB_GLOBGAINOFFSET_NONBE  
+    IF(decoder->frame_dms == LC3PLUS_FRAME_DURATION_1p25MS)
+    {
+        setup->quantizedGainOff = calc_GGainOffset_1p25_fx(setup->total_bits, decoder->fs_idx);  /* enc/dec common function */
+    }
+    ELSE
+    {
+        setup->quantizedGainOff =
+            -(s_min(115, setup->total_bits / (10 * (decoder->fs_idx + 1))) + 105 + 5 * (decoder->fs_idx + 1));
+    }
+#else 
     setup->quantizedGainOff =
         -(s_min(115, setup->total_bits / (10 * (decoder->fs_idx + 1))) + 105 + 5 * (decoder->fs_idx + 1));
-    tmp       = i_mult(80, decoder->fs_idx);
+#endif
+
+  
     
 #ifdef ENABLE_HR_MODE
     if (decoder->hrmode && decoder->fs_idx == 5)
@@ -452,29 +557,38 @@ LC3PLUS_Error update_dec_bitrate(LC3PLUS_Dec *decoder, int ch, Word16 nBytes)
         setup->quantizedGainOff = MAX(setup->quantizedGainOff, -181);
     }
 #endif
-    
-    totalBits = setup->total_bits;
 
+    tmp       = i_mult(80, decoder->fs_idx);
+
+    totalBits = setup->total_bits;
 
     SWITCH (decoder->frame_dms)
     {
-    case 25:
-        setup->enable_lpc_weighting = 0;
-        /* total_bits * 2.4 */
-        totalBits = extract_l(L_shr(L_mult0(19661, setup->total_bits), 13));
-        BREAK;
-    case 50:
-        setup->enable_lpc_weighting = setup->total_bits < 240;
-        totalBits                   = sub(i_mult(setup->total_bits, 2), 160);
-        BREAK;
-    case 75:
-        setup->enable_lpc_weighting = setup->total_bits < 360;
-        totalBits = L_shr(L_mult0(10923, setup->total_bits), 13);
-        BREAK;
-    case 100:
-        BREAK;
+#ifdef CR9_C_ADD_1p25MS
+        case LC3PLUS_FRAME_DURATION_1p25MS:
+            setup->enable_lpc_weighting = 0;
+            /* total_bits * 3.36 */
+            totalBits = extract_l(L_shr(L_mult0(27526, setup->total_bits), 13));
+            BREAK;
+#endif
+        case LC3PLUS_FRAME_DURATION_2p5MS:
+            setup->enable_lpc_weighting = 0;
+            /* total_bits * 2.4 */
+            totalBits = extract_l(L_shr(L_mult0(19661, setup->total_bits), 13));
+            BREAK;
+        case LC3PLUS_FRAME_DURATION_5MS:
+            setup->enable_lpc_weighting = setup->total_bits < 240;
+            totalBits                   = sub(i_mult(setup->total_bits, 2), 160);
+            BREAK;
+        case LC3PLUS_FRAME_DURATION_7p5MS:
+            setup->enable_lpc_weighting = setup->total_bits < 360;
+            totalBits = L_shr(L_mult0(10923, setup->total_bits), 13);
+            BREAK;
+        case LC3PLUS_FRAME_DURATION_10MS:
+            BREAK;
+        case LC3PLUS_FRAME_DURATION_UNDEFINED:
+            assert(0);
     }
-
 
     if (sub(totalBits, add(320, tmp)) < 0)
     {

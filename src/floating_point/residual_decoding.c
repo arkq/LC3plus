@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -9,8 +9,10 @@
 
 #include "functions.h"
 
-void processResidualDecoding_fl(LC3_INT* bitsRead, LC3_FLOAT x[], LC3_INT L_spec, uint8_t prm[], LC3_INT resQBits
-                , LC3_INT hrmode
+void processResidualDecoding_fl(LC3_INT* bitsRead, LC3_FLOAT x[], LC3_INT L_spec, uint8_t prm[], LC3_INT resQBits, LC3_INT hrmode
+#ifdef ENABLE_12p5_DMS_MODE
+                , LC3PLUS_FrameDuration frame_dms
+#endif
 )
 {
     LC3_INT k = 0, n = 0;
@@ -31,9 +33,14 @@ void processResidualDecoding_fl(LC3_INT* bitsRead, LC3_FLOAT x[], LC3_INT L_spec
         offset1 = 0.1875;
         offset2 = 0.3125;
     }
-
-    if (hrmode)
+    
+#ifdef ENABLE_12p5_DMS_MODE
+    if (frame_dms == LC3PLUS_FRAME_DURATION_1p25MS) 
     {
+        iter_max = 3;
+    }
+#endif
+
         /* enumerat non-zero coefficients */
         for (k = 0; k < L_spec; k ++)
         {
@@ -42,6 +49,10 @@ void processResidualDecoding_fl(LC3_INT* bitsRead, LC3_FLOAT x[], LC3_INT L_spec
                 nz_idx[N_nz ++] = k;
             }
         }
+		
+    if (hrmode)
+    {
+
         /* apply residual corrections */
         while (n < resQBits && iter < iter_max)
         {
@@ -69,26 +80,35 @@ void processResidualDecoding_fl(LC3_INT* bitsRead, LC3_FLOAT x[], LC3_INT L_spec
     }
     else
     {
-        while (k < L_spec && n < resQBits) {
-            if (x[k] != 0) {
+        UNUSED(offset);
+        
+        while (n < resQBits && iter < iter_max) {
+            for (k = 0; k < N_nz; k ++)
+            {
+                idx = nz_idx[k];       
+           
                 if ((prm[n >> 3] & 1 << (n & 7)) == 0)
                 {
-                    if (x[k] > 0) {
-                        x[k] -= offset1;
+                    if (x[idx] > 0) {
+                        x[idx] -= offset1;
                     } else {
-                        x[k] -= offset2;
+                        x[idx] -= offset2;
                     }
                 } else {
-                    if (x[k] > 0) {
-                        x[k] += offset2;
+                    if (x[idx] > 0) {
+                        x[idx] += offset2;
                     } else {
-                        x[k] += offset1;
+                        x[idx] += offset1;
                     }
                 }
-                n++;
+                if (++n >= resQBits)
+                {
+                    break;
+                }
             }
-            
-            k++;
+            offset1 *= 0.5;
+            offset2 *= 0.5;
+            iter ++;
         }
     }
     *bitsRead = n;

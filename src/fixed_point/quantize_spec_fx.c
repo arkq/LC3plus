@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -107,22 +107,22 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word32 gain, Word16 gain_e, 
 #    else
         FOR (i = 0; i < nt; i++)
         {
-                offs32 = Mpy_32_32(L_abs(x[i]), gain); /* multiply */
-                offs32 = L_shl(offs32, s);             /* convert to 15Q16 */
-                tmp16  = mac_r(offs32, -4096, 1);      /* add offset and truncate */
 
-                if (x[i] < 0)
-                    tmp16 = negate(tmp16); /* restore sign */
+            offs32 = Mpy_32_32(L_abs(x[i]), gain);  /* multiply */
+            offs32 = L_shl( offs32, s );             /* convert to 15Q16 */
+            tmp16 = mac_r(offs32, -4096, 1);         /* add offset and truncate */
+            if (x[i] < 0)
+                tmp16 = negate(tmp16); /* restore sign */
 
-                /* Normal quantization: xq[i] =  x[i] / gg + sign(x[i]) * 0.375
-                   quant_offset is -0.125 in Q15 and round adds 0.5 in Q16. Hence
-                   mac_r results in abs(x[i])/gain - 0.125 + 0.5 = abs(x[i])/gain + 0.375.
-                   Due to the abs and negate combination this achieves the same result
-                   as spec.
-                */
+            /* Normal quantization: xq[i] =  x[i] / gg + sign(x[i]) * 0.375
+                quant_offset is -0.125 in Q15 and round adds 0.5 in Q16. Hence
+                mac_r results in abs(x[i])/gain - 0.125 + 0.5 = abs(x[i])/gain + 0.375.
+                Due to the abs and negate combination this achieves the same result
+                as spec.
+            */
 
-                xq[i] = tmp16;
-                move16();
+            xq[i] = tmp16;
+            move16();
             }
 #    endif /* FUNCTION_quantizeSpec_func1 */
     }

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -28,15 +28,15 @@ typedef struct
     Word16  tdc_preemph_fac;
     Word16  tdc_lpc_order;
     Word16  cum_fflcAtten;
-    Word16  harmonicBuf_fx[MAX_PITCH] ALIGN_BUFFER_STRUCT;
+    Word16  harmonicBuf_fx[MAX_PITCH];
     Word16  harmonicBuf_Q;
-    Word16  synthHist_fx[M] ALIGN_BUFFER_STRUCT;
+    Word16  synthHist_fx[M];
     Word16  cum_fading_slow;
     Word16  cum_fading_fast;
     Word16  PhECU_LprotOrg_fx; /* needed to change the Prot size  adaptively  */
     Word16  PhECU_Lprot_fx;
     Word16  PhECU_fs_idx_fx;
-    Word16  PhECU_frame_ms;  /* needed in PLC_Update and PLCMain functons*/  
+    Word16  PhECU_frame_ms;  /* needed in PLC_Update and PLCMain functons*/
     Word16  PhECU_seed_fx;
     Word16  PhECU_xfp_exp_fx;
     Word16  PhECU_time_offs;
@@ -55,25 +55,25 @@ typedef struct
     Word16  max_len_pcm_plc;
     Word16  max_lprot;
     Word16  max_plocs;
-    
-    /* Word32 L_tot W_energy sum exponent */ 
-    Word16  PhECU_oold_Ltot_exp_fx; 
+
+    /* Word32 L_tot W_energy sum exponent */
+    Word16  PhECU_oold_Ltot_exp_fx;
     Word16  PhECU_old_Ltot_exp_fx;
     Word32  PhECU_L_oold_xfp_w_E_fx;
     Word32  PhECU_L_old_xfp_w_E_fx;
     Word16  PhECU_oold_xfp_w_E_exp_fx;   /* input Word16 xfp exponnet  */
-    Word16  PhECU_old_xfp_w_E_exp_fx;  
-    Word16  PhECU_oold_grp_shape_fx[MAX_LGW] ALIGN_BUFFER_STRUCT;
-    Word16  PhECU_old_grp_shape_fx[MAX_LGW] ALIGN_BUFFER_STRUCT;
-    Word16  PhECU_margin_xfp; 
+    Word16  PhECU_old_xfp_w_E_exp_fx;
+    Word16  PhECU_oold_grp_shape_fx[MAX_LGW];
+    Word16  PhECU_old_grp_shape_fx[MAX_LGW];
+    Word16  PhECU_margin_xfp;
 	Word16  PhECU_nonpure_tone_flag;         /*   non-pure single tone indicator state */
-    Word16  PhECU_mag_chg_1st[MAX_LGW] ALIGN_BUFFER_STRUCT;
-    Word16  PhECU_Xavg[MAX_LGW] ALIGN_BUFFER_STRUCT;
-    Word16  old_scf_q[M] ALIGN_BUFFER_STRUCT;
-    Word16  old_old_scf_q[M] ALIGN_BUFFER_STRUCT;
-    Word16  tdc_A[M + 1] ALIGN_BUFFER_STRUCT;
+    Word16  PhECU_mag_chg_1st[MAX_LGW];
+    Word16  PhECU_Xavg[MAX_LGW];
+    Word16  old_scf_q[M];
+    Word16  old_old_scf_q[M];
+    Word16  tdc_A[M + 1];
     /* for now 20 ms saved Q14  or ptr to a combined ifft win and MDCT  preTDA synthesis window  16  ms */
-    
+
     Word16 longterm_counter_plcTdc;
     Word16 longterm_counter_plcNsAdv;
     Word16 longterm_analysis_counter_max;  /* Maximum longterm frames number */
@@ -84,6 +84,9 @@ typedef struct
     Word16 overall_counter;
     Word8  longterm_counter_byte_position;
     Word8  longterm_counter_bit_position;
+#ifdef CR13_C_RESET_CLASSIFIER_AFTER_BAD_FRAMES
+    Word16 numberOfGoodFrames;
+#endif
 } AplcSetup;
 
 /* Channel state and bitrate-derived values go in this struct */
@@ -128,6 +131,21 @@ typedef struct
     Word16 plc_damping;
     Word16 last_size;
     Word32 rel_pitch_change;
+#ifdef CR9_C_ADD_1p25MS
+#ifdef FIX_TX_RX_STRUCT_STEREO
+    Word16 ltpf_rx_status[2];
+#endif
+    Word16 ltpf_mem_continuation;
+    Word16 ltpf_mem_active_prev;
+    Word16 ltpf_mem_pitch_int_prev;
+    Word16 ltpf_mem_pitch_fr_prev;
+    Word16 ltpf_mem_beta_idx_prev;
+    Word16 ltpf_mem_gain_prev;
+    Word16 ltpf_pitch_stability_counter;
+#ifdef NEW_SIGNALLING_SCHEME_1p25
+    Word16 ltpfinfo_frame_cntr_fx;  /* individual cntr for each channel*/
+#endif
+#endif
 } DecSetup;
 
 /* Constants and sampling rate derived values go in this struct */
@@ -146,7 +164,7 @@ struct LC3PLUS_Dec
     Word16        frame_length; /* sampling rate index */
     Word16        channels;     /* number of channels */
     Word16        plcMeth;      /* PLC method for all channels */
-    Word16        frame_dms;    /* frame length in dms (decimilliseconds, 10^-4)*/
+    LC3PLUS_FrameDuration        frame_dms;    /* frame length in dms (decimilliseconds, 10^-4)*/
     Word16        last_size;    /* size of last frame, without error protection */
     Word16        ep_enabled;   /* error protection enabled */
     Word16        error_report; /* corrected errors in last frame or -1 on error */
@@ -168,7 +186,19 @@ struct LC3PLUS_Dec
     Word16 ltpf_mem_y_len;
     Word16 BW_cutoff_bits;
     Word16 hrmode;
-    Word16 alpha_type_2_table[80];/* PLC_FADEOUT_TYPE_1_IN_MS*10/25 */
+    Word16 alpha_type_2_table[160];/* PLC_FADEOUT_TYPE_1_IN_MS*100/125 */
+#ifndef FIX_TX_RX_STRUCT_STEREO
+#ifdef CR9_C_ADD_1p25MS
+    Word16           ltpf_rx_status[2];
+    Word16           ltpf_mem_continuation;
+    Word16           ltpf_mem_active_prev;
+    Word16           ltpf_mem_pitch_int_prev;
+    Word16           ltpf_mem_pitch_fr_prev;
+    Word16           ltpf_mem_beta_idx_prev;
+    Word16           ltpf_mem_gain_prev;
+    Word16           ltpf_pitch_stability_counter;
+#endif
+#endif
 };
 
-#endif
+#endif /* SETUP_DEC_LC3_H */

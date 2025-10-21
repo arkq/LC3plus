@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -8,11 +8,15 @@
 ******************************************************************************/
 
 =================================
-LC3plus Conformance script V1.2.6
+LC3plus Conformance script V1.2.8
 =================================
 
 Changelog
 ==============
+    - V1.2.8 2025-09-12
+        - Added conditions to ensure stable conformance with different LTPF behaviour 
+    - V1.2.7 2025-02-07
+        - Added 16b conversion before PEAQ 
     - V1.2.6 2024-03-13
         - Added BFI-check for SQAM tests
     - V1.2.5 2023-09-15

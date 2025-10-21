@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -15,6 +15,9 @@ void processResidualDecoding_fx(Word32 x[], Word16 x_e, Word16 L_spec, UWord8 pr
 #ifdef ENABLE_HR_MODE
                                 , Word16 hrmode
 #endif
+#ifdef CR9_C_ADD_1p25MS
+                                , LC3PLUS_FrameDuration frame_dms 
+#endif
 )
 {
 
@@ -24,7 +27,11 @@ void processResidualDecoding_fx(Word32 x[], Word16 x_e, Word16 L_spec, UWord8 pr
     Word32  tmp;
     Counter idx;
     Word16 N_nz = 0;
-    Word16 iter;
+#if defined (CR9_C_ADD_1p25MS) || defined (ENABLE_HR_MODE)
+    Word16 iter = 0;    move16();
+    Word16 maxIter = 1; move16();
+    UNUSED(maxIter);
+#endif
     Word32 fac_hr;
 
 #ifdef DYNMEM_COUNT
@@ -52,6 +59,13 @@ void processResidualDecoding_fx(Word32 x[], Word16 x_e, Word16 L_spec, UWord8 pr
     {
         fac_m = L_shr(0xC000000, s);  /* 0.1875 in 1Q30 */
         fac_p = L_shr(0x14000000, s); /* 0.3125 in 1Q30 */
+        
+#if defined (CR9_C_ADD_1p25MS)
+        IF (sub(frame_dms, LC3PLUS_FRAME_DURATION_1p25MS) == 0)
+        {
+            maxIter = 3;
+        }                    
+#endif
     }
 
     bits = 0;
@@ -101,6 +115,10 @@ void processResidualDecoding_fx(Word32 x[], Word16 x_e, Word16 L_spec, UWord8 pr
     }
     ELSE
     {
+    #if defined (CR9_C_ADD_1p25MS)
+        WHILE (iter < maxIter)
+    #endif
+    {
         FOR (i = 0; i < L_spec; i++)
         {
             IF (sub(bits, resQBits) >= 0)
@@ -129,6 +147,12 @@ void processResidualDecoding_fx(Word32 x[], Word16 x_e, Word16 L_spec, UWord8 pr
                 bits = add(bits, 1);
             }
         }
+    #if defined (CR9_C_ADD_1p25MS)
+            iter++;
+            fac_p = L_shr(fac_p, 1);
+            fac_m = L_shr(fac_m, 1);
+    #endif
+    }
     }
 
 #ifdef DYNMEM_COUNT
@@ -139,6 +163,9 @@ void processResidualDecoding_fx(Word32 x[], Word16 x_e, Word16 L_spec, UWord8 pr
 #else
 
 void processResidualDecoding_fx(Word32 x[], Word16 x_e, Word16 L_spec, UWord8 prm[], Word16 resQBits
+#ifdef CR9_C_ADD_1p25MS
+                                , LC3PLUS_FrameDuration frame_dms 
+#endif
 )
 {
 
@@ -156,6 +183,12 @@ void processResidualDecoding_fx(Word32 x[], Word16 x_e, Word16 L_spec, UWord8 pr
                }));
 #endif
 
+#if defined (CR9_C_ADD_1p25MS)
+    Word16 iter = 0;    move16();
+    Word16 maxIter = 1; move16();
+    UNUSED(maxIter);
+#endif
+
     tmp = 0;
     s   = sub(x_e, 1);
     s = s_min(s, 31);
@@ -164,10 +197,20 @@ void processResidualDecoding_fx(Word32 x[], Word16 x_e, Word16 L_spec, UWord8 pr
         fac_m = L_shr(0xC000000, s);  /* 0.1875 in 1Q30 */
         fac_p = L_shr(0x14000000, s); /* 0.3125 in 1Q30 */
     }
+    
+#if defined (CR9_C_ADD_1p25MS)
+        IF (sub(frame_dms, LC3PLUS_FRAME_DURATION_1p25MS) == 0)
+        {
+            maxIter = 3;
+        }                    
+#endif
 
     bits = 0;
     move16();
-
+    
+    #if defined (CR9_C_ADD_1p25MS)
+        WHILE (iter < maxIter)
+    #endif
     {
         FOR (i = 0; i < L_spec; i++)
         {
@@ -197,6 +240,11 @@ void processResidualDecoding_fx(Word32 x[], Word16 x_e, Word16 L_spec, UWord8 pr
                 bits = add(bits, 1);
             }
         }
+    #if defined (CR9_C_ADD_1p25MS)
+            iter++;
+            fac_p = L_shr(fac_p, 1);
+            fac_m = L_shr(fac_m, 1);
+    #endif
     }
 
 #ifdef DYNMEM_COUNT

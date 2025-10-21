@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -18,6 +18,30 @@
 #include "setup_enc_lc3plus.h"
 #include "structs.h"
 #include "util.h"
+
+#ifdef CR9_C_ADD_1p25MS_LRSNS
+LC3_INT16 snsQuantScfEncLR(LC3_FLOAT* env, LC3_INT32* L_index, LC3_FLOAT* envq, Dct2 dct2structSNS, LC3_INT32 pitch_rx, LC3_INT32 ltpf_rx);
+#endif
+
+#ifdef CR9_C_ADD_1p25MS_LRSNS
+/* needed in both encoder and decoder */
+LC3_FLOAT snslr_remove_st1_DC_fQ11(LC3_FLOAT *scfq, LC3_INT32  len);
+void snslr_st1B_vector_dec(LC3_INT16 idx, const LC3_INT16* LFCB, const LC3_INT16 *HFCB, const LC3_INT16* seg_cnt_cum, const LC3_INT16* idx12b_cb, LC3_FLOAT *st1B_vector);
+void snslr_st1C_vector_dec(LC3_INT16 idx, const LC3_INT8* CBW8, LC3_INT16 scaleQ4, LC3_INT16 inv_scaleQ15, LC3_INT32 v_len, LC3_INT32 cb_len, LC3_FLOAT *st1C_vector);
+#endif
+
+#  ifdef CR9_C_ADD_1p25MS_LRSNS
+LC3_INT32 MSEsearchGeneric(LC3_FLOAT *scf, const LC3_FLOAT *sns_CB, LC3_INT32 v_len, LC3_INT32 cb_len, LC3_FLOAT* min_mse);
+LC3_INT32 MSEsearchCbBIdxMap(const LC3_FLOAT *scf, const LC3_INT16 *LFCB, const LC3_INT16 *HFCB, const LC3_INT16 *seg_cnt_cum, const LC3_INT16* idx12b_cb, LC3_INT32 v_len, LC3_INT32 cb_len, LC3_FLOAT* min_mse);
+LC3_INT32 MSEsearchGenericScaledW8(LC3_FLOAT *scf, const LC3_INT8 *sns_CBW8, LC3_INT16 scaleQ4, LC3_INT16 inv_scaleQ15, LC3_INT32 v_len, LC3_INT32 cb_len, LC3_FLOAT* min_mse);
+#endif
+
+#  ifdef CR9_C_ADD_1p25MS_LRSNS
+void snsQuantScfDecLR(LC3_INT32* sns_vq_idx, LC3_FLOAT* scf_q, LC3_INT32 pitch_rx, LC3_INT32 ltpf_rx);
+#  endif
+
+/* Common */
+LC3_INT16 getLastNzBits (LC3_INT16 N);
 
 /* FFT */
 #include "fft/iisfft.h"
@@ -46,7 +70,7 @@ void dct4_free(Dct4* dct);
 void dct4_apply(Dct4* dct, const LC3_FLOAT* input, LC3_FLOAT* output);
 
 /* mdct.c */
-void mdct_init(Mdct* mdct, LC3_INT length, LC3_INT frame_dms, LC3_INT fs_idx, LC3_INT hrmode);
+void mdct_init(Mdct* mdct, LC3_INT length, LC3PLUS_FrameDuration frame_dms, LC3_INT fs_idx, LC3_INT hrmode);
 void mdct_free(Mdct* mdct);
 void mdct_apply(const LC3_FLOAT* input, LC3_FLOAT* output, Mdct* mdct);
 
@@ -56,13 +80,22 @@ LC3_INT paddingDec_fl(LC3_UINT8* bytes, LC3_INT nbbits, LC3_INT L_spec, LC3_INT 
 
 void processEncoderEntropy_fl(LC3_UINT8* bytes, LC3_INT* bp_side, LC3_INT* mask_side, LC3_INT numbytes, LC3_INT bw_cutoff_bits,
                               LC3_INT bw_cutoff_idx, LC3_INT lastnz, LC3_INT N, LC3_INT lsbMode, LC3_INT gg_idx, LC3_INT num_tns_filters,
-                              LC3_INT* tns_order, LC3_INT* ltpf_idx, LC3_INT* scf_idx, LC3_INT fac_ns_idx
-                              , LC3_INT bfi_ext, LC3_INT fs_idx
+                              LC3_INT* tns_order, LC3_INT* ltpf_idx, LC3_INT* scf_idx, LC3_INT fac_ns_idx,
+                              LC3_INT bfi_ext, LC3_INT fs_idx
+#ifdef CR9_C_ADD_1p25MS                              
+                              , LC3PLUS_FrameDuration frame_dms, LC3_INT16* Tx_ltpf
+#endif
                               );
 void processDecoderEntropy_fl(LC3_UINT8* bytes, LC3_INT numbytes, LC3_INT* mask_side, LC3_INT* bp_side, LC3_INT N, LC3_INT fs_idx,
                               LC3_INT bw_cutoff_bits, LC3_INT* bfi, LC3_INT* gg_idx, LC3_INT* scf_idx, LC3_INT* fac_ns_idx,
                               LC3_INT* tns_numfilters, LC3_INT* tns_order, LC3_INT* ltpf_idx, LC3_INT* bw_cutoff_idx, LC3_INT* lastnz,
-                              LC3_INT* lsbMode, LC3_INT frame_dms
+                              LC3_INT* lsbMode, LC3PLUS_FrameDuration frame_dms
+#ifdef CR9_C_ADD_1p25MS
+                              , LC3_INT32 rx_status[2], LC3_INT16* mem_continuation
+#ifdef NEW_SIGNALLING_SCHEME_1p25
+                               , LC3_INT32 *ltpfinfo_frame_cntr  /* set/reset here, but increased outside  during/when bfi for the channel */
+#endif 
+#endif
                               );
 void processQuantizeSpec_fl(LC3_FLOAT x[], LC3_FLOAT gain, LC3_INT xq[], LC3_INT nt, LC3_INT totalBits, LC3_INT* nbits, LC3_INT* nbits2, LC3_INT fs,
                             LC3_INT* lastnzout, LC3_INT* codingdata, LC3_INT* lsbMode, LC3_INT mode, LC3_INT target, LC3_INT hrmode);
@@ -70,46 +103,50 @@ void processQuantizeSpec_fl(LC3_FLOAT x[], LC3_FLOAT gain, LC3_INT xq[], LC3_INT
 void processEstimateGlobalGain_fl(LC3_FLOAT x[], LC3_INT lg, LC3_INT nbitsSQ, LC3_FLOAT* gain, LC3_INT* quantizedGain,
                                   LC3_INT* quantizedGainMin, LC3_INT quantizedGainOff, LC3_FLOAT* targetBitsOff,
                                   LC3_INT* old_targetBits, LC3_INT old_specBits, LC3_INT bq_mode
-                                  , LC3_INT regBits, LC3_FLOAT frame_ms
+                                  , LC3_INT regBits, LC3PLUS_FrameDuration frame_ms
 );
 
 void processAriDecoder_fl(LC3_UINT8* bytes, LC3_INT bp_side, LC3_INT mask_side, LC3_INT L_spec, LC3_INT fs_idx, LC3_INT enable_lpc_weighting,
                           LC3_INT tns_numfilters, LC3_INT lsbMode, LC3_INT lastnz, LC3_INT* bfi, LC3_INT* tns_order, LC3_INT fac_ns_idx,
                           LC3_INT gg_idx, uint8_t* resBits, LC3_INT* x, LC3_INT* nf_seed, LC3_INT* tns_idx, LC3_INT* zero_frame, LC3_INT numbytes,
-                          LC3_INT* nbits_residual, LC3_INT* residualPresent, LC3_INT frame_dms,
+                          LC3_INT* nbits_residual, LC3_INT* residualPresent, LC3PLUS_FrameDuration frame_dms,
               LC3_INT32 n_pc, LC3_INT32 be_bp_left, LC3_INT32 be_bp_right, LC3_INT32 enc, LC3_INT32 *b_left, LC3_INT32 *spec_inv_idx,
                           LC3_INT hrmode
                           );
 
 void processMdctShaping_fl(LC3_FLOAT x[], LC3_FLOAT gains[], const LC3_INT bands_offset[], LC3_INT fdns_npts);
 
-void processResidualCoding_fl(LC3_FLOAT x[], LC3_INT xq[], LC3_FLOAT gain, LC3_INT L_spec, LC3_INT targetBits, LC3_INT nBits, uint8_t * resBits,
-                              LC3_INT* numResBits
-                              , LC3_INT hrmode
+void processResidualCoding_fl(LC3_FLOAT x[], LC3_INT xq[], LC3_FLOAT gain, LC3_INT L_spec, LC3_INT targetBits, LC3_INT nBits, uint8_t * resBits, LC3_INT* numResBits, LC3_INT hrmode
+#ifdef ENABLE_12p5_DMS_MODE
+                                , LC3PLUS_FrameDuration frame_dms
+#endif
 );
 
 void processResidualDecoding_fl(LC3_INT* bitsRead, LC3_FLOAT x[], LC3_INT L_spec, uint8_t prm[], LC3_INT resQBits
                                 , LC3_INT hrmode
+#ifdef ENABLE_12p5_DMS_MODE
+                                , LC3PLUS_FrameDuration frame_dms
+#endif
 );
 
 void processAdjustGlobalGain_fl(LC3_INT* gg_idx, LC3_INT gg_idx_min, LC3_INT gg_idx_off, LC3_FLOAT* gain, LC3_INT target, LC3_INT nBits,
                                 LC3_INT* gainChange, LC3_INT fs_idx
-                                , LC3_INT16 hrmode, LC3_INT16 frame_dms
+                                , LC3_INT16 hrmode, LC3PLUS_FrameDuration frame_dms
                                 );
 
 void processApplyGlobalGain_fl(LC3_FLOAT x[], LC3_INT xLen, LC3_INT global_gain_idx, LC3_INT global_gain_off);
 
-void processNoiseFactor_fl(LC3_INT* fac_ns_idx, LC3_FLOAT x[], LC3_INT xq[], LC3_FLOAT gg, LC3_INT BW_cutoff_idx, LC3_INT frame_dms,
+void processNoiseFactor_fl(LC3_INT* fac_ns_idx, LC3_FLOAT x[], LC3_INT xq[], LC3_FLOAT gg, LC3_INT BW_cutoff_idx, LC3PLUS_FrameDuration frame_dms,
                            LC3_INT target_bytes
                             );
 
-void processNoiseFilling_fl(LC3_FLOAT xq[], LC3_INT nfseed, LC3_INT fac_ns_idx, LC3_INT bw_stopband, LC3_INT frame_dms, LC3_FLOAT fac_ns_pc, LC3_INT spec_inv_idx);
+void processNoiseFilling_fl(LC3_FLOAT xq[], LC3_INT nfseed, LC3_INT fac_ns_idx, LC3_INT bw_stopband, LC3PLUS_FrameDuration frame_dms, LC3_FLOAT fac_ns_pc, LC3_INT spec_inv_idx);
 
 void processOlpa_fl(LC3_FLOAT* s_12k8, LC3_FLOAT* mem_s12k8, LC3_FLOAT* mem_s6k4, LC3_INT* mem_old_T0, 
                     LC3_INT* pitch_flag, 
-                    LC3_INT* T0_out,LC3_FLOAT* normcorr_out, LC3_INT len, LC3_INT frame_dms);
+                    LC3_INT* T0_out,LC3_FLOAT* normcorr_out, LC3_INT len, LC3PLUS_FrameDuration frame_dms);
 
-void processTnsCoder_fl(LC3_FLOAT* x, LC3_INT bw_cutoff_idx, LC3_INT bw_fcbin, LC3_INT fs, LC3_INT N, LC3_INT frame_dms, LC3_INT nBits,
+void processTnsCoder_fl(LC3_FLOAT* x, LC3_INT bw_cutoff_idx, LC3_INT bw_fcbin, LC3_INT fs, LC3_INT N, LC3PLUS_FrameDuration frame_dms, LC3_INT nBits,
                         LC3_INT* order_out, LC3_INT* rc_idx, LC3_INT* tns_numfilters, LC3_INT* bits_out
                         , LC3_INT16 near_nyquist_flag
         );                        
@@ -117,36 +154,58 @@ void levinsonDurbin(LC3_FLOAT* r, LC3_FLOAT* out_lev, LC3_FLOAT* rc_unq, LC3_FLO
 
 void processTnsDecoder_fl(LC3_FLOAT* x, LC3_INT* rc_idx, LC3_INT* order, LC3_INT numfilters, LC3_INT bw_fcbin, LC3_INT N, LC3_INT fs);
 
-void processSnsComputeScf_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_FLOAT* gains, LC3_INT smooth, LC3_FLOAT sns_damping, LC3_FLOAT attdec_damping_factor, LC3_INT fs_idx);
+void processSnsComputeScf_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_FLOAT* gains, LC3_INT smooth, LC3_FLOAT sns_damping, LC3_FLOAT attdec_damping_factor, LC3_INT fs_idx
+#ifdef CR9_C_ADD_1p25MS
+                             , LC3PLUS_FrameDuration frame_dms, LC3_FLOAT *LT_normcorr, LC3_FLOAT normcorr
+#endif
+);
 
 void processSnsInterpolateScf_fl(LC3_FLOAT* gains, LC3_INT encoder_side, LC3_INT bands_number, LC3_FLOAT* gains_LC3_INT);
 
-void processDetectCutoffWarped_fl(LC3_FLOAT* d2, LC3_INT fs_idx, LC3_INT frame_dms, LC3_INT* bw_idx);
+void processDetectCutoffWarped_fl(LC3_FLOAT* d2, LC3_INT fs_idx, LC3PLUS_FrameDuration frame_dms, LC3_INT* bw_idx);
 void processNearNyquistdetector_fl(LC3_INT16* near_nyquist_flag, const LC3_INT fs_idx, const LC3_INT near_nyquist_index,
-                                   const LC3_INT bands_number, const LC3_FLOAT* ener                               
-                                   , const LC3_INT16 frame_dms, const LC3_INT16 hrmode );                                                                    
-void processPerBandEnergy_fl(LC3_INT bands_number, const LC3_INT* acc_coeff_per_band, LC3_INT16 hrmode, LC3_INT16 frame_dms, LC3_FLOAT* d2, LC3_FLOAT* d);
+                                   const LC3_INT bands_number, const LC3_FLOAT* ener                                
+                                   , const LC3PLUS_FrameDuration frame_dms, const LC3_INT16 hrmode );                                                                     
+void processPerBandEnergy_fl(LC3_INT bands_number, const LC3_INT* acc_coeff_per_band, LC3_INT16 hrmode, LC3PLUS_FrameDuration frame_dms, LC3_FLOAT* d2, LC3_FLOAT* d);
 
 void ProcessingIMDCT_fl(LC3_FLOAT* y, LC3_INT yLen, const LC3_FLOAT* win, LC3_INT winLen, LC3_INT last_zeros, LC3_FLOAT* mem, LC3_FLOAT* x,
                         Dct4* dct);
 
 void ProcessingITDA_WIN_OLA_fl(LC3_FLOAT* x_tda, LC3_INT32 yLen, const LC3_FLOAT* win, LC3_INT32 winLen, LC3_INT32 last_zeros, LC3_FLOAT* mem, LC3_FLOAT* x);
 
-void process_ltpf_coder_fl(LC3_FLOAT* xin, LC3_INT xLen, LC3_INT ltpf_enable, LC3_INT pitch_ol, LC3_FLOAT pitch_ol_norm_corr, LC3_INT frame_dms,
+void process_ltpf_coder_fl(LC3_FLOAT* xin, LC3_INT xLen, LC3_INT ltpf_enable, LC3_INT pitch_ol, LC3_FLOAT pitch_ol_norm_corr, LC3PLUS_FrameDuration frame_dms,
                            LC3_FLOAT* mem_old_x, LC3_INT memLen, LC3_FLOAT* mem_norm_corr_past, LC3_INT* mem_on, LC3_FLOAT* mem_pitch,
                            LC3_INT* param, LC3_FLOAT* mem_norm_corr_past_past, LC3_INT* bits
-                          , LC3_INT16 hrmode
+                           , LC3_INT16 hrmode
+#ifdef CR9_C_ADD_1p25MS
+#ifdef NEW_SIGNALLING_SCHEME_1p25
+                            ,LC3_INT16* Tx_ltpf
+#else
+                            ,LC3_INT16 Tx_ltpf
+#endif
+#endif
 );
+
+#ifdef CR9_C_ADD_1p25MS
+void processTdcZeroCleanup(LC3_FLOAT *energies, LC3_INT32 n_bands, LC3PLUS_FrameDuration frame_dms); 
+#endif 
 
 void process_ltpf_decoder_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_FLOAT* y, LC3_INT fs, LC3_FLOAT* mem_old_x, LC3_FLOAT* mem_old_y,
                              LC3_INT* mem_pitch_LC3_INT, LC3_INT* mem_pitch_fr, LC3_FLOAT* mem_gain, LC3_INT* mem_beta_idx, LC3_INT bfi,
-                             LC3_INT* param, LC3_INT* mem_param, LC3_INT conf_beta_idx, LC3_FLOAT conf_beta, LC3_INT concealMethod, LC3_FLOAT damping
+                             LC3_INT* param, LC3_INT* mem_param, LC3_INT conf_beta_idx, LC3_FLOAT *conf_beta, LC3_INT concealMethod, LC3_FLOAT damping
                              , LC3_INT *mem_ltpf_active
-                             , LC3_FLOAT *rel_pitch_change, LC3_INT hrmode, LC3_INT frame_dms
+                             , LC3_FLOAT *rel_pitch_change, LC3_INT hrmode, LC3PLUS_FrameDuration frame_dms
+#ifdef CR9_C_ADD_1p25MS 
+                             , LC3_INT16* mem_continuation, LC3_INT32* mem_param_prev, LC3_INT16* mem_pitch_int_prev, 
+                             LC3_INT16* mem_pitch_fr_prev, LC3_INT32* mem_beta_idx_prev, LC3_FLOAT* mem_gain_prev,
+                             LC3_INT16* pitch_stability_counter, 
+                              LC3_FLOAT* gain_step,
+                              LC3_FLOAT conf_beta_max
+#endif
 );
 
 void process_resamp12k8_fl(LC3_FLOAT x[], LC3_INT x_len, LC3_FLOAT mem_in[], LC3_INT mem_in_len, LC3_FLOAT mem_50[], LC3_FLOAT mem_out[],
-                           LC3_INT mem_out_len, LC3_FLOAT y[], LC3_INT* y_len, LC3_INT fs_idx, LC3_INT frame_dms, LC3_INT fs);
+                           LC3_INT mem_out_len, LC3_FLOAT y[], LC3_INT* y_len, LC3_INT fs_idx, LC3PLUS_FrameDuration frame_dms, LC3_INT fs);
 
 void write_bit_backward_fl(LC3_UINT8* ptr, LC3_INT* bp_side, LC3_INT* mask_side, LC3_INT bit);
 void write_uint_backward_fl(LC3_UINT8* ptr, LC3_INT* bp_side, LC3_INT* mask_side, LC3_INT val, LC3_INT numbits);
@@ -185,6 +244,10 @@ LC3PLUS_Error Dec_LC3PLUS_fl(LC3PLUS_Dec* decoder, LC3_UINT8* input, int input_b
 
 void* balloc(void* base, size_t* base_size, size_t size);
 
+#ifdef FIX_BOTH_1p25_WB_GLOBGAINOFFSET_NONBE  
+LC3_INT16 calc_GGainOffset_1p25(LC3_INT16 total_bits, LC3_INT16 fs_idx);
+#endif 
+
 void processPlcMain_fl(LC3_FLOAT *q_d_fl_c, LC3_FLOAT *syntM_fl_c, LC3PLUS_Dec* decoder, DecSetup* h_DecSetup, LC3_INT bfi,
                PlcAdvSetup *PlcAdvSetup, PlcSetup *PlcSetup, LC3_INT plcMeth, LC3_INT ltpf_pitch_int, LC3_INT ltpf_pitch_fr,
                LC3_INT tilt, const LC3_INT *bands_offset, LC3_INT bands_number, const LC3_INT *bands_offsetPLC,
@@ -211,13 +274,13 @@ LC3_INT32 fec_decoder(LC3_UINT8 *iobuf, LC3_INT16 slot_bytes, LC3_INT32 *data_by
 
 LC3_FLOAT array_max_abs(LC3_FLOAT *in, LC3_INT32 len);
 
-void processPcClassify_fl(LC3_INT32 pitch_present, LC3_INT32 frame_dms, LC3_FLOAT *q_d_prev, LC3_FLOAT *q_old_res, LC3_INT32 yLen, LC3_INT32 spec_inv_idx, LC3_FLOAT stab_fac, LC3_INT32 *bfi);
+void processPcClassify_fl(LC3_INT32 pitch_present, LC3PLUS_FrameDuration frame_dms, LC3_FLOAT *q_d_prev, LC3_FLOAT *q_old_res, LC3_INT32 yLen, LC3_INT32 spec_inv_idx, LC3_FLOAT stab_fac, LC3_INT32 *bfi);
 void processPcMain_fl(LC3_INT32 *bfi, LC3PLUS_Dec* decoder, LC3_FLOAT *sqQdec, DecSetup* h_DecSetup, LC3_INT32 pitch_present, LC3_FLOAT stab_fac, LC3_INT32 gg_idx, LC3_INT32 gg_idx_off, LC3_INT32 fac_ns_idx, pcState *statePC, LC3_INT32 spec_inv_idx, LC3_INT32 yLen);
 void processPcUpdate_fl(LC3_INT32 bfi, LC3_FLOAT *q_res, LC3_INT32 gg_idx, LC3_INT32 gg_idx_off, LC3_INT32 rframe, LC3_INT32 *BW_cutoff_idx_nf, LC3_INT32 *prev_BW_cutoff_idx_nf, LC3_INT32 fac_ns_idx, LC3_FLOAT *prev_fac_ns, LC3_FLOAT *fac, LC3_FLOAT *q_old_res, LC3_FLOAT *prev_gg, LC3_INT32 spec_inv_idx, LC3_INT32 yLen);
 void processPcApply_fl(LC3_FLOAT *q_res, LC3_FLOAT *q_old_res, LC3_FLOAT *q_d_prev, LC3_INT32 spec_inv_idx, LC3_INT32 yLen, LC3_INT32 gg_idx, LC3_INT32 gg_idx_off, LC3_FLOAT *prev_gg, LC3_FLOAT *fac, LC3_INT32 *pc_nbLostCmpt);
 
 void processPlcClassify_fl(LC3_INT plcMeth, LC3_INT *concealMethod, LC3_INT32 *nbLostCmpt, LC3_INT32 bfi,
-                          LC3_FLOAT *xcorr, LC3_INT32 framelength, LC3_INT32 frame_dms, LC3_INT32 pitch_int,
+                          LC3_FLOAT *xcorr, LC3_INT32 framelength, LC3PLUS_FrameDuration frame_dms, LC3_INT32 pitch_int,
                           LC3_INT32 fs, const LC3_INT *band_offsets, LC3_INT32 bands_number, LC3_INT32 tilt, PlcAdvSetup *plcAd
                           , LC3_INT32 hrmode
 );
@@ -227,20 +290,20 @@ void processPlcDampingScramblingMain_fl(LC3_INT32 *ns_seed,
                                         LC3_INT32 *pc_seed, LC3_INT32 ns_nbLostCmpt_pc,
                                         LC3_INT32 ns_nbLostCmpt, LC3_FLOAT *stabFac, LC3_FLOAT *cum_fading_slow, LC3_FLOAT *cum_fading_fast,
                                         LC3_FLOAT *spec_prev, LC3_FLOAT *spec, LC3_INT32 spec_inv_idx, LC3_INT32 yLen, LC3_INT32 bfi,
-                                        LC3_INT32 frame_dms, LC3_INT32 concealMethod, LC3_INT32 pitch_present_bfi1, LC3_INT32 pitch_present_bfi2,
+                                        LC3PLUS_FrameDuration frame_dms, LC3_INT32 concealMethod, LC3_INT32 pitch_present_bfi1, LC3_INT32 pitch_present_bfi2,
                                         LC3_FLOAT *cum_fflcAtten
                                         , LC3_UINT8 plc_fadeout_type
                                         );
 
 void processPlcDampingScrambling_fl(LC3_FLOAT *spec, LC3_INT32 yLen, LC3_INT32 nbLostCmpt, LC3_FLOAT *stabFac, LC3_INT32 processDampScramb,
-                                    LC3_FLOAT *cum_fflcAtten, LC3_INT32 pitch_present, LC3_INT32 frame_dms, LC3_FLOAT *cum_fading_slow,
+                                    LC3_FLOAT *cum_fflcAtten, LC3_INT32 pitch_present, LC3PLUS_FrameDuration frame_dms, LC3_FLOAT *cum_fading_slow,
                                     LC3_FLOAT *cum_fading_fast, LC3_INT32 *seed, LC3_INT32 spec_inv_idx
                                     , LC3_UINT8 plc_fadeout_type
                                     );
 
 void plc_phEcu_F0_refine_first(LC3_INT32 *plocs, LC3_INT32 n_plocs, LC3_FLOAT *f0est, const LC3_INT32 Xabs_len,
                                 LC3_FLOAT *f0binPtr, LC3_FLOAT *f0gainPtr, const LC3_INT32 nSubm);
-void processTdcLpcEstimation_fl(LC3_FLOAT *r, LC3_INT32 fs_idx, LC3_INT32 len, LC3_FLOAT *A, LC3_INT32 frame_dms);
+void processTdcLpcEstimation_fl(LC3_FLOAT *r, LC3_INT32 fs_idx, LC3_INT32 len, LC3_FLOAT *A, LC3PLUS_FrameDuration frame_dms);
 
 LC3_FLOAT plc_phEcuSetF0Hz(LC3_INT32 fs, LC3_FLOAT *old_pitchPtr);
 
@@ -312,14 +375,14 @@ void processTdcPreemphasis_fl(LC3_FLOAT *in, LC3_FLOAT *pre_emph_factor, LC3_INT
 void processTdcTdac_fl(const LC3_FLOAT *synth_inp, const LC3_FLOAT *win, LC3_INT32 frame_length, LC3_INT32 la_zeroes, LC3_FLOAT *ola_mem);
 void processTdcInverseOdft_fl(LC3_FLOAT *in, LC3_INT32 n_bands, LC3_FLOAT *out, LC3_INT32 lpc_order);
 
-void processTdcApply_fl(const LC3_INT32 pitch_LC3_INT, const LC3_FLOAT *preemphFac, const LC3_FLOAT* A, const LC3_INT32 lpc_order, const LC3_FLOAT* pcmbufHist, const LC3_INT32 max_len_pcm_plc, const LC3_INT32 N, const LC3_INT32 frame_dms,
+void processTdcApply_fl(const LC3_INT32 pitch_LC3_INT, const LC3_FLOAT *preemphFac, const LC3_FLOAT* A, const LC3_INT32 lpc_order, const LC3_FLOAT* pcmbufHist, const LC3_INT32 max_len_pcm_plc, const LC3_INT32 N, const LC3PLUS_FrameDuration frame_dms,
                                      const LC3_INT32 SampRate, const LC3_INT32 nbLostCmpt, const LC3_INT32 overlap, const LC3_FLOAT *stabFac, LC3_FLOAT harmonicBuf[MAX_PITCH], LC3_FLOAT synthHist[M],
                                      LC3_INT32* fract, LC3_INT16* seed, LC3_FLOAT* gain_c, LC3_FLOAT* alpha, LC3_FLOAT* synth
-                        ,LC3_UINT8       plc_fadeout_type
+                                     , LC3_UINT8 plc_fadeout_type
                         ,LC3_FLOAT*      alpha_type_2_table
 );
 void* balloc(void* base, size_t* base_size, size_t size);
 
-LC3_FLOAT type_2_fadeout(LC3_INT32 nbLostFramesInRow, LC3_INT32 frame_dms);
+LC3_FLOAT type_2_fadeout(LC3_INT32 nbLostFramesInRow, LC3PLUS_FrameDuration frame_dms);
 
 #endif

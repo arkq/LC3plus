@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -9,18 +9,53 @@
 
 #include "functions.h"
 
-void processSnsComputeScf_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_FLOAT* gains, LC3_INT smooth, LC3_FLOAT sns_damping, LC3_FLOAT attdec_damping_factor, LC3_INT fs_idx)
+#ifdef CR9_C_ADD_1p25MS
+static float limitShaping (LC3_FLOAT* xl4 ) {
+    LC3_FLOAT fac;
+    LC3_FLOAT score;
+    LC3_FLOAT min_fac;
+    LC3_FLOAT max_fac;
+    LC3_FLOAT start;
+    LC3_FLOAT stop;
+    
+    min_fac = 1.f;
+    max_fac = 0.3f;
+    start   = 5.f;
+    stop    = 8.f;
+
+    score = ((2.f*(xl4[0]-xl4[1])) + (xl4[0]-xl4[2])) / 2.f;
+    score = fmin(fmax(score, start), stop);
+
+    fac = (stop-score)/(stop-start);
+    return ((min_fac - max_fac) * fac + max_fac);
+}
+#endif
+
+void processSnsComputeScf_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_FLOAT* gains, LC3_INT smooth, LC3_FLOAT sns_damping, LC3_FLOAT attdec_damping_factor, LC3_INT fs_idx
+#ifdef CR9_C_ADD_1p25MS
+                            , LC3PLUS_FrameDuration frame_dms, LC3_FLOAT *LT_normcorr, LC3_FLOAT normcorr
+#endif
+                            )
 {
     LC3_INT   bands_number, d, i, j, n, n2, n4, mapping[64];
-    LC3_FLOAT x_tmp1[MAX_LEN], sum, mean, nf, gains_smooth[M], ratio;
-    LC3_FLOAT sum_gains_smooth;
-    const LC3_FLOAT* sns_preemph;
+    LC3_FLOAT x_tmp1[MAX_LEN], sum = 0, mean, nf, gains_smooth[M], ratio;
+    LC3_FLOAT sum_gains_smooth = 0;
+#ifdef CR9_C_ADD_1p25MS
+    LC3_FLOAT fac;
+    LC3_FLOAT start;
+    LC3_FLOAT limiterGain;
+#endif
+    const LC3_FLOAT *sns_preemph_adapt, *sns_preemph;
+    bands_number = xLen;
     
-    sum_gains_smooth = 0; sum = 0;
     sns_preemph = sns_preemph_all[fs_idx];
     
-    bands_number = xLen;
-    assert(bands_number <= 64);
+#ifdef CR9_C_ADD_1p25MS
+    limiterGain = 1.f;
+    sns_preemph_adapt = sns_preemph_adaptMaxTilt_all[fs_idx];
+#else
+    (void) sns_preemph_adapt;
+#endif
 
     /* 5 ms */
     if (bands_number < 64) {
@@ -88,9 +123,29 @@ void processSnsComputeScf_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_FLOAT* gains, LC3_I
     x[63] = 0.5 * x[63] + 0.25 * (x_tmp1[63] + x[63]);
 
     /* Pre-emphasis */
+#ifdef CR9_C_ADD_1p25MS
+    if (sns_preemph_adapt != NULL && frame_dms == LC3PLUS_FRAME_DURATION_1p25MS)
+    {
+        *LT_normcorr = normcorr * 0.125f + *LT_normcorr * 0.875f;
+
+        start = 0.8f;   /* adaptive preemphasis active from start to 1.0 */
+        fac = (fmax(*LT_normcorr - start, 0) * (1. / (1.-start)));
+
+        for (i = 0; i < 64; i++) {
+            x[i] = x[i] * (sns_preemph[i] + fac*sns_preemph_adapt[i]);
+        }
+    } 
+    else
+    {
+        for (i = 0; i < 64; i++) {
+            x[i] = x[i] * sns_preemph[i];
+        }
+    }
+#else  
     for (i = 0; i < 64; i++) {
         x[i] = x[i] * sns_preemph[i];
     }
+#endif
 
     /* Noise floor at -40dB */
     for (i = 0; i < 64; i++) {
@@ -137,17 +192,57 @@ void processSnsComputeScf_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_FLOAT* gains, LC3_I
         gains_smooth[n] = sum;
         sum_gains_smooth += sum;
     }
-
-
+#ifdef CR9_C_ADD_1p25MS
+    /* limit shaping */
+    if (frame_dms == LC3PLUS_FRAME_DURATION_1p25MS) {
+        limiterGain *= limitShaping(gains_smooth);
+    }
+#endif
     /* Remove mean and scaling */
     mean = sum_gains_smooth / 16.0;
 
     for (i = 0; i < 16; i++) {
+#ifdef CR9_C_ADD_1p25MS
+        gains[i] = limiterGain * sns_damping * (gains_smooth[i] - mean);
+#else
         gains[i] = sns_damping * (gains_smooth[i] - mean);
+#endif
     }
 
     /* Smoothing */
-    if (smooth) {
+#ifdef CR9_C_ADD_1p25MS_LRSNS 
+     if (frame_dms == LC3PLUS_FRAME_DURATION_1p25MS)
+    {   /* smoothing loop for 1.25 ms  */
+
+        const LC3_FLOAT A0 = 3.0 / 16.0;  /* 2/16= 0.125,   3/16 = 0.1875  */
+        const LC3_FLOAT A1 = (1.0 - 2 * A0);
+        const LC3_FLOAT A2 = A0;
+
+        gains_smooth[0] = A0 * (gains[0] + gains[1]) * 0.5 + A1 * gains[0] + A2 * gains[1];
+        /* BASOP-loop:: preload gains[-1] with  0.5*(gains[0]+gains[1]) */
+        for (i = 1; i < (M - 1); i++)
+        {
+            gains_smooth[i] = A0 * gains[i - 1] + A1 * gains[i] + A2 * gains[i + 1];
+        }
+        gains_smooth[M - 1] = A0 * gains[M - 2] + A1 * gains[M - 1] + A2 * 0.5 * (gains[M - 2] + gains[M - 1]);
+        /* BASOP-loop :: preload gains[M] with  0.5*(gains[M-2]+gains[M-1]) */
+        sum = 0;
+        for (i = 0; i < M; i++)
+        {
+            sum += gains_smooth[i];
+        }
+
+        mean = sum / (LC3_FLOAT)M;
+        for (i = 0; i < M; i++)
+        {
+            gains[i] = attdec_damping_factor * (gains_smooth[i] - mean);
+        }
+    }
+    else if (smooth == 1) /* original attack smoothing */
+#    else
+    if (smooth)
+#    endif
+    {
         gains_smooth[0] = (gains[0] + gains[1] + gains[2]) / 3.0;
         gains_smooth[1] = (gains[0] + gains[1] + gains[2] + gains[3]) / 4.0;
 

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -83,6 +83,151 @@ Word32 BASOP_Util_Log2(Word32 x)
 
     return (accuRes);
 }
+
+
+
+#ifdef  LOG2_LC_APPROX
+/* LC log2 with 16 segment piecewise 2nd order minmax optimized approximation  */
+
+Word32 BASOP_Util_Log2_LC(Word32 L_x)
+{
+    Word16 exp_e0;
+    Word32 L_accuRes;
+
+#define L2LC_TABSIZE_BITS       4  /* 16 segments */
+#define L2LC_TABWIDTH           2  
+#define L2LC_TABLENGTH  (1<<L2LC_TABSIZE_BITS)
+
+    /*
+           log2(x)  =  x belongs to [0.0 ... 1.0[
+           z=log2(1+y/16)    // approximation in  16 segments
+           segm_ind  = floor(y*16);               // segm quantization
+           tail_ind  = dx =  y -segm_ind*16       //  dx  belongs to [-.5 ...5[
+           Approx. in each segment  = C0 + C1*(dx) + C2*(dx)^2
+         
+           */
+
+    Word16 log2_LC_TabValC1C2_Qx[1 << L2LC_TABSIZE_BITS][L2LC_TABWIDTH] =
+    {  /* C1 Q18, C2 Q23   */
+    { 22921, -22223},
+    { 21611, -19759},
+    { 20443, -17680},
+    { 19395, -15913},
+    { 18448, -14399},
+    { 17590, -13091},
+    { 16809, -11953},
+    { 16093, -10957},
+    { 15436, -10081},
+    { 14831,  -9306},
+    { 14271,  -8617},
+    { 13753,  -8001},
+    { 13270,  -7450},
+    { 12820,  -6953},
+    { 12400,  -6505},
+    { 12006,  -6098}
+    };
+
+    Word32 L_log2_LC_TabValC0Q25[16] = /* C0 in output Q25 format */
+    {
+   95335645 >> 6/*0.044*/ , 277633165 >> 6, 449797678 >> 6, 612896598 >> 6,
+   767837083 >> 6, 915396590 >> 6, 1056246482 >> 6, 1190970490 >> 6,
+   1320079339 >> 6, 1444022426 >> 6, 1563197273 >> 6, 1677957208 >> 6,
+   1788617686 >> 6, 1895461516 >> 6, 1998743213 >> 6, 2098692655 >> 6 /*0.9773*/
+    };
+
+    Word32 L_pow2Const[31] =  
+    {   /* The Table implements  L_shl_pos( L_deposit_l(add(exp_e0,1)), 25)) */
+         ((0L + 1) << 25), /* orig exp_e0==0 */   
+         ((0L + 2) << 25),
+         ((0L + 3) << 25),
+         ((0L + 4) << 25),
+         ((0L + 5) << 25),
+         ((0L + 6) << 25),
+         ((0L + 7) << 25),
+         ((0L + 8) << 25),
+         ((0L + 9) << 25),
+         ((0L + 10) << 25),
+
+         ((0L + 11) << 25),
+         ((0L + 12) << 25),
+         ((0L + 13) << 25),
+         ((0L + 14) << 25),
+         ((0L + 15) << 25),
+         ((0L + 16) << 25),
+         ((0L + 17) << 25),
+         ((0L + 18) << 25),
+         ((0L + 19) << 25),
+         ((0L + 20) << 25),
+
+         ((0L + 21) << 25),
+         ((0L + 22) << 25),
+         ((0L + 23) << 25),
+         ((0L + 24) << 25),
+         ((0L + 25) << 25),
+         ((0L + 26) << 25),
+         ((0L + 27) << 25),
+         ((0L + 28) << 25),
+         ((0L + 29) << 25),
+         ((0L + 30) << 25),
+         ((0L + 31) << 25), /* orig exp_e0==30 */   
+    };
+
+    Word32 L_x_up;
+    Word16 dx;
+    Word32 L_segm_ind;
+    Word32 L_tail_frac_indQ32;
+    Word16*  cXPtr;              /* C1C2  row pointer */
+    Word32 L_tmp;
+
+
+    cXPtr = &(log2_LC_TabValC1C2_Qx[0][0]);        /* C1C2  table init */
+    assert(L_x >= 0);
+
+    if (L_x == 0)                   /* logic kept from non LC version  */
+    {                               /* do not call this function with 0 */
+        return ((Word32)MIN_32);    
+    }
+
+    /* start of actual BASOP approximation  */
+    exp_e0 = norm_l(L_x);               /* exp_e0 = number of upshifts for L_x to get into   0.5 to 1.0  */
+    L_x_up = L_shl_pos(L_x, exp_e0);    /* max upshift to a get a mantissa fractional value range .5 to 1.0  */
+
+    /* apply total_frac=(2*x-1)    to move to region  1.0 to 2.0 , and extract tail fraction to approximation ox log2(1+x/16) )*/
+
+    L_segm_ind = L_shr_pos_pos(L_and(L_x_up, 0x3c000000), 30 - 4);   /* 2 ops to pick segment */
+
+    /* use 16 bits after the segment index, and put them it in a Q16 short variable as in segment range  -.5 to .5 */
+    L_tail_frac_indQ32 = L_and(L_x_up, 0x03ffffff);          /* mask away to a positive value in  Q26 */
+    L_tail_frac_indQ32 = L_sub(L_tail_frac_indQ32, 1L << (26 - 1));    /*  subtract 0.5 at    Q26   */
+    L_tail_frac_indQ32 = L_shl_pos(L_tail_frac_indQ32, 6);     /* shift up to Q32 */
+    dx = extract_h(L_tail_frac_indQ32);       /* 4 ops to get a the signed tail fraction into a Word16 */
+
+
+    ASSERT(L_segm_ind >= 0 && L_segm_ind <= L2LC_TABLENGTH);
+    /*   Table ptr  init  to  [segm_ind][0,1,2]   */
+    cXPtr += (L_segm_ind*L2LC_TABWIDTH);     /* allows for ptr increment , for the Word16 table segment adressing */
+
+      /*  ops  pre =  8 ,  mid = 6   ,  tail =  1,  sum=   15    (25-15)/25  =   40%  reduction */
+      /* Horners rule     ((C2*x+ C1)*x) + C0 , maintains precision until final summation */
+
+    L_tmp = L_mult0(cXPtr[1], dx);      /* Q23*Q16 -> Q39     C2*x */
+    L_tmp = L_shr_pos(L_tmp, 39 - 34);  /* Q39 to -> Q34   */
+
+    L_tmp = L_msu(L_tmp, cXPtr[0], SHRT_MIN);  /* add C1,  with L_msu , no extra cycle cost for C1 Word16 storage in Q18  , Q34=18+15+1 */
+
+    L_tmp = Mpy_32_16(L_tmp, dx);   /*Q34*Q16  to -> Q50-16+1 = Q35   ,  (x*c2+c1)x*/
+    L_tmp = L_shr_pos(L_tmp, 35 - 25);   /*Q34+1 to -> Q25  */  /* fractional to final  Q25  */
+
+    L_tmp = L_add(L_tmp, L_log2_LC_TabValC0Q25[L_segm_ind]);   /* Q25 to -> Q25  */
+
+    /* back to 0..1 from log2(1+x/16) range  */
+    ASSERT(exp_e0 >= 0 && exp_e0 <= 30);
+    L_accuRes = L_sub(L_tmp, L_pow2Const[exp_e0]);          /*   result = integer_partQ25*2^-1  + fractional partQ25  */
+
+    return (L_accuRes);
+}
+#   endif 
+ 
 
 Word32 BASOP_Util_InvLog2(Word32 x)
 {
@@ -171,9 +316,14 @@ Word32 BASOP_Util_InvLog2_pos(Word32 x, Word16 *exp)
     }
     ELSE IF(x == 0)
     {
+#ifdef  LRSNS_ALLZERO_FIX
+        *exp = 2; move16();
+        return (1L << 29);   /* 2^29/(2^(31-(+2))   =   1.0 exactly   */
+#else 
         *exp = -1;
         move16();
         return 0x10000000;
+#endif 
     }
 
     frac = extract_l(L_and(x, 0x3FF));

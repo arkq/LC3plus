@@ -3,7 +3,7 @@
 # Version 1.2.6
 
 #******************************************************************************
-#                        ETSI TS 103 634 V1.5.1                               *
+#                        ETSI TS 103 634 V1.6.1                               *
 #              Low Complexity Communication Codec Plus (LC3plus)              *
 #                                                                             *
 # Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -54,7 +54,7 @@ WavInfo  = collections.namedtuple('WavInfo', 'ch rate frames')
 MAX_DELAY = 322
 MAX_SAMPLES_PER_FRAME = 480
 SAMPLERATES = [8000, 16000, 24000, 32000, 44100, 48000, 96000]
-FRAME_SIZES = [2.5, 5.0, 7.5, 10.0]
+FRAME_SIZES = [1.25, 2.5, 5.0, 7.5, 10.0]
 CHANNELS = [1, 2]
 SQAM_URL    = 'https://qc.ebu.io/testmaterial/523/1/download/'
 SQAM_SHA256 = '7d6fcd0fc42354637291792534b61bf129612f221f8efef97b62e8942a8686aa'
@@ -64,6 +64,7 @@ SOX_EXE     = pathlib.Path('SoX/sox-14.4.2/sox.exe')
 INF         = float('inf')
 
 PC_BER_FILES = {
+  1.25  : "etc/pc_ber_2.5ms.dat",
   2.5  : "etc/pc_ber_2.5ms.dat",
   5.0  : "etc/pc_ber_5ms.dat",
   7.5  : "etc/pc_ber_10ms.dat",
@@ -71,6 +72,7 @@ PC_BER_FILES = {
 }
 
 PLC_BURST_FILES = {
+  1.25  : "etc/plc_bfer_1.25ms_eid.dat",
   2.5  : "etc/plc_bfer_2.5ms_eid.dat",
   5.0  : "etc/plc_bfer_5ms_eid.dat",
   7.5  : "etc/plc_bfer_7.5ms_eid.dat",
@@ -78,6 +80,7 @@ PLC_BURST_FILES = {
 }
 
 PLC_RANDOM_FILES = {
+  1.25  : "etc/plc_fer_1.25ms_eid.dat",
   2.5  : "etc/plc_fer_2.5ms_eid.dat",
   5.0  : "etc/plc_fer_5ms_eid.dat",
   7.5  : "etc/plc_fer_7.5ms_eid.dat",
@@ -93,6 +96,8 @@ MIN_HRMODE_BYTES = {# (frame_size, sampling_rate): min_bytes_per_frame
     (5,96000): 109,
     (2.5,48000): 54,
     (2.5,96000): 62,
+    (1.25,48000): 54,
+    (1.25,96000): 62,
 }
 
 # test items
@@ -165,7 +170,7 @@ DEFAULTS_TEST = {'configs': []}
 for test in TESTS:
     DEFAULTS_TEST['test_' + test] = False
 for test, mode in itertools.product(TESTS, TEST_MODES):
-    DEFAULTS_TEST['{}_{}_eng_threshold'.format(test, mode)] = 70
+    DEFAULTS_TEST['{}_{}_eng_threshold'.format(test, mode)] = [70,90]
     DEFAULTS_TEST['{}_{}_mld_threshold'.format(test, mode)] = 4
     DEFAULTS_TEST['{}_{}_odg_threshold'.format(test, mode)] = [0.06, 0.08, 0.12]
     DEFAULTS_TEST['{}_{}_rms_threshold'.format(test, mode)] = 14
@@ -247,6 +252,43 @@ STYLE = ('body {font-family:sans-serif; color:#f8f8f2; background-color:#272822;
          '{background-color:rgba(214,137,16,0.4)} a:link {color: white;text-decoration: none;} a:visited {color: '
          'white} a:hover {color: white;font-weight:bold;} a:active {color: rgb(155, 155, 155)}')
 
+# Constants for bitstream editing
+G192_SYNC_WORD        = int('0xCC1C', 16)
+G192_GOOD_FRAME       = int('0x6B21', 16)
+G192_BAD_FRAME        = int('0x6B20', 16)
+G192_ONE              = int('0x0081', 16)
+G192_ZERO             = int('0x007F', 16)
+G192_REDUNDANCY_FRAME = int('0x6B22', 16)
+
+# List of conditions for silencing frames to ensure stable conformance testing
+# when different LTPF behaviour is observed between fl and fx implementations
+LTPF_BITSTREAM_CONDITIONS = [
+    {'item': 'Male_Speech_English',  "channels": 2, 'sampling_rate': 16000, 'frame_size': 1.25, 'bitrate': 512000, 'ep_mode': 4,'critical_frames': list(range(5069, 5080))},
+    {'item': 'Male_Speech_English',  "channels": 1, 'sampling_rate': 24000, 'frame_size': 1.25, 'bitrate': 256000, 'ep_mode': 3,'critical_frames': list(range(5069, 5080))},
+    {'item': 'Male_Speech_English',  "channels": 1, 'sampling_rate': 24000, 'frame_size': 1.25, 'bitrate': 256000, 'ep_mode': '1-4','critical_frames': list(range(2238, 2249))},
+    {'item': 'Male_Speech_English',  "channels": 2, 'sampling_rate': 32000, 'frame_size': 1.25, 'bitrate': 512000, 'ep_mode': 4,'critical_frames': list(range(4477, 4490))},
+    {'item': 'Female_Speech_German',  "channels": 1, 'sampling_rate': 16000, 'frame_size': 1.25, 'bitrate': 128000, 'ep_mode': 0,'critical_frames': list(range(4179, 4190))},
+    {'item': 'Female_Speech_German',  "channels": 1, 'sampling_rate': 16000, 'frame_size': 1.25, 'bitrate': '128000-128000', 'ep_mode': 0,'critical_frames': list(range(4179, 4190))},
+    {'item': 'Female_Speech_German',  "channels": 1, 'sampling_rate': 16000, 'frame_size': 1.25, 'bitrate': 256000, 'ep_mode': 4,'critical_frames': list(range(4179, 4190))},
+    {'item': 'Female_Speech_German',  "channels": 1, 'sampling_rate': 24000, 'frame_size': 1.25, 'bitrate': 128000, 'ep_mode': 0,'critical_frames': list(range(2034, 2045))},
+    {'item': 'Female_Speech_German',  "channels": 1, 'sampling_rate': 24000, 'frame_size': 1.25, 'bitrate': '128000-128000', 'ep_mode': 0,'critical_frames': list(range(2034, 2045))},
+    {'item': 'Female_Speech_German',  "channels": 1, 'sampling_rate': 24000, 'frame_size': 1.25, 'bitrate': 256000, 'ep_mode': 4,'critical_frames': list(range(2034, 2045))},
+    {'item': 'Female_Speech_German',  "channels": 1, 'sampling_rate': 48000, 'frame_size': 1.25, 'bitrate': 256000, 'ep_mode': '1-4','critical_frames': list(range(5690, 5701))},
+    {'item': 'Female_Speech_German',  "channels": 1, 'sampling_rate': 48000, 'frame_size': 1.25, 'bitrate': 256000, 'ep_mode': 3,'critical_frames': list(range(812, 923))},
+    {'item': 'Female_Speech_German',  "channels": 2, 'sampling_rate': 32000, 'frame_size': 1.25, 'bitrate': 512000, 'ep_mode': 4,'critical_frames': list(range(730, 741))},
+    {'item': 'Female_Speech_German',  "channels": 2, 'sampling_rate': 32000, 'frame_size': 1.25, 'bitrate': 512000, 'ep_mode': 3,'critical_frames': list(range(4067, 4078))},
+    {'item': 'Female_Speech_German',  "channels": 1, 'sampling_rate': 24000, 'frame_size': 1.25, 'bitrate': 256000, 'ep_mode': '1-4','critical_frames': list(range(1098, 1109))},
+    {'item': 'Female_Speech_German',  "channels": 1, 'sampling_rate': 16000, 'frame_size': 1.25, 'bitrate': 256000, 'ep_mode': '1-4','critical_frames': list(range(3004, 3015))},
+    {'item': 'Harpsichord',  "channels": 1, 'sampling_rate': 24000, 'frame_size': 1.25, 'bitrate': 128000, 'ep_mode': 0,'critical_frames': list(range(3786, 4082))},
+    {'item': 'Harpsichord',  "channels": 1, 'sampling_rate': 24000, 'frame_size': 1.25, 'bitrate': '128000-128000', 'ep_mode': 0,'critical_frames': list(range(3786, 4082))},
+    {'item': 'Harpsichord',  "channels": 1, 'sampling_rate': 24000, 'frame_size': 1.25, 'bitrate': 256000, 'ep_mode': 4,'critical_frames': list(range(3786, 4082))},
+    {'item': 'Piano_Schubert',  "channels": 1, 'sampling_rate': 24000, 'frame_size': 1.25, 'bitrate': '128000-128000', 'ep_mode': 0,'critical_frames': list(range(2815, 2826)) + list(range(4662, 4673))},
+    {'item': 'Piano_Schubert',  "channels": 1, 'sampling_rate': 24000, 'frame_size': 1.25, 'bitrate': 128000, 'ep_mode': 0,'critical_frames': list(range(2815, 2826))+ list(range(4662, 4673))},
+    {'item': 'Piano_Schubert',  "channels": 1, 'sampling_rate': 48000, 'frame_size': 1.25, 'bitrate': 128000, 'ep_mode': 0,'critical_frames': list(range(2793, 2817))},
+    {'item': 'Glockenspiel',  "channels": 1, 'sampling_rate': 16000, 'frame_size': 1.25, 'bitrate': 128000, 'ep_mode': 0,'critical_frames': list(range(6487, 6523))},
+    {'item': 'Violoncello',  "channels": 1, 'sampling_rate': 24000, 'frame_size': 1.25, 'bitrate': 128000, 'ep_mode': 0,'critical_frames': list(range(3106, 3117))},
+    {'item': 'Violoncello',  "channels": 1, 'sampling_rate': 24000, 'frame_size': 1.25, 'bitrate': '128000-128000', 'ep_mode': 0,'critical_frames': list(range(3106, 3117))}
+]
 
 # convenience wrapper for os.makedirs
 def makedirs(path):
@@ -321,7 +363,7 @@ def check_system(args, globvars):
     if sys.platform == 'win32':
         sys.exit('This script must run under cygwin')
     tools = ['curl', 'gcc', 'make']
-    if sys.platform != 'cygwin':
+    if sys.platform != 'cygwin' and sys.platform != 'darwin':
         tools += ['wine']
     if args.system_sox:
         tools += ['sox']
@@ -412,13 +454,21 @@ def generate_switching_file2(env, fs, *values):
     p.tofile(str(path))
     return path, min(values)
 
-# generate switching file with unique name, returns path
-def generate_switching_file(env, *values):
-    path   = env.test_dir / uuid_file('swf_', '.dat')
-    layers = ','.join(map(str, sorted(values)))
-    cmd    = 'tools/gen-rate-profile.exe -layers {} {} 10 0 15000 123456789'
-    call(cmd.format(layers, path), log_output=False, opid=env.opid, opid_log=env.opid_log)
-    return path
+# get switching file, returns path
+def get_switching_file(env, *values):
+    layers_sorted = sorted(values)
+    layers = '_'.join(map(str, layers_sorted))
+    switching_dir = pathlib.Path('switching_files')
+
+    # the files have been generated and stored using tools/gen-rate-profile.exe -layers {} {} 10 0 15000 123456789
+    base_name = f"swf_layers_{layers}_frame_10_min_0_max_15000_seed_123456789.dat"
+    switching_file_path = switching_dir / base_name
+
+    # Check if switching_file exists
+    if not switching_file_path.exists():
+        raise FileNotFoundError(f"Switching file {switching_file_path} not found in '{pathlib.Path.cwd()}'.")
+
+    return switching_file_path
 
 
 # compares binary equality of files
@@ -666,10 +716,11 @@ def run_rms(env, ref, tst, threshold):
 def run_peaq(env, reference, test):
     odg = 5
     for ref_chan_x, tst_chan_x in split_channels(env, reference, test):
-        ref48 = ref_chan_x.with_suffix('.48k.wav')
-        tst48 = tst_chan_x.with_suffix('.48k.wav')
-        resample(ref_chan_x, ref48, 48000, opid=env.opid, opid_log=env.opid_log)
-        resample(tst_chan_x, tst48, 48000, opid=env.opid, opid_log=env.opid_log)
+        ref48 = ref_chan_x.with_suffix('.48k.16b.wav')
+        tst48 = tst_chan_x.with_suffix('.48k.16b.wav')
+        # resample to 48kHz and convert to 16b
+        call(f'{SOX_EXE} -R {ref_chan_x} -b 16 {ref48} rate -vs 48000',opid=env.opid, opid_log=env.opid_log)
+        call(f'{SOX_EXE} -R {tst_chan_x} -b 16 {tst48} rate -vs 48000',opid=env.opid, opid_log=env.opid_log)
         out = call(env.config['peaq_bin'].format(reference=ref48, test=tst48), opid=env.opid, opid_log=env.opid_log)
         odg = min(odg, float(regex_search(env.config['peaq_odg_regex'], out)))
     return odg
@@ -765,6 +816,13 @@ def get_delta_threshold(hr_info, sr, odg_ref, delta_odg_thresh):
         return delta_odg_thresh[2]
 
 
+def get_eng_threshold(frame_size, engergy_thresholds):
+    if frame_size < 2.5:
+        return engergy_thresholds[1]
+    else:
+        return engergy_thresholds[0]
+
+
 # compare output wavs by metric rms, odg, mld, eng
 def compare_wav(env, hr_info, mode, sr, infile, file_ref, file_tst):
     mkey   = '{}_{}_metric'.format(env.test, mode)
@@ -807,6 +865,7 @@ def compare_wav(env, hr_info, mode, sr, infile, file_ref, file_tst):
         values = [(mld, ('fail', 'pass')[ok], thresh)]
     if metric == 'eng':
         d_eng  = energy(env, file_tst)
+        thresh = get_eng_threshold(hr_info['frame_size'], thresh)
         ok     = d_eng <= thresh
         values = [(d_eng, ('fail', 'pass')[ok], thresh)]
 
@@ -889,7 +948,8 @@ def decode_reference(env, input, output, error_file=None):
     check_io_files(input, output)
     cmd = env.config['ref_decoder']
     opt = []
-    opt += ['-ep_dbg', error_file]
+    if error_file:
+        opt += ['-ep_dbg', error_file]
     options = ' '.join(map(str, opt))
     call(cmd.format(input=input, output=output, options=options), opid=env.opid, opid_log=env.opid_log)
 
@@ -898,7 +958,8 @@ def decode_test(env, input, output, error_file=None):
     check_io_files(input, output)
     cmd = env.config['tst_decoder']
     opt = []
-    opt += [env.config['option_ep_debug'].format(arg=error_file)]
+    if error_file:
+        opt += [env.config['option_ep_debug'].format(arg=error_file)]
     options = ' '.join(map(str, opt))
     call(cmd.format(input=input, output=output, options=options), opid=env.opid, opid_log=env.opid_log)
 
@@ -907,10 +968,16 @@ def apply_error_pattern(env, input, output, mode, pattern):
     assert mode in ('fer', 'ber', 'flip')
     check_io_files(input, output)
     if mode == 'fer':
-        cmd = 'tools/eid-xor.exe -vbr -bs g192 -ep byte -fer {} {} {}'
+        if sys.platform == 'darwin':
+            cmd = 'tools/eid-xor_mac -vbr -bs g192 -ep byte -fer {} {} {}'
+        else: 
+            cmd = 'tools/eid-xor_linux -vbr -bs g192 -ep byte -fer {} {} {}'
         call(cmd.format(input, pattern, output), opid=env.opid, opid_log=env.opid_log)
     if mode == 'ber':
-        cmd = 'tools/eid-xor.exe -vbr -bs g192 -ep byte -ber {} {} {}'
+        if sys.platform == 'darwin':
+            cmd = 'tools/eid-xor_mac -vbr -bs g192 -ep byte -ber {} {} {}'
+        else:
+            cmd = 'tools/eid-xor_linux -vbr -bs g192 -ep byte -ber {} {} {}'
         call(cmd.format(input, pattern, output), opid=env.opid, opid_log=env.opid_log)
     if mode == 'flip':
         if 'bitflip_seed' in env.config.keys():
@@ -923,6 +990,231 @@ def apply_error_pattern(env, input, output, mode, pattern):
     # copy the config file of g192 bitstreams
     if is_file(str(input) + '.cfg'):
         call('cp {} {}'.format(str(input) + '.cfg', str(output) + '.cfg'), opid=env.opid, opid_log=env.opid_log)
+
+def read_bit(bytes, bp, mask):
+    if bytes[bp] & mask:
+        bit = 1
+    else:
+        bit = 0
+
+    if mask == 128:
+        mask = 1
+        bp -= 1
+    else:
+        mask <<= 1
+
+    return bit, bp, mask
+
+def read_uint(bytes, bp, mask, nbits):
+    val, bp, mask = read_bit(bytes, bp, mask)
+
+    for i in range(1, nbits):
+        bit, bp, mask = read_bit(bytes, bp, mask)
+        val += bit << i
+
+    return val, bp, mask
+
+def getLastNzBits(N):
+    minBits = int(numpy.ceil(numpy.log2(N >> 1)))
+
+    if ((1 << minBits) - (N >> 1)) < 2:
+        minBits += 1
+    
+    return minBits
+
+def decode_and_edit_bitstream(config, data, bitstream, nbytes, bytes_read):
+    # bw_cutoff_bits is set in FillDecSetup() in setup_dec_lc3.c as decoder->BW_cutoff_bits = BW_cutoff_bits_all[decoder->fs_idx];
+    # decoder->fs_idx = ( decoder->fs ) == 96000 ? 5 : ( decoder->fs ) / 10000
+    BW_cutoff_bits_all =  [ 0, 1, 2, 2, 3, 0 ] # Defined in constans.c
+    fs_idx = 5 if config['samplingrate'] == 96000 else int(config['samplingrate']/10000)
+    bw_cutoff_bits = BW_cutoff_bits_all[fs_idx]
+
+    # N = decoder->yLen which is set in setup_dec_lc3.c in set_dec_frame_params()
+    frame_length = int(numpy.ceil( config['samplingrate'] * 10 / 1000 ))
+    if config['hrmode'] == 1:
+        N = frame_length
+    else:
+        N = min( 400, frame_length ) # 400 is MAX_BW
+    if config['frame_ms'] == 7.5:
+        N = int((N * 3) / 4)
+    else:
+        N = int(N / int(10/config['frame_ms']))
+    if config['frame_ms']  == 1.25:
+        bw_cutoff_bits = 0
+
+    # Start decoding the side information
+    bp = 0
+    bp_side = nbytes - 1
+    mask_side = 1
+
+    # Bandwidth
+    if bw_cutoff_bits > 0:
+        bw_cutoff_idx, bp_side, mask_side = read_uint( bw_cutoff_bits, data, bp_side, mask_side, bw_cutoff_bits )
+    else:
+        bw_cutoff_idx = fs_idx
+
+    # Last non-zero tuple
+    lastnz, bp_side, mask_side = read_uint( data, bp_side, mask_side, getLastNzBits( N ) )
+    lastnz = ( lastnz + 1 ) * 2
+
+    # LSB mode bit
+    lsbMode, bp_side, mask_side = read_bit( data, bp_side, mask_side )
+
+    # Global Gain
+    gg_idx, bp_side, mask_side = read_uint( data, bp_side, mask_side, 8 )
+
+    # TNS activation flag
+    if config['frame_ms']  == 1.25:
+        tns_numfilters = 0
+    else:
+        if bw_cutoff_idx < 3 or config['frame_ms']  == 1.25:
+            tns_numfilters = 1
+        else:
+            tns_numfilters = 2
+    tns_order = numpy.zeros(tns_numfilters)
+    for i in range(tns_numfilters):
+        tns_order[i], bp_side, mask_side = read_bit( data, bp_side, mask_side )
+
+    # LTPF activation flag
+    pitch_present, bp_side, mask_side = read_bit( data, bp_side, mask_side )
+
+    # Skipping 38 bits in SNS data
+    if (8 - int(numpy.log2(mask_side))) > 1:
+        bp_side -= 1
+    bp_side -= (38 - (8 - int(numpy.log2(mask_side)))) // 8
+
+    mask_side = 1 << (38 - (8 - int(numpy.log2(mask_side)))) % 8
+
+    # LTPF pitch data
+    if pitch_present:
+        mask_side_b4 = mask_side
+        bp_side_b4 = bp_side
+        
+        # Read ltpf flag by indexing the bitstream
+        ltpf_idx_in_bitstream = bytes_read-16*(nbytes-1-(bp_side-1)) + int(numpy.log2(mask_side)*2)
+        x, = struct.unpack('<H', bitstream[ltpf_idx_in_bitstream : ltpf_idx_in_bitstream + 2])
+        ltpf_active_v2 = 1 if x == G192_ONE else 0 
+
+        # Read ltpf flag as in the C code
+        ltpf_active, bp_side, mask_side = read_uint( data, bp_side, mask_side, 1 )
+
+        assert( ltpf_active == ltpf_active_v2 )
+
+        # If LTPF is active, deactivate it by modifying the bitsream.
+        if ltpf_active:
+            bitstream[ltpf_idx_in_bitstream : ltpf_idx_in_bitstream + 2] = struct.pack('<H', G192_ZERO)
+        else:
+            bitstream[ltpf_idx_in_bitstream : ltpf_idx_in_bitstream + 2] = struct.pack('<H', G192_ONE)
+
+        pitch_index, bp_side, mask_side = read_uint( data, bp_side, mask_side, 9 )
+    else:
+        ltpf_active = 0
+        pitch_index = 0
+
+    return bitstream
+
+def read_cfg_header(g192_cfg_file):
+    with open(g192_cfg_file, 'rb') as f_g192:
+            data = f_g192.read()
+
+    data = struct.unpack('<HhhhhhhHhh', data[:20])
+
+    config = {}
+    config['file_id']           = data[0]
+    config['header_size']       = data[1]
+    config['samplingrate']      = data[2] * 100
+    config['bitrate']           = data[3] * 100
+    config['channels']          = data[4]
+    config['frame_ms']          = data[5] / 100
+    config['epmode']            = data[6]
+    config['signal_len']        = data[7]
+    config['signal_len_red']    = data[8] << 16
+    config['hrmode']            = data[9]
+
+    assert( hex(config['file_id']) == '0xcc1c' )
+
+    return config
+
+def pack_unpack_bitstream_epmode(g192_file_in, g192_file_out, fs, br, ep_mode, task='unpack'):
+    try:
+        print(os.getcwd())
+        ccConvert = '../src/fixed_point/ccConvert'
+        if task == 'unpack':
+            cmd = [ccConvert, '-unpack', g192_file_in, g192_file_out]
+        elif task == 'pack':
+            gross_bytes = int((br / 8) / (1000 / fs))
+            cmd = [ccConvert, '-pack', str(gross_bytes), str(ep_mode), g192_file_in, g192_file_out]
+        call(cmd)
+    except:
+        raise Exception
+
+# Toggles LTPF activations flag
+def edit_ltpf_bitstream(g192_file, frames, fs, br, ep_mode, opid='', opid_log={}):
+    logging.debug( '[{}] '.format(opid) + f'edit_ltpf_bitstream: {g192_file}')
+    if opid:
+        if opid_log.__contains__(opid) == False:
+            opid_log[opid] = ''
+        opid_log[opid] += f'[CMD] # edit_ltpf_bitstream: {g192_file}\n\n'
+    g192_cfg_file = g192_file + '.cfg'
+
+    config = read_cfg_header(g192_cfg_file)
+
+    problematic_frames = numpy.array(frames)
+    problematic_frames -= 20
+
+    bytes_read = 0
+
+    # unpack bitstream in case of epmode
+    if ep_mode > 0:
+        g192_file_unpacked = g192_file.replace('.g192', '_unpacked.g192') #'out_unpacked.g192'
+        pack_unpack_bitstream_epmode(g192_file, g192_file_unpacked, fs, br, ep_mode, task='unpack')
+        with open(g192_file_unpacked, 'rb') as f_g192:
+            bitstream = bytearray(f_g192.read())
+    else:
+        with open(g192_file, 'rb') as f_g192:
+            bitstream = bytearray(f_g192.read())
+
+
+    with open(g192_file, 'rb') as f_g192:
+        bitstream = bytearray(f_g192.read())
+
+    for x, frame in enumerate(problematic_frames):
+        for f in range(frame+1) if x==0 else range(problematic_frames[x-1]+1, frame+1):
+            frame_indicator, length = struct.unpack('<HH', bitstream[bytes_read:bytes_read+4])
+            bytes_read += 4
+
+            assert( frame_indicator == G192_GOOD_FRAME )
+
+            nbytes = length // 8
+            data = numpy.zeros(nbytes, dtype=numpy.uint8)
+
+            for i in range(nbytes):
+                byte = numpy.uint8(0)
+                
+                for b in range(8):
+                    x, = struct.unpack('<H', bitstream[bytes_read:bytes_read+2])
+                    if x == G192_ONE:
+                        byte |= numpy.uint8(1) << b
+                    bytes_read += 2
+                data[i] = byte
+
+            if f == frame:
+                bitstream = decode_and_edit_bitstream(config, data, bitstream, nbytes, bytes_read)
+
+    if ep_mode > 0:
+        # if epmode, pack the bitstream back into protected mode
+        # Write the modified bitstream
+        g192_file_unpacked_edit = g192_file.replace('.g192', '_unpacked.edit.g192')
+        call(f'cp {g192_file_unpacked}.cfg {g192_file_unpacked_edit}.cfg')
+        with open(g192_file_unpacked_edit, 'wb') as f_g192:
+            f_g192.write(bitstream)
+        #g192_file_new_packed = 'out_modified_packed.g192'
+        pack_unpack_bitstream_epmode(g192_file_unpacked_edit, g192_file, fs, br, ep_mode, task='pack')
+    else:
+        # Write the modified bitstream
+        g192_file_new = g192_file
+        with open(g192_file_new, 'wb') as f_g192:
+            f_g192.write(bitstream) 
 
 # rename switcing files
 def swf_bitrate_to_label (tmp):
@@ -960,6 +1252,35 @@ def test_executor(env, func, tests):
     return list(ex.map(lambda args: func(*args), tests))
 
 
+def check_ltpf_conditions(fs,sr,br,epmode,item_path):
+    for condition in LTPF_BITSTREAM_CONDITIONS:
+        if '.dat' in str(epmode):
+            epmode_tmp = '1-4'
+        else:
+            epmode_tmp = epmode
+        if (fs == condition['frame_size'] and sr == condition['sampling_rate'] and br == condition['bitrate'] and epmode_tmp == condition['ep_mode'] and condition['item'] in item_path and f"_{str(condition['channels'])}ch_" in item_path):
+                return condition['critical_frames']
+    return []
+
+def silence_samples(input_wav, output_wav, start_sample, len_silence):
+    with wave.open(str(input_wav), 'rb') as wav_in:
+        params = wav_in.getparams()  # Get parameters of the wav file
+        frames = wav_in.readframes(params.nframes)  # Read all frames
+
+    # Convert frames to numpy array + Create a writable copy
+    audio_data = numpy.frombuffer(frames, dtype=numpy.int16).copy() 
+
+    start_index = start_sample * params.nchannels
+    # Silence the critical samples
+    audio_data[start_index:start_index + len_silence * params.nchannels] = 0
+
+    # Write the modified audio to the output WAV file
+    tmp_path = output_wav.parent / f"{output_wav.name}.{uuid.uuid4().hex}.tmp"
+    with wave.open(str(tmp_path), 'wb') as wav_out:
+        wav_out.setparams(params)
+        wav_out.writeframes(audio_data.tobytes())
+    os.replace(tmp_path, output_wav)
+
 # process a single test item
 # performs encoding, erroring, decoding and evaluation
 # returns tuple of bool, list (pass condition, metric values)
@@ -978,30 +1299,40 @@ def process_item(env, mode, item, fs, sr, br, infile, bandwidth=None, ep_mode=0,
     cmp_only = env[8]['active']
     cmp_only_dir = env[7]['path']
     print(fmt.format(mode, item, fs, sr, lstr(br), ep_name))
+    if isinstance(br, int):
+        br_param = br
+    elif isinstance(br, tuple):
+        br_param = lstr(br)
 
     file_names = ['r.g192', 't.g192', 're.g192', 'te.g192', 'r.wav', 't.wav', 'rd', 'td']
     file_tuple = make_files(env, file_names, mode, infile.stem, fs, sr, br, bw_name, ep_name)
     ref_bin, tst_bin, ref_err, tst_err, ref_wav, tst_wav, ref_dbg, tst_dbg = file_tuple
     # evaluate channel coder output only for decode_ep_* tests
     if not (env.test.startswith('ep_') and mode == 'decode'):
-        err_ok, err_val= True, []
+        err_ok, err_val, ref_dbg, tst_dbg = True, [], None, None
 
     try:
-        # generate bitratre switching file if needed
+        # generate bitrate switching file if needed
         sw_min_bitrate = 0
         if type(br) in (list, tuple):
             #br = generate_switching_file(env, *br)
             br, sw_min_bitrate = generate_switching_file2(env, fs, *br)
         # encode
         encode_reference(env, infile, ref_bin, fs, br, bandwidth=bandwidth, ep_mode=ep_mode, lfe=lfe)
+        # for ltpf with adaptive gain, edit the bitstream
+        critical_frames = check_ltpf_conditions(fs,sr,br_param,ep_mode,ref_bin.stem)
+        if 0: # len(critical_frames) > 0:
+            edit_ltpf_bitstream(str(ref_bin), critical_frames, fs, br, ep_mode, opid=env.opid, opid_log=env.opid_log)
         if not cmp_only:
             if mode in ('encode', 'encdec'):
                 encode_test(env, infile, tst_bin, fs, br, bandwidth=bandwidth, ep_mode=ep_mode, lfe=lfe)
-        # apply errors
-        if error_mode:
-            apply_error_pattern(env, ref_bin, ref_err, error_mode, error_pattern)
-            ref_bin = ref_err
-            if not cmp_only:
+                critical_frames = check_ltpf_conditions(fs,sr,br_param,ep_mode,tst_bin.stem)
+                if 0: # len(critical_frames) > 0:
+                    edit_ltpf_bitstream(str(tst_bin), critical_frames, fs, br, ep_mode, opid=env.opid, opid_log=env.opid_log)
+            # apply errors
+            if error_mode:
+                apply_error_pattern(env, ref_bin, ref_err, error_mode, error_pattern)
+                ref_bin = ref_err
                 if mode in ('encode', 'encdec'):
                     apply_error_pattern(env, tst_bin, tst_err, error_mode, error_pattern)
                     tst_bin = tst_err
@@ -1028,6 +1359,23 @@ def process_item(env, mode, item, fs, sr, br, infile, bandwidth=None, ep_mode=0,
             if cmp_only:
                 tst_wav = pathlib.Path(str(tst_wav).replace(tst_wav.parts[0], cmp_only_dir))
             hr_info = {'frame_size':fs, 'ep_mode':ep_mode, 'hrmode':int(env.config['hrmode']), 'bitrate':sw_min_bitrate if sw_min_bitrate else br}
+            if critical_frames:
+                for i, crit_frame in enumerate(critical_frames):
+                    frame_length = int(numpy.ceil( sr * 10 / 1000 ))
+                    N = int(frame_length / int(10/fs))
+                    start_sample = crit_frame * N
+                    new_infile = re.sub(r'(?i)^(.*?)(?:\.edit(\d+))?(\.wav)$', lambda m: f"{m.group(1)}.edit{int(m.group(2) or 0)+1}{m.group(3)}", str(infile))
+                    new_infile = pathlib.Path(new_infile)
+                    silence_samples(infile, new_infile, start_sample, N)
+                    infile = new_infile
+                    new_ref_wav = re.sub(r'(?i)^(.*?)(?:\.edit(\d+))?(\.wav)$', lambda m: f"{m.group(1)}.edit{int(m.group(2) or 0)+1}{m.group(3)}", str(ref_wav))
+                    new_ref_wav = pathlib.Path(new_ref_wav)
+                    silence_samples(ref_wav, new_ref_wav, start_sample, N)
+                    ref_wav = new_ref_wav
+                    new_tst_wav = re.sub(r'(?i)^(.*?)(?:\.edit(\d+))?(\.wav)$', lambda m: f"{m.group(1)}.edit{int(m.group(2) or 0)+1}{m.group(3)}", str(tst_wav))
+                    new_tst_wav = pathlib.Path(new_tst_wav)
+                    silence_samples(tst_wav, new_tst_wav, start_sample, N)
+                    tst_wav = new_tst_wav
             ok, val = compare_wav(env, hr_info, mode, sr, infile, ref_wav, tst_wav)
             if ref_dbg and tst_dbg:
                 if cmp_only:
@@ -1122,7 +1470,7 @@ def test_bitrate_switching(env):
 def test_bandwidth_switching(env):
     print('Testing bandwidth switching ...')
     def func(mode, item, fs, sr, br, infile):
-        bwf = generate_switching_file(env, *BAND_WIDTHS[sr])
+        bwf = get_switching_file(env, *BAND_WIDTHS[sr])
         ok, values, opid = process_item(env, mode, item, fs, sr, br, infile, bwf)
         return [ok, mode, item, fs, sr, br] + values + [opid]
 
@@ -1196,7 +1544,7 @@ def test_ep_non_correctable(env):
 
 def test_ep_mode_switching(env):
     print('Testing ep-mode switching ...')
-    ep_mode = generate_switching_file(env, 100, 200, 300, 400)
+    ep_mode = get_switching_file(env, 100, 200, 300, 400)
     def func(mode, item, fs, sr, br, infile):
         ok, values, opid = process_item(env, mode, item, fs, sr, br, infile, None, ep_mode, None, None)
         return [ok, mode, item, fs, sr, br, '1-4'] + values + [opid]

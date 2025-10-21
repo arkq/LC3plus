@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -123,6 +123,7 @@ static WAVEFILEIN *OpenWav(const char *filename, unsigned int *samplerate, short
     unsigned int tmpSize;
     char         tmpFormat[4];
     SWavInfo     wavinfo = {0, 0, 0, 0, 0, 0};
+    int32_t      tmp_return_val;
 
     self = (WAVEFILEIN *)calloc(1, sizeof(WAVEFILEIN));
     if (!self)
@@ -305,9 +306,9 @@ static WAVEFILEIN *OpenWav(const char *filename, unsigned int *samplerate, short
 
     if (wavinfo.compressionCode == -2)
     {
-        fseek(self->theFile, 8, SEEK_CUR);                         // skip channel mask
-        fread_LE(&(wavinfo.compressionCode), 2, 1, self->theFile); // part of GUID
-        fseek(self->theFile, 14, SEEK_CUR);                        // skip rest of GUID
+        fseek(self->theFile, 8, SEEK_CUR);                         /* skip channel mask */
+        fread_LE(&(wavinfo.compressionCode), 2, 1, self->theFile); /* part of GUID */
+        fseek(self->theFile, 14, SEEK_CUR);                        /* skip rest of GUID */
         offset = fmt_chunk.chunkSize - 40;
     }
     else
@@ -331,7 +332,7 @@ static WAVEFILEIN *OpenWav(const char *filename, unsigned int *samplerate, short
     /* Skip rest of fmt header if any. */
     for (; offset > 0; offset--)
     {
-        fread(&tmpSize, 1, 1, self->theFile);
+        tmp_return_val = fread(&tmpSize, 1, 1, self->theFile);
     }
 
     do
@@ -367,7 +368,7 @@ static WAVEFILEIN *OpenWav(const char *filename, unsigned int *samplerate, short
         /* Jump over non data chunk. */
         for (; offset > 0; offset--)
         {
-            fread(&tmpSize, 1, 1, self->theFile);
+            tmp_return_val = fread(&tmpSize, 1, 1, self->theFile);
         }
 
     } while (!feof(self->theFile));
@@ -385,6 +386,7 @@ static WAVEFILEIN *OpenWav(const char *filename, unsigned int *samplerate, short
 
     fgetpos(self->theFile, &self->dataChunkPos);
 
+    (void) tmp_return_val;
     return self;
 
 bail:

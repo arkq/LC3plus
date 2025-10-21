@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -11,7 +11,7 @@
 #include "rom_basop_util.h"
 
 void processPerBandEnergy_fx(Word32 *d2_fx, Word16 *d2_fx_exp, Word32 *d_fx, Word16 d_fx_exp,
-                             const Word16 *band_offsets, Word16 fs_idx, Word16 n_bands, Word16 linear, Word16 frame_dms,
+                             const Word16 *band_offsets, Word16 fs_idx, Word16 n_bands, Word16 linear, LC3PLUS_FrameDuration frame_dms,
                              Word8 *scratchBuffer
 #ifdef ENABLE_HR_MODE
                              , Word16 hrmode
@@ -24,6 +24,8 @@ void processPerBandEnergy_fx(Word32 *d2_fx, Word16 *d2_fx_exp, Word32 *d_fx, Wor
 
 
     d2_band_fx_exp = (Word16 *)scratchAlign(scratchBuffer, 0); /* Size = 2 * MAX_BANDS_NUMBER_PLC bytes */
+    bandsOffsetOne = 0; move16();
+    bandsOffsetTwo = 0; move16();
 
 #ifdef ENABLE_HR_MODE
     if (hrmode)
@@ -41,7 +43,17 @@ void processPerBandEnergy_fx(Word32 *d2_fx, Word16 *d2_fx_exp, Word32 *d_fx, Wor
 
     SWITCH (frame_dms)
     {
-    case 25: maxBwBin = maxBwBin >> 2; move16();
+#ifdef CR9_C_ADD_1p25MS
+    case LC3PLUS_FRAME_DURATION_1p25MS: maxBwBin = maxBwBin >> 3; move16();
+        {
+            bandsOffsetOne = bands_offset_with_one_max_1_25ms[fs_idx];
+            move16();
+            bandsOffsetTwo = bands_offset_with_two_max_1_25ms[fs_idx];
+            move16();
+        }
+        BREAK;
+#endif
+    case LC3PLUS_FRAME_DURATION_2p5MS: maxBwBin = maxBwBin >> 2; move16();
         {
             bandsOffsetOne = bands_offset_with_one_max_2_5ms[fs_idx];
             move16();
@@ -49,7 +61,7 @@ void processPerBandEnergy_fx(Word32 *d2_fx, Word16 *d2_fx_exp, Word32 *d_fx, Wor
             move16();
         }
         BREAK;
-    case 50: maxBwBin = maxBwBin >> 1; move16();
+    case LC3PLUS_FRAME_DURATION_5MS: maxBwBin = maxBwBin >> 1; move16();
         {
             bandsOffsetOne = bands_offset_with_one_max_5ms[fs_idx];
             move16();
@@ -57,14 +69,14 @@ void processPerBandEnergy_fx(Word32 *d2_fx, Word16 *d2_fx_exp, Word32 *d_fx, Wor
             move16();
         }
         BREAK;
-    case 75:
+    case LC3PLUS_FRAME_DURATION_7p5MS:
         maxBwBin = (maxBwBin >> 2) * 3; move16();
         bandsOffsetOne = bands_offset_with_one_max_7_5ms[fs_idx];
         move16();
         bandsOffsetTwo = bands_offset_with_two_max_7_5ms[fs_idx];
         move16();
         BREAK;
-    default: /* 100 */
+    case LC3PLUS_FRAME_DURATION_10MS:
         {
             bandsOffsetOne = bands_offset_with_one_max[fs_idx];
             move16();
@@ -72,6 +84,7 @@ void processPerBandEnergy_fx(Word32 *d2_fx, Word16 *d2_fx_exp, Word32 *d_fx, Wor
             move16();
         }
         BREAK;
+    case LC3PLUS_FRAME_DURATION_UNDEFINED: assert(0);
     }
 
     IF (sub(linear, 1) == 0)
@@ -86,30 +99,39 @@ void processPerBandEnergy_fx(Word32 *d2_fx, Word16 *d2_fx_exp, Word32 *d_fx, Wor
 
         SWITCH (frame_dms)
         {
-        case 25:
+#ifdef CR9_C_ADD_1p25MS
+        case LC3PLUS_FRAME_DURATION_1p25MS:
+            bandsOffsetOne = bands_offset_with_one_max_lin_1_25ms[fs_idx];
+            move16();
+            bandsOffsetTwo = bands_offset_with_two_max_lin_1_25ms[fs_idx];
+            move16();
+            BREAK;
+#endif
+        case LC3PLUS_FRAME_DURATION_2p5MS:
             bandsOffsetOne = bands_offset_with_one_max_lin_2_5ms[fs_idx];
             move16();
             bandsOffsetTwo = bands_offset_with_two_max_lin_2_5ms[fs_idx];
             move16();
             BREAK;
-        case 50:
+        case LC3PLUS_FRAME_DURATION_5MS:
             bandsOffsetOne = bands_offset_with_one_max_lin_5ms[fs_idx];
             move16();
             bandsOffsetTwo = bands_offset_with_two_max_lin_5ms[fs_idx];
             move16();
             BREAK;
-        case 75:
+        case LC3PLUS_FRAME_DURATION_7p5MS:
             bandsOffsetOne = bands_offset_with_one_max_lin_7_5ms[fs_idx];
             move16();
             bandsOffsetTwo = bands_offset_with_two_max_lin_7_5ms[fs_idx];
             move16();
             BREAK;
-        case 100:
+        case LC3PLUS_FRAME_DURATION_10MS:
             bandsOffsetOne = bands_offset_with_one_max_lin[fs_idx];
             move16();
             bandsOffsetTwo = bands_offset_with_two_max_lin[fs_idx];
             move16();
             BREAK;
+        case LC3PLUS_FRAME_DURATION_UNDEFINED: assert(0);
         }
     }
 

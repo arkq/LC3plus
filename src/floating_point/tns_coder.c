@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -140,7 +140,7 @@ void poly2rc(LC3_FLOAT* a, LC3_FLOAT* out, LC3_INT len)
 }
 
 
-void processTnsCoder_fl(LC3_FLOAT* x, LC3_INT bw_cutoff_idx, LC3_INT bw_fcbin, LC3_INT fs, LC3_INT N, LC3_INT frame_dms, LC3_INT nBits,
+void processTnsCoder_fl(LC3_FLOAT* x, LC3_INT bw_cutoff_idx, LC3_INT bw_fcbin, LC3_INT fs, LC3_INT N, LC3PLUS_FrameDuration frame_dms, LC3_INT nBits,
                         LC3_INT* order_out, LC3_INT* rc_idx, LC3_INT* tns_numfilters, LC3_INT* bits_out
                         , LC3_INT16 near_nyquist_flag
 )
@@ -157,16 +157,15 @@ void processTnsCoder_fl(LC3_FLOAT* x, LC3_INT bw_cutoff_idx, LC3_INT bw_fcbin, L
 
     /* Init */
 
-    if (fs >= 32000 && frame_dms >= 50) {
+    if (fs >= 32000 && frame_dms >= LC3PLUS_FRAME_DURATION_5MS) {
         numfilters = 2;
     } else {
         numfilters = 1;
     }
 
     /* 40 * frame_dms / 10 = 4 * frame_dms */
-    if (N > 4 * frame_dms)
-    {
-        N = 4 * frame_dms;
+    if (N > 40 * ((LC3_FLOAT) (frame_dms*1.25*10) / 10.0)) {
+        N  = 40 * ((LC3_FLOAT) (frame_dms*1.25*10) / 10.0);
         fs = 40000;
     }
 
@@ -182,27 +181,35 @@ void processTnsCoder_fl(LC3_FLOAT* x, LC3_INT bw_cutoff_idx, LC3_INT bw_fcbin, L
     
     switch (frame_dms)
     {
-        case 25:
+#ifdef CR9_C_ADD_1p25MS
+        case LC3PLUS_FRAME_DURATION_1p25MS:
             maxOrder      = 4;
             nSubdivisions = 2.0;
             break;
-        case 50:
+#endif
+        case LC3PLUS_FRAME_DURATION_2p5MS:
             maxOrder      = 4;
             nSubdivisions = 2.0;
             break;
-        case 75:
+        case LC3PLUS_FRAME_DURATION_5MS:
+            maxOrder      = 4;
+            nSubdivisions = 2.0;
+            break;
+        case LC3PLUS_FRAME_DURATION_7p5MS:
             maxOrder      = 8;
             nSubdivisions = 3;
             break;
-        case 100:
+        case LC3PLUS_FRAME_DURATION_10MS:
             maxOrder      = 8;
             nSubdivisions = 3.0;
             break;
+        case LC3PLUS_FRAME_DURATION_UNDEFINED:
+            assert(0);
     }
 
     minPredictionGain = 1.5;
 
-    if (nBits >= 4.8 * frame_dms) {
+    if (nBits >= 4.8 * ((LC3_FLOAT) frame_dms * 1.25 * 10)) {
         order = order1_tns;
     } else {
         order = order2_tns;
@@ -291,7 +298,7 @@ void processTnsCoder_fl(LC3_FLOAT* x, LC3_INT bw_cutoff_idx, LC3_INT bw_fcbin, L
         if (tns == 1) {
             minPGfac = 0.85;
             maxPG    = 2;
-            if (nBits >= 4.8 * frame_dms) {
+            if (nBits >= 4.8 * frame_dms*1.25*10) {
                 maxPG = minPredictionGain;
             }
 
@@ -333,11 +340,11 @@ void processTnsCoder_fl(LC3_FLOAT* x, LC3_INT bw_cutoff_idx, LC3_INT bw_fcbin, L
 
             order_out[f] = order_tmp;
 
-            // Disable TNS if order is 0:
+            /* Disable TNS if order is 0: */
             if (order_out[f] == 0) {
                 tns = 0;
 
-                // Jump to else statement
+                /* Jump to else statement */
                 goto tns_disabled;
             }
             tmp = order[order_out[f] - 1];

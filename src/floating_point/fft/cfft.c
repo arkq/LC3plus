@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -127,7 +127,9 @@ static void scramble(LC3_FLOAT* re, LC3_FLOAT* im, LC3_INT n, LC3_INT s)
     for (m = 1, j = 0; m < (n - 1); m++) {
         {
             for (k = n >> 1; (!((j ^= k) & k)); k >>= 1)
+            {
                 ;
+            }
         }
 
         if (j > m) {

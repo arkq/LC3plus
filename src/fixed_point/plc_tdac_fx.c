@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -118,6 +118,12 @@ void processTdac_fx(Word16 *ola_mem, Word16 *ola_mem_exp, const Word16 *synth_in
         {
             INV_NORM_E = add(INV_NORM_E, 2);
         }
+#ifdef FIX_PLC_CONFORM_ISSUES
+        if (sub(frame_len, 30) == 0)
+        {
+            INV_NORM_E = add(INV_NORM_E, 2);
+        }
+#endif
     }
 
     /* Scale input */

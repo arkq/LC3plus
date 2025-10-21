@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -193,6 +193,9 @@ typedef struct {
     LC3_INT16       overall_counter;
     LC3_INT8        longterm_counter_byte_position;
     LC3_INT8        longterm_counter_bit_position;
+#ifdef CR13_C_RESET_CLASSIFIER_AFTER_BAD_FRAMES
+    LC3_INT16       numberOfGoodFrames;
+#endif
 } PlcAdvSetup;
 
 #endif

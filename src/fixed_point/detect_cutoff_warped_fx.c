@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -10,7 +10,7 @@
 #include "functions.h"
 #include "rom_basop_util.h"
 
-void processDetectCutoffWarped_fx(Word16 *bw_idx, Word32 *d2_fx, Word16 d2_fx_exp, Word16 fs_idx, Word16 frame_dms)
+void processDetectCutoffWarped_fx(Word16 *bw_idx, Word32 *d2_fx, Word16 d2_fx_exp, Word16 fs_idx, LC3PLUS_FrameDuration frame_dms)
 {
 
     Dyn_Mem_Deluxe_In(
@@ -28,28 +28,39 @@ void processDetectCutoffWarped_fx(Word16 *bw_idx, Word32 *d2_fx, Word16 d2_fx_ex
         const Word16 *warp_idx_start, *warp_idx_stop, *bw_brickwall_dist;
     );
 
+    warp_idx_start = 0;
+    warp_idx_stop = 0;
+    bw_brickwall_dist = 0;
+
     SWITCH (frame_dms)
     {
-    case 25:
+#ifdef CR9_C_ADD_1p25MS
+    case LC3PLUS_FRAME_DURATION_1p25MS:
+        *bw_idx = fs_idx; move16();
+        Dyn_Mem_Deluxe_Out();
+        return;
+#endif
+    case LC3PLUS_FRAME_DURATION_2p5MS:
         warp_idx_start = BW_warp_idx_start_all_2_5ms[fs_idx - 1]; move16();
         warp_idx_stop  = BW_warp_idx_stop_all_2_5ms[fs_idx - 1];  move16();
         bw_brickwall_dist = BW_brickwall_dist_2_5ms;
         BREAK;
-    case 50:
+    case LC3PLUS_FRAME_DURATION_5MS:
         warp_idx_start = BW_warp_idx_start_all_5ms[fs_idx - 1]; move16();
         warp_idx_stop  = BW_warp_idx_stop_all_5ms[fs_idx - 1];  move16();
         bw_brickwall_dist = BW_brickwall_dist_5ms;
         BREAK;
-    case 75:
+    case LC3PLUS_FRAME_DURATION_7p5MS:
         warp_idx_start = BW_warp_idx_start_all_7_5ms[fs_idx - 1]; move16();
         warp_idx_stop  = BW_warp_idx_stop_all_7_5ms[fs_idx - 1];  move16();
         bw_brickwall_dist = BW_brickwall_dist_7_5ms;
         BREAK;
-    default:                                                /* 100 */
+    case LC3PLUS_FRAME_DURATION_10MS:
         warp_idx_start = BW_warp_idx_start_all[fs_idx - 1]; move16();
         warp_idx_stop  = BW_warp_idx_stop_all[fs_idx - 1];  move16();
         bw_brickwall_dist = BW_brickwall_dist;
         BREAK;
+    case LC3PLUS_FRAME_DURATION_UNDEFINED: assert(0);
     }
 
     counter = fs_idx;

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -659,6 +659,20 @@ const PWord16 SineWindow20[10] = {
     WTCP(0x6fadf2fb, 0x3e8b240e), WTCP(0x6a6d98a3, 0x471cece6), WTCP(0x648543e3, 0x4f3e7874),
     WTCP(0x5dfe47ad, 0x56e2f15d),
 };
+    
+#  if (defined CR9_C_ADD_1p25MS)
+#    ifdef ENABLE_HR_MODE
+const PWord32 SineWindow30[] = {
+#    else
+const PWord16 SineWindow30[] = {
+#    endif
+  WTCP(0x7ff4c56f, 0x0359c428), WTCP(0x7f9afcb9, 0x0a0af299), WTCP(0x7ee7aa4c, 0x10b5150f), WTCP(0x7ddb4bfc, 0x17537e63), 
+  WTCP(0x7c769e18, 0x1de189a6), WTCP(0x7aba9ae6, 0x245a9d65), WTCP(0x78a879f4, 0x2aba2ee4), WTCP(0x7641af3d, 0x30fbc54d), 
+  WTCP(0x7387ea23, 0x371afcd5), WTCP(0x707d1443, 0x3d1389cb), WTCP(0x6d23501b, 0x42e13ba4), WTCP(0x697cf78a, 0x487fffe4), 
+  WTCP(0x658c9a2d, 0x4debe4fe), WTCP(0x6154fb91, 0x53211d18), WTCP(0x5cd91140, 0x581c00b3), WTCP(0x5cd91140, 0x581c00b3),
+
+};
+#  endif
 
 #    ifdef ENABLE_HR_MODE
 const PWord32 SineWindow40[20] = {
@@ -1360,13 +1374,14 @@ const PWord32 SineWindow960[480] = {
 };
 #  endif
     
-//    fs  48  32  24  16  8
-// ms   +--------------------
-// 10.0 | 480 320 240 160 80
-//  7.5 | 360 240 180 120 60
-//  5.0 | 240 160 120  80 40
-//  2.5 | 120  80  60  40 20
-
+/*
+    fs  48  32  24  16  8
+ ms   +--------------------
+ 10.0 | 480 320 240 160 80
+  7.5 | 360 240 180 120 60
+  5.0 | 240 160 120  80 40
+  2.5 | 120  80  60  40 20
+*/ 
 void BASOP_getTables(
 #ifdef ENABLE_HR_MODE
                      const PWord32 **twiddle, const PWord32 **sin,
@@ -1385,6 +1400,17 @@ void BASOP_getTables(
         *twiddle = SineWindow20;
         move16();
         BREAK;
+#ifdef CR9_C_ADD_1p25MS
+        /* 24 kHz 1.25 ms */
+    case 30:
+        *sin = SineTable360;
+        move16();
+        *sin_step = 24;
+        move16();
+        *twiddle = SineWindow30;
+        move16();
+        BREAK;
+#endif
     case 40:
         *sin = SineTable320;
         move16();

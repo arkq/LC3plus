@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -12,10 +12,9 @@
 void processNearNyquistdetector_fx(Word16 *near_nyquist_flag, const Word16 fs_idx, const Word16 near_nyquist_index,
                                    const Word16 bands_number, const Word32 *ener_fx, const Word16 ener_fx_exp
 #ifdef ENABLE_HR_MODE
-                                   , Word16 frame_dms, Word16 hrmode)
-#else
-                                   )
+                                   ,LC3PLUS_FrameDuration frame_dms, Word16 hrmode
 #endif
+                                   )
 {
     *near_nyquist_flag = 0;
 #ifdef ENABLE_HR_MODE
@@ -62,25 +61,31 @@ void processNearNyquistdetector_fx(Word16 *near_nyquist_flag, const Word16 fs_id
         }
 #ifdef ENABLE_HR_MODE
     } 
-    ELSE // hrmode == 1 
+    ELSE /* hrmode == 1 */ 
     {
-        // inverse spectral flatness = mean(energy) ./ 2^(mean(log2(energy)));
-        Word32 td_thresh;
+        /* inverse spectral flatness = mean(energy) ./ 2^(mean(log2(energy))); */
+        Word32 td_thresh = 0;
 
         SWITCH (frame_dms)
         {
-        case 25:
+#ifdef CR9_C_ADD_1p25MS
+        case LC3PLUS_FRAME_DURATION_1p25MS:
+            assert(0);
+            BREAK;
+#endif
+        case LC3PLUS_FRAME_DURATION_2p5MS:
             td_thresh = TD_HR_thresh_2_5ms;
             BREAK;
-        case 50:
+        case LC3PLUS_FRAME_DURATION_5MS:
             td_thresh = TD_HR_thresh_5ms;
             BREAK;
-        case 75:
+        case LC3PLUS_FRAME_DURATION_7p5MS:
             td_thresh = TD_HR_thresh_7_5ms;
             BREAK;
-        default:                             /* 100 */
+        case LC3PLUS_FRAME_DURATION_10MS:
             td_thresh = TD_HR_thresh_10ms;
             BREAK;
+        case LC3PLUS_FRAME_DURATION_UNDEFINED: assert(0);
         }
 
         Word16 mean_ener_exp = 0;
@@ -93,11 +98,11 @@ void processNearNyquistdetector_fx(Word16 *near_nyquist_flag, const Word16 fs_id
         }
 
         Word16 denom = sub(14,norm_s(bands_number));
-        IF (sub(frame_dms, 50) == 0){
+        IF (sub(frame_dms, LC3PLUS_FRAME_DURATION_5MS) == 0){
             denom = sub(15,norm_s(bands_number)); move16();
         }
 
-        Word32 mean_ener = L_shr(sum_ener, denom); move32(); // = sum_ener / bands_number
+        Word32 mean_ener = L_shr(sum_ener, denom); move32();  
         mean_ener_exp = sum_ener_exp; move16();
 
         Word32 sum_ener_log2 = 0;move32();
@@ -127,5 +132,5 @@ void processNearNyquistdetector_fx(Word16 *near_nyquist_flag, const Word16 fs_id
             *near_nyquist_flag = 1; move16();
         } 
     }
-    #endif // ENABLE_HR_MODE
+    #endif /* ENABLE_HR_MODE */
 }

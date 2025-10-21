@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -15,7 +15,7 @@
 void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[], Word16 *pitch, Word16 *s12k8,
                      Word16 len, Word16 *normcorr, Word16 *mem_pitch, 
                      Word16 *pitch_flag,                   
-                     Word16 s12k8_exp, Word16 frame_dms, Word8 *scratchBuffer)
+                     Word16 s12k8_exp, LC3PLUS_FrameDuration frame_dms, Word8 *scratchBuffer)
 {
     Word32  sum, sum0, sum1, sum2, prod, inv;
     Word16  shift, s6k4_exp, prod_exp, min_pitch, max_pitch;
@@ -54,15 +54,24 @@ void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[]
 
     SWITCH(frame_dms)
     {
-        case 50:
+        case LC3PLUS_FRAME_DURATION_10MS: break;
+        case LC3PLUS_FRAME_DURATION_7p5MS: break;
+        case LC3PLUS_FRAME_DURATION_5MS:
             mem_in_len = add(mem_in_len, 32);
             acflen     = add(acflen, 32);
             break;
 
-        case 25:
+        case LC3PLUS_FRAME_DURATION_2p5MS:
             mem_in_len = add(mem_in_len, 48);
             acflen     = add(acflen, 48);
             break;
+        case LC3PLUS_FRAME_DURATION_UNDEFINED: assert(0);
+#ifdef CR9_C_ADD_1p25MS
+        case LC3PLUS_FRAME_DURATION_1p25MS:
+            mem_in_len = add(mem_in_len, 56);
+            acflen     = add(acflen, 56);
+            break;
+#endif
     }
 
     s6k4    = mem_s6k4 + mem_in_len;
@@ -103,13 +112,21 @@ void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[]
 
     SWITCH(frame_dms)
     {
-        case 50:
+        case LC3PLUS_FRAME_DURATION_10MS: break;
+        case LC3PLUS_FRAME_DURATION_7p5MS: break;
+        case LC3PLUS_FRAME_DURATION_5MS:
             s6k4 = s6k4 - 32;
             break;
         
-        case 25:
+        case LC3PLUS_FRAME_DURATION_2p5MS:
             s6k4 = s6k4 - 48;
             break;
+#ifdef CR9_C_ADD_1p25MS
+        case LC3PLUS_FRAME_DURATION_1p25MS:
+            s6k4 = s6k4 - 56;
+            break;
+#endif
+        case LC3PLUS_FRAME_DURATION_UNDEFINED: assert(0);
     }
 
     Scale_sig(mem_s6k4, mem_in_len, shift);
@@ -229,7 +246,7 @@ void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[]
 
     SWITCH(frame_dms)
     {
-        case 50:
+        case LC3PLUS_FRAME_DURATION_5MS:
             if(*pitch_flag == 1) {
                 *mem_pitch = *pitch; move16();
                 *pitch_flag = 0;
@@ -239,7 +256,7 @@ void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[]
             }
             break;
         
-        case 25:
+        case LC3PLUS_FRAME_DURATION_2p5MS:
             if (*pitch_flag == 3) {
                 *mem_pitch   = *pitch; move16();
                 *pitch_flag = 0;
@@ -248,6 +265,17 @@ void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[]
                 *pitch_flag += 1;
             }
             break;
+#ifdef CR9_C_ADD_1p25MS     
+        case LC3PLUS_FRAME_DURATION_1p25MS:
+            if (*pitch_flag == 7) {
+                *mem_pitch   = *pitch; move16();
+                *pitch_flag = 0;
+            }
+            else {
+                *pitch_flag += 1;
+            }
+            break;
+#endif
 
         default:
 

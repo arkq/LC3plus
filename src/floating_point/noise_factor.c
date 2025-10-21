@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -9,7 +9,7 @@
 
 #include "functions.h"
 
-void processNoiseFactor_fl(LC3_INT* fac_ns_idx, LC3_FLOAT x[], LC3_INT xq[], LC3_FLOAT gg, LC3_INT BW_cutoff_idx, LC3_INT frame_dms,
+void processNoiseFactor_fl(LC3_INT* fac_ns_idx, LC3_FLOAT x[], LC3_INT xq[], LC3_FLOAT gg, LC3_INT BW_cutoff_idx, LC3PLUS_FrameDuration frame_dms,
                            LC3_INT target_bytes
 )
 {
@@ -19,22 +19,30 @@ void processNoiseFactor_fl(LC3_INT* fac_ns_idx, LC3_FLOAT x[], LC3_INT xq[], LC3
 
     switch (frame_dms)
     {
-        case 25:
+#ifdef CR9_C_ADD_1p25MS
+        case LC3PLUS_FRAME_DURATION_1p25MS:
             nTransWidth = 1;
             startOffset = 6;
             break;
-        case 50:
+#endif
+        case LC3PLUS_FRAME_DURATION_2p5MS:
+            nTransWidth = 1;
+            startOffset = 6;
+            break;
+        case LC3PLUS_FRAME_DURATION_5MS:
             nTransWidth = 1;
             startOffset = 12;
             break;
-        case 75:
+        case LC3PLUS_FRAME_DURATION_7p5MS:
             nTransWidth = 2;
             startOffset = 18;
             break;
-        case 100:
+        case LC3PLUS_FRAME_DURATION_10MS:
             nTransWidth = 3;
             startOffset = 24;
             break;
+        case LC3PLUS_FRAME_DURATION_UNDEFINED:
+            assert(0);
     }
 
     for (k = startOffset - nTransWidth; k < startOffset + nTransWidth; k++)
@@ -89,7 +97,7 @@ void processNoiseFactor_fl(LC3_INT* fac_ns_idx, LC3_FLOAT x[], LC3_INT xq[], LC3
 
 
 
-        if (kZeroLines > 1 && target_bytes <= 20 && frame_dms == 100) {
+        if (kZeroLines > 1 && target_bytes <= 20 && frame_dms == LC3PLUS_FRAME_DURATION_10MS) {
 
             j = 0, k = 0, nsf1 = 0, nsf2 = 0, sumZeroLines = 0;
 

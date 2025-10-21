@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -39,12 +39,20 @@ void processInverseODFT_fx(Word32 *r_fx, Word16 *r_fx_exp, Word32 *d2_fx, Word16
     buffer_BASOP_rfftN = scratchAlign(x, sizeof(*x) * (MAX_BANDS_NUMBER_PLC + MAX_BANDS_NUMBER_PLC/2)); /* Size = 480 bytes */
 
     ASSERT(lpc_order <= M);
+#ifdef FIX_PLC_CONFORM_ISSUES
+    ASSERT(n_bands == 80 || n_bands == 60 || n_bands == 40 || n_bands == 30 || n_bands == 20);
+#else
     ASSERT(n_bands == 80 || n_bands == 60 || n_bands == 40 || n_bands == 20);
+#endif
 
     n_bands2 = shr_pos_pos(n_bands, 1);
 
     test();
-    IF (sub(n_bands, 20) == 0 || sub(n_bands, 60) == 0)
+#ifdef FIX_PLC_CONFORM_ISSUES
+    IF( sub(n_bands, 20) == 0 || sub( n_bands, 30) == 0 || sub( n_bands, 60) == 0 )
+#else
+    IF( sub(n_bands, 20) == 0 || sub( n_bands, 60) == 0 )
+#endif
     {
       /* sort input samples */
         FOR (i = 0; i < n_bands2; i++)
@@ -75,6 +83,13 @@ void processInverseODFT_fx(Word32 *r_fx, Word16 *r_fx_exp, Word32 *d2_fx, Word16
         inv_odft_twiddle_re = inv_odft_twiddle_20_re;
         inv_odft_twiddle_im = inv_odft_twiddle_20_im;
     }
+#ifdef FIX_PLC_CONFORM_ISSUES
+    ELSE IF(sub(n_bands, 30) == 0 )
+    {
+        inv_odft_twiddle_re = inv_odft_twiddle_30_re;
+        inv_odft_twiddle_im = inv_odft_twiddle_30_im;
+    }
+#endif
     ELSE IF (sub(n_bands, 40) == 0)
     {
         inv_odft_twiddle_re = inv_odft_twiddle_40_re;

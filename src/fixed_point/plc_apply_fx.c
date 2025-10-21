@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -23,7 +23,7 @@ void processPLCapply_fx(
                         Word16 x_fx[], Word16 ola_mem[],
                         Word16 *ola_mem_exp, Word16 q_old_d_fx[], Word16 *q_old_fx_exp, Word32 q_d_fx[],
                         Word16 *q_fx_exp, Word16 yLen, Word16 fs_idx, Word16 *damping, Word16 old_pitch_int,
-                        Word16 old_pitch_fr, Word16 *ns_cum_alpha, Word16 *ns_seed, Word16 frame_dms, AplcSetup *plcAd,
+                        Word16 old_pitch_fr, Word16 *ns_cum_alpha, Word16 *ns_seed, LC3PLUS_FrameDuration frame_dms, AplcSetup *plcAd,
                         Word8 *scratchBuffer
 #ifdef ENABLE_HR_MODE
                         , Word16 hrmode
@@ -58,9 +58,9 @@ void processPLCapply_fx(
     UNUSED(rel_pitch_change);
 #endif
 
-    Word16 thresh_tdc_cnt;
-    Word16 thresh_ns_cnt;
-    Word16 thresh_tdc_ns_cnt;
+    Word16 thresh_tdc_cnt = 0;
+    Word16 thresh_ns_cnt = 0;
+    Word16 thresh_tdc_ns_cnt = 0;
 
     band_offsets = NULL;
 
@@ -91,23 +91,31 @@ void processPLCapply_fx(
     {
             SWITCH(frame_dms)
             {
-                case 25: 
+#ifdef CR9_C_ADD_1p25MS
+                case LC3PLUS_FRAME_DURATION_1p25MS: 
+                    consecutiveLostThreshold  = 32;
+                    thresh_tdc_cnt = THRESH_025_DMS_TDC_CNT;
+                    thresh_ns_cnt = THRESH_025_DMS_NS_CNT;
+                    thresh_tdc_ns_cnt =  THRESH_025_DMS_TDC_NS_CNT;
+                    BREAK;
+#endif
+                case LC3PLUS_FRAME_DURATION_2p5MS: 
                     consecutiveLostThreshold  = 16;
                     thresh_tdc_cnt = THRESH_025_DMS_TDC_CNT;
                     thresh_ns_cnt = THRESH_025_DMS_NS_CNT;
                     thresh_tdc_ns_cnt =  THRESH_025_DMS_TDC_NS_CNT;                  
                     break;
-                case 50: consecutiveLostThreshold  = 8;  
+                case LC3PLUS_FRAME_DURATION_5MS: consecutiveLostThreshold  = 8;  
                     thresh_tdc_cnt = THRESH_050_DMS_TDC_CNT;
                     thresh_ns_cnt = THRESH_050_DMS_NS_CNT;
                     thresh_tdc_ns_cnt =  THRESH_050_DMS_TDC_NS_CNT;                
                     break;
-                case 75: consecutiveLostThreshold  = 6;
+                case LC3PLUS_FRAME_DURATION_7p5MS: consecutiveLostThreshold  = 6;
                     thresh_tdc_cnt = THRESH_075_DMS_TDC_CNT;
                     thresh_ns_cnt = THRESH_075_DMS_NS_CNT;
                     thresh_tdc_ns_cnt =  THRESH_075_DMS_TDC_NS_CNT;                  
                     break;
-                case 100: consecutiveLostThreshold = 4;  
+                case LC3PLUS_FRAME_DURATION_10MS: consecutiveLostThreshold = 4;  
                     thresh_tdc_cnt = THRESH_100_DMS_TDC_CNT;
                     thresh_ns_cnt = THRESH_100_DMS_NS_CNT;
                     thresh_tdc_ns_cnt =  THRESH_100_DMS_TDC_NS_CNT;
@@ -135,8 +143,9 @@ void processPLCapply_fx(
                 {
                     plcAd->plc_fadeout_type = 0;
                 }
+
 #ifdef ENABLE_HR_MODE
-            IF (L_sub(rel_pitch_change,REL_PITCH_THRESH) > 0 && sub(hrmode,1) == 0 && (sub(frame_dms,50) == 0 || sub(frame_dms,25) == 0)){
+            IF (L_sub(rel_pitch_change,REL_PITCH_THRESH) > 0 && sub(hrmode,1) == 0 && (sub(frame_dms, LC3PLUS_FRAME_DURATION_5MS) == 0 || sub(frame_dms, LC3PLUS_FRAME_DURATION_2p5MS) == 0)){
                 plcAd->plc_fadeout_type = 2;move16();
             } ELSE 
 #endif
@@ -151,7 +160,7 @@ void processPLCapply_fx(
         SWITCH (*concealMethod)
         {
         case LC3_CON_TEC_PHASE_ECU:
-            ASSERT(frame_dms == 100);
+            ASSERT(frame_dms == LC3PLUS_FRAME_DURATION_10MS);
             /* call phaseEcu */
             env_stab        = 32767; move16();                 /* 1.0=stable , 0.0=dynamic Q15*/
             tmp_is_trans[0] = plcAd->PhECU_short_flag_prev; move16();
@@ -254,21 +263,32 @@ void processPLCapply_fx(
                 n_bands          = s_min(frame_length, MAX_BANDS_NUMBER_PLC);
                 SWITCH (frame_dms)
                 {
-                case 25:
+#ifdef CR9_C_ADD_1p25MS
+                case LC3PLUS_FRAME_DURATION_1p25MS:
+#ifdef FIX_PLC_CONFORM_ISSUES
+                    band_offsets = bands_offset_lin_1_25ms[fs_idx];  move16();
+#endif
+                    IF (sub(fs_idx, 4) == 0)
+                    {
+                        n_bands = 60;  move16();
+                    }
+                    BREAK;
+#endif
+                case LC3PLUS_FRAME_DURATION_2p5MS:
                     band_offsets = bands_offset_lin_2_5ms[fs_idx];  move16();
                     IF (sub(fs_idx, 4) == 0)
                     {
                         n_bands = 60;  move16();
                     }
                     BREAK;
-                case 50:
+                case LC3PLUS_FRAME_DURATION_5MS:
                     band_offsets = bands_offset_lin_5ms[fs_idx]; move16();
                     IF (sub(fs_idx, 2) == 0)
                     {
                         n_bands = 40; move16();
                     }
                     BREAK;
-                case 75:
+                case LC3PLUS_FRAME_DURATION_7p5MS:
                     band_offsets = bands_offset_lin_7_5ms[fs_idx];  move16();
 #        ifdef ENABLE_HR_MODE
                     IF (sub(fs_idx, 5) != 0)
@@ -282,9 +302,10 @@ void processPLCapply_fx(
                     }
 #        endif
                     BREAK;
-                case 100:
+                case LC3PLUS_FRAME_DURATION_10MS:
                     band_offsets = bands_offset_lin[fs_idx]; move16();
                     BREAK;
+                case LC3PLUS_FRAME_DURATION_UNDEFINED: assert(0);
                 }
 
                 FOR (i = 0; i < yLen; i++)

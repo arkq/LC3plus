@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -88,7 +88,9 @@ static LC3_INT16 pc_check_bytes(LC3_INT32* bp, Decoder_State_fl* st_fl, LC3_INT3
             {
                 bp_side_local = bp_side_local + 1;
             }
-        } else {
+        } 
+        else 
+        {
             bp_local = bp_local - 1;
         }
         
@@ -129,12 +131,16 @@ static LC3_INT16 pc_check_bytes(LC3_INT32* bp, Decoder_State_fl* st_fl, LC3_INT3
             
             if (st_fl->pc_bfi == 2)
             {
-                
+#ifdef CR13_B_FIX_PC_BINS
+                if (st_fl->pc_c_bp_side && (*bp_side + 1) <= st_fl->pc_be_bp_right)
+#else
                 if ((st_fl->pc_c_bp && (*bp + 1) >= st_fl->pc_be_bp_left) || (st_fl->pc_c_bp_side && (*bp_side + 1) <= st_fl->pc_be_bp_right))
+#endif
                 {
                     st_fl->pc_inv_bin = cur_bin;
                     return 1;
-                } else if ((st_fl->pc_c_bp && *bp >= 0) || (st_fl->pc_c_bp_side && *bp_side <= (st_fl->pc_bytes - 1)))
+                } 
+                else if ((st_fl->pc_c_bp && *bp >= 0) || (st_fl->pc_c_bp_side && *bp_side <= (st_fl->pc_bytes - 1)))
                 {
                     st_fl->pc_inv_bin = MIN(st_fl->pc_inv_bin, cur_bin);
                     return 0;
@@ -148,6 +154,53 @@ static LC3_INT16 pc_check_bytes(LC3_INT32* bp, Decoder_State_fl* st_fl, LC3_INT3
 #endif   
     return 0;
 }
+
+#ifdef CR13_B_FIX_PC_BINS
+static LC3_INT16 pc_check_bytes_ac_decode(LC3_INT32* bp, Decoder_State_fl* st_fl, LC3_INT32 from_left, LC3_INT32 mask_side, LC3_INT32* bp_side, LC3_INT16 cur_bin)
+{
+    LC3_INT32 bp_local, bp_side_local;
+#ifdef WMOPS
+    push_wmops("pc_check_bytes");
+#endif
+
+    if (st_fl->pc_bytes > 0)
+    {
+        bp_local = *bp;
+        bp_side_local = *bp_side;
+
+        if (from_left)
+        {
+            if (mask_side == 1)
+            {
+                bp_side_local = bp_side_local + 1;
+            }
+        }
+        else 
+        {
+            bp_local = bp_local - 1;
+        }
+
+ 
+        if (!st_fl->pc_enc && st_fl->pc_b_right > -1)
+        {
+
+            if (st_fl->pc_bfi == 2)
+            {
+                if ((st_fl->pc_c_bp && (*bp) > st_fl->pc_be_bp_left))
+                {
+                    st_fl->pc_inv_bin = cur_bin;
+                    return 1;
+                }
+            }
+        }
+    }
+
+#ifdef WMOPS
+    pop_wmops();
+#endif   
+    return 0;
+}
+#endif
 
 void ac_dec_init_fl(LC3_UINT8* ptr, LC3_INT* bp, Decoder_State_fl* st_fl, LC3_INT from_left, LC3_INT mask_side, LC3_INT *bp_side)
 {
@@ -182,15 +235,25 @@ LC3_INT32 ac_decode_fl(Decoder_State_fl* st, const LC3_INT16* freq, LC3_INT32 nu
     push_wmops("ac_decode_fl");    
 #endif
 
+#ifdef CR13_B_FIX_PC_BINS
+    if (pc_check_bytes_ac_decode(bp, st, from_left, mask_side, bp_side, cur_bin) != 0)
+    {
+        st->BER_detect = 1;
+        return 0;
+    }
+#endif
+
     tmp = st->ac_range_fl >> 10;
 
-    if (st->ac_low_fl >= (LC3_UINT32)(tmp << 10)) {
+    if (st->ac_low_fl >= (LC3_UINT32)(tmp << 10)) 
+    {
         st->BER_detect = 1;
     }
 
     val = num_sym - 1;
 
-    while (st->ac_low_fl < (LC3_UINT32)(tmp * freq[val])) {
+    while (st->ac_low_fl < (LC3_UINT32)(tmp * freq[val])) 
+    {
         val--;
     }
     
@@ -199,7 +262,8 @@ LC3_INT32 ac_decode_fl(Decoder_State_fl* st, const LC3_INT16* freq, LC3_INT32 nu
     st->ac_low_fl   = st->ac_low_fl - tmp * freq[val];
     st->ac_range_fl = tmp * symfreq_loc;
 
-    while (st->ac_range_fl < 65536) {
+    while (st->ac_range_fl < 65536) 
+    {
         st->ac_low_fl   = ((LC3_INT32)st->ac_low_fl) & ((LC3_INT32)(16777215));
 
         if(pc_check_bytes(bp, st, from_left, mask_side, bp_side, cur_bin) != 0)
@@ -207,7 +271,7 @@ LC3_INT32 ac_decode_fl(Decoder_State_fl* st, const LC3_INT16* freq, LC3_INT32 nu
             st->BER_detect = 1;
             return 1;
         }
-        
+
         st->ac_low_fl   = st->ac_low_fl << 8;
         st->ac_low_fl   = st->ac_low_fl + ptr[*bp];
         *bp             = *bp + 1;
@@ -239,7 +303,7 @@ void read_bit_fl(LC3_UINT8* ptr, LC3_INT* mask_side, LC3_INT* bp_side, LC3_INT* 
 void processAriDecoder_fl(LC3_UINT8* bytes, LC3_INT bp_side, LC3_INT mask_side, LC3_INT L_spec, LC3_INT fs_idx, LC3_INT enable_lpc_weighting,
                           LC3_INT tns_numfilters, LC3_INT lsbMode, LC3_INT lastnz, LC3_INT* bfi, LC3_INT* tns_order, LC3_INT fac_ns_idx,
                           LC3_INT gg_idx, uint8_t * resBits, LC3_INT* x, LC3_INT* nf_seed, LC3_INT* tns_idx, LC3_INT* zero_frame, LC3_INT numbytes,
-                          LC3_INT* nbits_residual, LC3_INT* residualPresent, LC3_INT frame_dms,
+                          LC3_INT* nbits_residual, LC3_INT* residualPresent, LC3PLUS_FrameDuration frame_dms,
                           LC3_INT32 n_pc, LC3_INT32 be_bp_left, LC3_INT32 be_bp_right, LC3_INT32 enc, LC3_INT32 *b_left, LC3_INT32 *spec_inv_idx,
                           LC3_INT hrmode
 )
@@ -296,7 +360,7 @@ void processAriDecoder_fl(LC3_UINT8* bytes, LC3_INT bp_side, LC3_INT mask_side, 
     tmp = MAXLAG;
     
 
-    if (frame_dms <= 50)
+    if (frame_dms <= LC3PLUS_FRAME_DURATION_5MS)
     {
         tmp /= 2;
     }
@@ -332,11 +396,13 @@ void processAriDecoder_fl(LC3_UINT8* bytes, LC3_INT bp_side, LC3_INT mask_side, 
     }
 
     /* Spectral data */
-    for (k = 0; k < lastnz; k = k + 2) {
+    for (k = 0; k < lastnz; k = k + 2) 
+    {
         /* Context */
         t = c + rateFlag;
 
-        if (k > (L_spec >> 1)) {
+        if (k > (L_spec >> 1)) 
+        {
             t = t + 256;
         }
 
@@ -344,23 +410,29 @@ void processAriDecoder_fl(LC3_UINT8* bytes, LC3_INT bp_side, LC3_INT mask_side, 
         x[k]     = 0;
         x[k + 1] = 0;
 
-        if (hrmode == 1) {
+        if (hrmode == 1) 
+        {
             max_lev = 13 + 8;
-        } else {
+        } 
+        else
+        {
             max_lev = 13;
         }
 
-        for (lev = 0; lev <= max_lev; lev++) {
+        for (lev = 0; lev <= max_lev; lev++) 
+        {
             lev1 = MIN(lev, 3);
             pki  = ari_spec_lookup_fl[t + lev1 * 1024];
 
             sym = ac_decode_fl(&st, &ari_spec_cumfreq_fl[pki][0], 17, ptr, &bp, 1, mask_side, &bp_side, k);
 
-            if (sym < 16) {
+            if (sym < 16) 
+            {
                 break;
             }
 
-            if (lsbMode == 0 || lev > 0) {
+            if (lsbMode == 0 || lev > 0) 
+            {
                 if(pc_check_bytes(&bp, &st, 0, mask_side, &bp_side, k) != 0)
                 {
                     goto ber_detect;
@@ -493,6 +565,12 @@ void processAriDecoder_fl(LC3_UINT8* bytes, LC3_INT bp_side, LC3_INT mask_side, 
         {
             idx_len *= EXT_RES_ITER_MAX;
         }
+#  ifdef CR9_C_ADD_1p25MS
+        if (frame_dms == LC3PLUS_FRAME_DURATION_1p25MS) {
+            idx_len *= 3;
+        }
+#  endif
+
         *nbits_residual  = MIN(*nbits_residual, idx_len);
         *residualPresent = 1;
 
@@ -703,7 +781,7 @@ void ac_shift_fl(Encoder_State_fl* st)
         st->carry_count = st->carry_count + 1;
     }
 
-    st->low = st->low << 8;
+    st->low = (LC3_INT)((LC3_UINT32)st->low << 8);
     st->low = (st->low) & (16777215); /* 2^24 - 1 */
 }
 

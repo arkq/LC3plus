@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -10,7 +10,7 @@
 #include "functions.h"
 
 void processAdjustGlobalGain_fl(LC3_INT* gg_idx, LC3_INT gg_idx_min, LC3_INT gg_idx_off, LC3_FLOAT* gain, LC3_INT target, LC3_INT nBits, LC3_INT* gainChange, LC3_INT fs_idx
-    , LC3_INT16 hrmode, LC3_INT16 frame_dms
+    , LC3_INT16 hrmode, LC3PLUS_FrameDuration frame_dms
     )
 {
     LC3_FLOAT delta;
@@ -18,7 +18,7 @@ void processAdjustGlobalGain_fl(LC3_INT* gg_idx, LC3_INT gg_idx_min, LC3_INT gg_
     LC3_INT   gg_idx_inc;
     LC3_FLOAT factor;
 
-    if (frame_dms == 25)
+    if (frame_dms == LC3PLUS_FRAME_DURATION_2p5MS)
     {
         if (target < 520)
         {
@@ -26,11 +26,11 @@ void processAdjustGlobalGain_fl(LC3_INT* gg_idx, LC3_INT gg_idx_min, LC3_INT gg_
         } else {
             factor = 4;
         }
-    } else if (frame_dms == 50)
+    } else if (frame_dms == LC3PLUS_FRAME_DURATION_5MS)
     {
         factor = 2;
     }
-    else if (frame_dms == 75)
+    else if (frame_dms == LC3PLUS_FRAME_DURATION_7p5MS)
     {
         factor = 1.2;
     }

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -9,30 +9,38 @@
 
 #include "functions.h"
 
-void processNoiseFilling_fl(LC3_FLOAT xq[], LC3_INT nfseed, LC3_INT fac_ns_idx, LC3_INT bw_stopband, LC3_INT frame_dms, LC3_FLOAT fac_ns_pc, LC3_INT spec_inv_idx)
+void processNoiseFilling_fl(LC3_FLOAT xq[], LC3_INT nfseed, LC3_INT fac_ns_idx, LC3_INT bw_stopband, LC3PLUS_FrameDuration frame_dms, LC3_FLOAT fac_ns_pc, LC3_INT spec_inv_idx)
 {
     LC3_INT   zeroLines[MAX_LEN];
-    LC3_INT   nTransWidth, startOffset, j, k, nzeros = 0, kZeroLines;
+    LC3_INT   nTransWidth = 0, startOffset = 0, j, k, nzeros = 0, kZeroLines;
     LC3_FLOAT fac_ns = 0;
 
     switch (frame_dms)
     {
-        case 25:
+#ifdef CR9_C_ADD_1p25MS
+        case LC3PLUS_FRAME_DURATION_1p25MS:
             nTransWidth = 1;
             startOffset = 6;
             break;
-        case 50:
+#endif
+        case LC3PLUS_FRAME_DURATION_2p5MS:
+            nTransWidth = 1;
+            startOffset = 6;
+            break;
+        case LC3PLUS_FRAME_DURATION_5MS:
             nTransWidth = 1;
             startOffset = 12;
             break;
-        case 75:
+        case LC3PLUS_FRAME_DURATION_7p5MS:
             nTransWidth = 2;
             startOffset = 18;
             break;
-        case 100:
+        case LC3PLUS_FRAME_DURATION_10MS:
             nTransWidth = 3;
             startOffset = 24;
             break;
+        case LC3PLUS_FRAME_DURATION_UNDEFINED:
+            assert(0);
     }
 
     fac_ns = (8.0 - fac_ns_idx) / 16.0;

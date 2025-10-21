@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -16,13 +16,13 @@ void fft_init(Fft* fft, int length)
 {
     HANDLE_IIS_FFT handle = NULL;
     IIS_FFT_ERROR error = 0;
-    assert(length % 2 == 0);
     
     fft->length = length;
     
     error = LC3_IIS_CFFT_Create(&handle, length, IIS_FFT_FWD);
     
     assert(error == IIS_FFT_NO_ERROR);
+    (void) error;
     fft->handle = handle;
 }
 
@@ -36,6 +36,8 @@ void fft_free(Fft* fft)
         assert(error == IIS_FFT_NO_ERROR);
         memset(fft, 0, sizeof(*fft));
     }
+
+    (void) error;
 }
 
 void real_fft_free(Fft* fft)
@@ -48,6 +50,8 @@ void real_fft_free(Fft* fft)
         assert(error == IIS_FFT_NO_ERROR);
         memset(fft, 0, sizeof(*fft));
     }
+
+    (void) error;
 }
 
 void real_fft_init(Fft* fft, LC3_INT32 length, HANDLE_IIS_FFT *handle)
@@ -60,6 +64,8 @@ void real_fft_init(Fft* fft, LC3_INT32 length, HANDLE_IIS_FFT *handle)
     error = LC3_IIS_RFFT_Create(handle, length, IIS_FFT_FWD);
     assert(error == IIS_FFT_NO_ERROR);
     fft->handle = *handle;
+
+    (void) error;
 }
 
 
@@ -74,6 +80,8 @@ void real_ifft_init(Fft* fft, LC3_INT32 length, HANDLE_IIS_FFT *handle)
 
     assert(error == IIS_FFT_NO_ERROR);
     fft->handle = *handle;
+
+    (void) error;
 }
 
 void fft_apply(Fft* fft, const Complex* input, Complex* output)
@@ -82,6 +90,8 @@ void fft_apply(Fft* fft, const Complex* input, Complex* output)
     error = LC3_IIS_FFT_Apply_CFFT(fft->handle, input, output);
     
     assert(error == IIS_FFT_NO_ERROR);
+
+    (void) error;
 }
 
 
@@ -94,5 +104,7 @@ void real_fft_apply(Fft* fft, const LC3_FLOAT* input, LC3_FLOAT* output)
     error = LC3_IIS_FFT_Apply_RFFT(fft->handle, input, output);  
 
     assert(error == IIS_FFT_NO_ERROR);
+
+    (void) error;
 }
 

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -8,6 +8,12 @@
 ******************************************************************************/
 
 #include "functions.h"
+
+#ifdef CR9_C_ADD_1p25MS_LRSNS 
+#  ifndef USE_LC3_OPERATORS
+#    include "enh40.h"
+#  endif 
+#endif 
 
 void idct16_fx(const Word16 *in, Word16 *out)
 {
@@ -463,3 +469,180 @@ void idct32_32_fx(const Word32 *in, Word32 *out)
 
     Dyn_Mem_Deluxe_Out();
 }
+
+#ifdef CR9_C_ADD_1p25MS_LRSNS 
+void dct16_W32int_fx(const Word16 *in,
+    Word16 *out)  /* for now same Q as input . later potetially reduce Q for output */
+{
+
+
+#define     Mpy_32_16op(Lx,y)   Mpy_32_16(Lx, y )        /* two-three  cycle count as  in existing STL  */    
+#define     Mpy_32_16_0op(Lx,y)  Mpy_32_16_0_0(Lx,y )     /* no rounding , STL shift  cost  still there */  
+  
+
+    Dyn_Mem_Deluxe_In(
+        /*  Counter i; */
+        Word32 L_a0, L_a1, L_a2, L_a3, L_a4, L_a5, L_a6, L_a7, L_a8, L_a9, L_a10, L_a11, L_a12, L_a13, L_a14, L_a15;
+    Word32 L_b0, L_b1, L_b2, L_b3, L_b4, L_b5, L_b6, L_b7, L_b8, L_b9, L_b10, L_b11, L_b12, L_b13, L_b14, L_b15;
+    );
+    BASOP_sub_sub_start("dct16_W32int_fx");
+
+#define INMARGIN 0    
+#if INMARGIN > 0 
+#   define INSCALE  (1<<(15-INMARGIN) ) 
+#endif 
+
+#if  INMARGIN == 0
+    L_a0 = L_deposit_h(add(in[15], in[0]));         /*  Word16 Q11 deposited 16 levels up, becomes Q27,  NB add can still potentially saturate !  */
+    L_a1 = L_deposit_h(add(in[14], in[1]));
+    L_a2 = L_deposit_h(add(in[13], in[2]));
+    L_a3 = L_deposit_h(add(in[12], in[3]));
+    L_a4 = L_deposit_h(add(in[11], in[4]));
+    L_a5 = L_deposit_h(add(in[10], in[5]));
+    L_a6 = L_deposit_h(add(in[9], in[6]));
+    L_a7 = L_deposit_h(add(in[8], in[7]));
+
+    L_a10 = L_deposit_h(sub(in[5], in[10]));
+    L_a11 = L_deposit_h(sub(in[4], in[11]));
+    L_a12 = L_deposit_h(sub(in[3], in[12]));
+    L_a13 = L_deposit_h(sub(in[2], in[13]));
+#else 
+    /* create higher internal  margin  */
+    /*  Q11 deposited 16 levels up, becomes lower than Q27,   internal L_aX, L_bx  signals  becomes Q26, or lower   */
+    L_a0 = L_mult0(add(in[15], in[0]), INSCALE);
+    L_a1 = L_mult0(add(in[14], in[1]), INSCALE);
+    L_a2 = L_mult0(add(in[13], in[2]), INSCALE);
+    L_a3 = L_mult0(add(in[12], in[3]), INSCALE);
+    L_a4 = L_mult0(add(in[11], in[4]), INSCALE);
+    L_a5 = L_mult0(add(in[10], in[5]), INSCALE);
+    L_a6 = L_mult0(add(in[9], in[6]), INSCALE);
+    L_a7 = L_mult0(add(in[8], in[7]), INSCALE);
+
+    L_a10 = L_mult0(sub(in[5], in[10]), INSCALE);
+    L_a11 = L_mult0(sub(in[4], in[11]), INSCALE);
+    L_a12 = L_mult0(sub(in[3], in[12]), INSCALE);
+    L_a13 = L_mult0(sub(in[2], in[13]), INSCALE);
+#endif 
+
+    L_b0 = L_add(L_a7, L_a0);
+    L_b1 = L_add(L_a6, L_a1);
+    L_b2 = L_add(L_a5, L_a2);
+    L_b3 = L_add(L_a4, L_a3);
+    L_b4 = L_sub(L_a3, L_a4);
+    L_b5 = L_sub(L_a2, L_a5);
+    L_b6 = L_sub(L_a1, L_a6);
+    L_b7 = L_sub(L_a0, L_a7);
+
+#if  INMARGIN == 0
+    L_b8 = L_deposit_h(sub(in[7], in[8]));
+    L_b9 = L_deposit_h(sub(in[6], in[9]));
+#else 
+    L_b8 = L_mult0(sub(in[7], in[8]), INSCALE);
+    L_b9 = L_mult0(sub(in[6], in[9]), INSCALE);
+#endif 
+    L_b10 = L_add(Mpy_32_16op(L_a10, -23170), Mpy_32_16op(L_a13, 23170));/* -Cπ/4 Cπ/4 */
+    //L_b10 = L_add(L_b10, L_b10);  /* scale up due to previous use of L_Mpy_32_16_0op() */
+
+    L_b11 = L_add(Mpy_32_16op(L_a11, -23170), Mpy_32_16op(L_a12, 23170)); /* -Cπ/4 Cπ/4 */
+    //L_b11 = L_add(L_b11, L_b11);/* scale up due to previous use of L_Mpy_32_16_0op() */
+
+    L_b12 = L_add(Mpy_32_16op(L_a12, 23170), Mpy_32_16op(L_a11, 23170));  /*  Cπ/4 Cπ/4 */
+    //L_b12 = L_add(L_b12, L_b12);/* scale up due to previous use of L_Mpy_32_16_0op() */
+
+    L_b13 = L_add(Mpy_32_16op(L_a13, 23170), Mpy_32_16op(L_a10, 23170));  /*  Cπ/4 Cπ/4 */
+    //L_b13 = L_add(L_b13, L_b13);/* scale up due to previous use of L_Mpy_32_16_0op() */
+
+#if  INMARGIN  ==  0
+    L_b14 = L_deposit_h(sub(in[1], in[14]));
+    L_b15 = L_deposit_h(sub(in[0], in[15]));
+#else 
+    L_b14 = L_mult0(sub(in[1], in[14]), INSCALE);
+    L_b15 = L_mult0(sub(in[0], in[15]), INSCALE);
+#endif 
+
+    /* all inputs processed */
+    L_a0 = L_add_sat(L_b3, L_b0); /*saturation was required in dct32_fx()*/
+    L_a1 = L_add(L_b2, L_b1);
+    L_a2 = L_sub(L_b1, L_b2);
+    L_a3 = L_sub_sat(L_b0, L_b3);  /*saturation was required in dct32_fx()*/
+
+    L_a4 = L_add(L_b4, 0L);
+
+    L_a5 = L_add(Mpy_32_16op(L_b5, -23170), Mpy_32_16op(L_b6, 23170)); /* -Cπ/4 Cπ/4 */
+    //L_a5 = L_add(L_a5, L_a5);/* scale up due to previous use of L_Mpy_32_16_0op() */
+    L_a6 = L_add(Mpy_32_16op(L_b6, 23170), Mpy_32_16op(L_b5, 23170));  /*  Cπ/4 Cπ/4 */
+    //L_a6 = L_add(L_a6, L_a6);/* scale up due to previous use of L_Mpy_32_16_0op() */
+
+    L_a7 = L_add(L_b7, 0L);
+    L_a8 = L_add(L_b11, L_b8);
+    L_a9 = L_add(L_b10, L_b9);
+
+    L_a10 = L_sub(L_b9, L_b10);
+    L_a11 = L_sub(L_b8, L_b11);
+
+    L_a12 = L_sub(L_b15, L_b12);
+    L_a13 = L_sub(L_b14, L_b13);
+
+    L_a14 = L_add(L_b13, L_b14);
+    L_a15 = L_add(L_b12, L_b15);
+
+    /* upscaling done by constant doubling */
+    out[0] = round_fx(L_add(Mpy_32_16_0op(L_a0, 8192 * 2), Mpy_32_16_0op(L_a1, 8192 * 2))); move16(); /*  Cπ/4/√8   Cπ/4/√8  */
+    out[8] = round_fx(L_add(Mpy_32_16_0op(L_a1, -8192 * 2), Mpy_32_16_0op(L_a0, 8192 * 2))); move16(); /* -Cπ/4/√8   Cπ/4/√8  */
+    out[4] = round_fx(L_add(Mpy_32_16_0op(L_a2, 4433 * 2), Mpy_32_16_0op(L_a3, 10703 * 2))); move16(); /*  Sπ/8/√8   Cπ/8/√8  */
+    out[12] = round_fx(L_add(Mpy_32_16_0op(L_a3, 4433 * 2), Mpy_32_16_0op(L_a2, -10703 * 2))); move16(); /*  C3π/8/√8 -S3π/8/√8 */
+
+    L_b4 = L_add(L_a5, L_a4);
+    L_b5 = L_sub_sat(L_a4, L_a5); /*saturation was required in dct32_fx()*/
+    L_b6 = L_sub_sat(L_a7, L_a6); /*saturation was required in dct32_fx()*/
+    L_b7 = L_add(L_a6, L_a7);
+    L_b8 = L_add(L_a8, 0L); ;
+
+    L_b9 = L_add(Mpy_32_16op(L_a9, -30274), Mpy_32_16op(L_a14, 12540)); /* -Cπ/8  Sπ/8 */
+    L_b10 = L_add(Mpy_32_16op(L_a10, -12540), Mpy_32_16op(L_a13, -30274)); /* -Sπ/8 -Cπ/8 */
+    L_b11 = L_add(L_a11, 0L);
+    L_b12 = L_add(L_a12, 0L);
+
+    L_b13 = L_add(Mpy_32_16op(L_a13, 12540), Mpy_32_16op(L_a10, -30274));  /* C3π/8 -S3π/8 */
+    L_b14 = L_add(Mpy_32_16op(L_a14, 30274), Mpy_32_16op(L_a9, 12540));  /* S3π/8  C3π/8 */
+    L_b15 = L_add(L_a15, 0L);
+
+
+    /* upscaling done by constant doubling */
+    out[2] = round_fx(L_add(Mpy_32_16_0op(L_b4, 2260 * 2), Mpy_32_16_0op(L_b7, 11363 * 2))); move16();  /* Sπ/16/√8   Cπ/16/√8  */
+    out[10] = round_fx(L_add(Mpy_32_16_0op(L_b5, 9633 * 2), Mpy_32_16_0op(L_b6, 6436 * 2))); move16();  /* S5π/16/√8  C5π/16/√8 */
+    out[6] = round_fx(L_add(Mpy_32_16_0op(L_b6, 9633 * 2), Mpy_32_16_0op(L_b5, -6436 * 2))); move16();  /* C3π/16/√8 -S3π/16/√8 */
+    out[14] = round_fx(L_add(Mpy_32_16_0op(L_b7, 2260 * 2), Mpy_32_16_0op(L_b4, -11363 * 2))); move16();  /* C7π/16/√8 -S7π/16/√8 */
+
+    L_a8 = L_add_sat(L_b9, L_b8); /*saturation was required in dct32_fx()*/
+    L_a9 = L_sub_sat(L_b8, L_b9);
+    L_a10 = L_sub_sat(L_b11, L_b10);
+    L_a11 = L_add_sat(L_b10, L_b11);
+    L_a12 = L_add_sat(L_b13, L_b12);
+    L_a13 = L_sub_sat(L_b12, L_b13);
+    L_a14 = L_sub_sat(L_b15, L_b14);
+    L_a15 = L_add_sat(L_b14, L_b15);
+
+    /* upscaling done by constant doubling */
+    out[1] = round_fx(L_add(Mpy_32_16_0op(L_a8, 1136 * 2), Mpy_32_16_0op(L_a15, 11529 * 2)));  move16();   /* Sπ/32/√8    Cπ/32/√8   */
+    out[9] = round_fx(L_add(Mpy_32_16_0op(L_a9, 8956 * 2), Mpy_32_16_0op(L_a14, 7350 * 2)));   move16();    /* S9π/32/√8   C9π/32/√8  */
+    out[5] = round_fx(L_add(Mpy_32_16_0op(L_a10, 5461 * 2), Mpy_32_16_0op(L_a13, 10217 * 2)));  move16();  /* S5π/32/√8   C5π/32/√8  */
+    out[13] = round_fx(L_add(Mpy_32_16_0op(L_a11, 11086 * 2), Mpy_32_16_0op(L_a12, 3363 * 2)));   move16(); /* S13π/32/√8  C13π/32/√8 */
+    out[3] = round_fx(L_add(Mpy_32_16_0op(L_a12, 11086 * 2), Mpy_32_16_0op(L_a11, -3363 * 2)));  move16(); /* C3π/32/√8  -S3π/32/√8  */
+    out[11] = round_fx(L_add(Mpy_32_16_0op(L_a13, 5461 * 2), Mpy_32_16_0op(L_a10, -10217 * 2))); move16();/* C11π/32/√8 -S11π/32/√8 */
+    out[7] = round_fx(L_add(Mpy_32_16_0op(L_a14, 8956 * 2), Mpy_32_16_0op(L_a9, -7350 * 2)));   move16();   /* C7π/32/√8  -S7π/32/√8  */
+    out[15] = round_fx(L_add(Mpy_32_16_0op(L_a15, 1136 * 2), Mpy_32_16_0op(L_a8, -11529 * 2)));  move16(); /* C15π/32/√8 -S15/32/√8  */
+
+ 
+
+#ifdef Mpy_32_16op
+#  undef   Mpy_32_16op
+#endif 
+
+#ifdef Mpy_32_16_0op
+#  undef   Mpy_32_16_0op
+#endif 
+    BASOP_sub_sub_end();
+    Dyn_Mem_Deluxe_Out();
+}
+#endif

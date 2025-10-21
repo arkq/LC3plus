@@ -1,5 +1,5 @@
 #******************************************************************************
-#                        ETSI TS 103 634 V1.5.1                               *
+#                        ETSI TS 103 634 V1.6.1                               *
 #              Low Complexity Communication Codec Plus (LC3plus)              *
 #                                                                             *
 # Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -17,25 +17,29 @@ OPTIM                    = 0
 SHORT_PLC_FADEOUT        = 0
 
 # Paths
-VPATH  = .
-BUILD  = build
-CC     = gcc
-LINK   = $(CC)
+VPATH  ?= .
+BUILD  ?= build
+CC     ?= gcc
+LINK   ?= $(CC)
 
 # Binary Name
-NAME_LC3   = LC3plus
+NAME_LC3   ?= LC3plus
 # Shared Library Name
-LIB_LC3    = libLC3plus.so
+LIB_LC3    ?= libLC3plus.so
 
 # Default tool settings
-CC        = gcc
 RM        = rm -f
 
+# Compiler Identification
+COMPILER_NAME := $(shell $(CC) --version 2>/dev/null | head -n 1)
+
 # Preprocessor(-I/-D) / Compiler / Linker flags
-CFLAGS   += -std=c99 -fPIC                                            \
+ifneq (,$(findstring clang,$(COMPILER_NAME))$(findstring gcc,$(COMPILER_NAME)))
+    CFLAGS   += -std=c99 -fPIC                                         \
              -pedantic -Wcast-qual -Wall -W -Wextra -Wno-long-long     \
              -Wpointer-arith -Wstrict-prototypes -Wmissing-prototypes  \
              -Werror-implicit-function-declaration
+endif
 
 LDFLAGS += -lm -g
 # Include dependency flags

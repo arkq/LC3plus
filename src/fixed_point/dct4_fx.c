@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -98,7 +98,7 @@ void dct_IV(Word32 *pDat,       /* i/o: pointer to data buffer */
     pDat_0 = &pDat[0];
     pDat_1 = &pDat[L - 2];
 
-    FOR (i = 0; i < M2; i += 2)
+    FOR (i = 0; i < M_var; i += 2)
     {
 #ifdef ENABLE_HR_MODE
       if (hrmode) {
@@ -113,10 +113,11 @@ void dct_IV(Word32 *pDat,       /* i/o: pointer to data buffer */
         cplxMpy32_32_16_2(accu3, accu4, pDat_1[0], pDat_0[1], twiddle[i + 1].v.re, twiddle[i + 1].v.im);
 #endif
 
-        pDat_0[0] = accu2;           move32();
-        pDat_0[1] = accu1;           move32();
+        /* The order of writing the coefficients is not important unless the length is odd, as then the two pointers pDat_0 and pDat_1 would overlap. The order here should be correct as such that the incorrectly calculated coefficient is overwritten with the correctly calculated coefficient. This is happens e.g. for the FFT15, 30 Samples, 1.25 ms @ 24 kHz */
         pDat_1[0] = accu4;           move32();
         pDat_1[1] = L_negate(accu3); move32();
+        pDat_0[0] = accu2;           move32();
+        pDat_0[1] = accu1;           move32();
 
         pDat_0 = pDat_0 + 2;
         pDat_1 = pDat_1 - 2;

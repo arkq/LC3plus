@@ -1,7 +1,7 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
-*                        Software Version V1.7.4ETSI                          *
+*                        Software Version V1.8.0ETSI                          *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
@@ -38,7 +38,7 @@ Features
                                 48 kHz, 96 kHz
     - Multichannel support by multi-mono coding
     - Support of audio sample depth: 16 bits and 24 bits
-    - Frame duration of 10 ms, 7.5 ms, 5 ms and 2.5 ms
+    - Frame duration of 10 ms, 7.5 ms, 5 ms, 2.5 ms and 1.25 ms
     - Supported bit rates as outlined in Table 5.1 and Table 5.2 of TS 103 634
     - Packet loss concealment as defined in ETSI TS 103 634
 
@@ -46,6 +46,23 @@ Changelog
 ---------
   Latest non-bitexact changes are encapsulated in defines listed in defines.h
   for review.
+  
+    - V1.8.0ETSI 2025-10-21 (ETSI TS 103 634 V1.6.1)
+       - General
+            - Updated source headers to version V1.6.1
+  
+    - V1.8.0ETSI 2025-09-12 (ETSI TS 103 634 V1.5.6)
+       - General
+            - Finalize support for 1.25 ms frame duration for both fixed and floating point
+            - For hrmode, 1.25 ms is not supported
+
+    - V1.7.6ETSI 2025-06-02 (ETSI TS 103 634 V1.5.5)
+       - General
+            - Improved support for 1.25 ms frame duration
+
+    - V1.7.5ETSI 2025-03-10 (ETSI TS 103 634 V1.5.3)
+       - General
+            - Added support for 1.25 ms frame duration
   
     - V1.7.4ETSI 2024-05-01 (ETSI TS 103 634 V1.5.1)
        - General
@@ -222,7 +239,6 @@ Usage
         where the patternfile is a binary file containing a sequence of
         16-bit values, non-zero values indicating a detected frame loss
 
-
     The high-resolution mode is mandatory for usage with 96 kHz sampling frequency 
     and can also be used with 48 kHz sampling frequency. 
     To enable the high-resolution mode call
@@ -271,56 +287,24 @@ Usage
     Switching files can be created with 'gen_rate_profile' available from
     ITU-T G191.
 
-    If error protection is enabled, the compressed LC3plus frame is reduced
-    depending on the robustness according to the following table:
+    For supported bitrate configurations refer to ETSI TS 103 634 Table 5.1.
 
-    Frame Duration| Min. Bitrate  |  Max. Bitrate
-    Channel Mode  | [kbps]        |  [kbps]
-    ==============================================
-    2.5 ms        |  128          |  960
-    Mono          |               |
-    ----------------------------------------------
-    5 ms          |  64           |  480
-    Mono          |               |
-    ----------------------------------------------
-    10 ms         |  32           |  240
-    Mono          |               |
-    ----------------------------------------------
-    2.5 ms        |  256          |  1920
-    Stereo        |               |
-    ----------------------------------------------
-    5 ms          |  128          |  960
-    Stereo        |               |
-    ----------------------------------------------
-    10 ms         |  64           |  480
-    Stereo        |               |
-
-    While the number of bytes per frame is smaller than or equal to 160, left
+    When the number of bytes per frame is smaller than or equal to 160, left
     and right channel are coded jointly by the LC3plus channel coder. Above this
     threshold, left and right channel are channel encoded separately. The
     cross-over bitrates are given in the table below.
 
     Frame Duration [ms]|  Max. Bitrate for Joint Channel Coding [kbps]
     ===================================================================
+    1.25               |  1024
+    -------------------------------------------------------------------
     2.5                |  512
     -------------------------------------------------------------------
     5                  |  256
     -------------------------------------------------------------------
+    7.5                |  170.667
+    -------------------------------------------------------------------
     10                 |  128
-    -------------------------------------------------------------------
-
-    The minimum and maximum allowed bitrate per channel depends on the frame duration
-    since the minimum and maximum frame data size of 20 bytes ... 400 bytes is kept
-    independently of the frame duration. Therefore, the bitrate per channel is
-    restricted according to the table below.
-
-    Frame Duration [ms]|  Min. Bitrate [kbps]  |  Max. Bitrate [kbps]
-    ===================================================================
-    2.5                |  64                   |  1280
-    -------------------------------------------------------------------
-    5                  |  32                   |  640
-    -------------------------------------------------------------------
-    10                 |  16                   |  320
     -------------------------------------------------------------------
 
     The software package also includes a Channel Coder Converter (CCC) which converts unprotected

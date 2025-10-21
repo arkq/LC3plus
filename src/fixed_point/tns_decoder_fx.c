@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -14,7 +14,7 @@ static Word32 IIRLattice(Word16 order, const Word16 *parCoeff, Word32 *state, Wo
 /*************************************************************************/
 
 void processTnsDecoder_fx(Word16 rc_idx[], Word32 x[], Word16 xLen, Word16 order[], Word16 *x_e, Word16 BW_stopband_idx,
-                          Word16 frame_dms, Word8 *scratchBuffer
+                          LC3PLUS_FrameDuration frame_dms, Word8 *scratchBuffer
 #ifdef ENABLE_HR_MODE
                           , Word16 hrmode
 #endif
@@ -45,26 +45,40 @@ void processTnsDecoder_fx(Word16 rc_idx[], Word32 x[], Word16 xLen, Word16 order
 
     SWITCH (frame_dms)
     {
-    case 25:
+#ifdef CR9_C_ADD_1p25MS
+    case LC3PLUS_FRAME_DURATION_1p25MS:
+        startfreq[0] = 3; move16();
+        BW_stopband  = shr_pos(BW_stopband, 3);
+        BREAK;
+#endif
+    case LC3PLUS_FRAME_DURATION_2p5MS:
         startfreq[0] = 3; move16();
         BW_stopband  = shr_pos(BW_stopband, 2);
         BREAK;
-    case 50:
+    case LC3PLUS_FRAME_DURATION_5MS:
         startfreq[0] = 6; move16();
         BW_stopband  = shr_pos(BW_stopband, 1);
         BREAK;
-    case 75:
+    case LC3PLUS_FRAME_DURATION_7p5MS:
         startfreq[0] = 9; move16();
         BW_stopband = add(shr_pos(BW_stopband, 2), add(shr_pos(BW_stopband, 2), shr_pos(BW_stopband, 2)));
         BREAK;
-    case 100: startfreq[0] = 12; BREAK;
+    case LC3PLUS_FRAME_DURATION_10MS: startfreq[0] = 12; BREAK;
+    case LC3PLUS_FRAME_DURATION_UNDEFINED: assert(0);
     }
 
-    IF (sub(BW_stopband_idx, 3) >= 0 && frame_dms >= 50)
+    IF (sub(BW_stopband_idx, 3) >= 0 && frame_dms >= LC3PLUS_FRAME_DURATION_5MS)
     {
         numfilters   = 2;
         startfreq[1] = shr_pos(BW_stopband, 1);
     }
+    
+#ifdef CR9_C_ADD_1p25MS
+    IF (frame_dms <= LC3PLUS_FRAME_DURATION_1p25MS) {
+        numfilters = 0;
+    }
+#endif
+    
     stopfreq = 0;
 
     test(); test();

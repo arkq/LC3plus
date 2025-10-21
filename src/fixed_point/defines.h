@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -86,12 +86,132 @@
 #define ENABLE_BANDWIDTH_FLAG
 #define ENABLE_RBANDWIDTH_FLAG
 #define ENABLE_EP_MODE_FLAG
-#define ENABLE_FRAME_MS_FLAG                   
+#define ENABLE_FRAME_MS_FLAG
 
 #ifndef NO_POST_REL_CHANGES
 /* Post-release non-bitexact changes */
+#define CR13_B_FIX_PC_BINS
+#define CR13_C_RESET_CLASSIFIER_AFTER_BAD_FRAMES
+
+#define CR12_B_STOP_DC_RINGING   
+#define CR12_D_FIX_BITRATE_LIMITS   
+
+#define CR9_C_ADD_1p25MS
+
+#ifdef CR9_C_ADD_1p25MS
+
+#  define CR9_C_ADD_1p25MS_LRSNS
+#  define ENABLE_12p5_DMS_MODE
+#  define NOISEFILLWIDTH_1_25MS 1
+#  define NOISEFILLSTART_1_25MS 6
+
+#  define CR9_C_ADD_1p25MS_NOISEFILLING
+#  define CR9_1p25MS_SNS_TILT
+#  define CR9_1p25MS_SNS_TILT_FIX_DELTA_AD_LINE
+
+#  define PLC34_ATTEN_FAC_125_FX   32752
+
+#  define LTPF_ADAPTIVE_GAIN
+
+#  ifdef LTPF_ADAPTIVE_GAIN
+#    define LTPF_PITCH_STABILITY_THRESHOLD  5         /* Number of frames for which the pitch must be constant for adaptive gain and pitch correction to be applied */
+#    define LTPF_ADAPTIVE_GAIN_RATE         20        /* Number of frames it must take to reach maximum beta from the default value, provided the pitch remains constant */
+
+#    define LTPF_ADAPTIVE_GAIN_WITH_NORM_CORR
+#  endif
+
+/* master integration fixes for 1p25  */
+#ifdef CR9_C_ADD_1p25MS
+#  define FIX_BASOP_ENC_QUANTIZE_1P25MS_512KBPS  /* add  two last MDCT coeffs into the last quadruple for global_gain _xmax_ and energy  analysis    */
+ 
+
+#  define FIX_BOTH_1p25_WB_GLOBGAINOFFSET_NONBE   /* 1p25 curve tilt calulation corrected and made into BASOP, WB had a loss of of HF in the range 211-260 kbps   */ 
+#  define FIX_BOTH_1p25_WB_GLOBGAINOFFSET_LOWLIM_NONBE  -135   /* 1p25 curve tilt calulation limited to value   -135   kbps   */
+
+#  define    FIX_BOTH_1p25_TEST_NEW_GG_EST2               /*  GG_EST2_will use bands with two coeffs in each  instead of four, for 1p25 WB and 1p25 SSWB , note only active for  regular, hrmode==0  */
+
+#  ifdef FIX_BOTH_1p25_TEST_NEW_GG_EST2 
+#    define    FIX_BASOP_1p25_NEW_GG_EST3                 /*  GG_EST3 ,  GG_EST2 with optimized code for better BASOP code reuse  , less changes to non 1p25ms */
+#    define    FIX_BOTH_1p25_GG_EST_SWB_FB                /*  1.25ms  GG_EST  update for SWB/FB, better RD curve  float and BASOP , active for hrmode==0 */
+#  endif
+
+/* defines to activate 2 or 3 tuple 1.25ms loops for  WB,SSWB,SWB,FB  */
+#  define FIX_1p25_GG_EST_TUPLES   /*  1.25 ms GG_EST2_will use 2,3 or 4 , note only active for  regular, hrmode==0  */
+#  ifdef FIX_1p25_GG_EST_TUPLES
+#  define  GG_1p25_WB_TUPLES     2
+#  define  GG_1p25_SSWB_TUPLES   2
+#  define  GG_1p25_SWB_TUPLES    2
+#  define  GG_1p25_FB_TUPLES     3 
+#  define  GG_1p25_MAX_TUPLES    MAX(MAX(GG_1p25_WB_TUPLES ,GG_1p25_SSWB_TUPLES  ), MAX(GG_1p25_SWB_TUPLES ,GG_1p25_FB_TUPLES))     /* used to control common energy loop */
+#  define FIX_1p25_32kHz_CLANG_WARNING_EST_GAIN
+
+#  ifndef     FIX_BOTH_1p25_ALLOC_SPECTRUM  
+#   define    FIX_BOTH_1p25_ALLOC_SPECTRUM  
+#     endif 
+
+#define    FIX_1p25_FLEX_ITER_TUPLE_LOOP        /* energy loop part optimized BASOP only */
+#define    LOG2_LC_APPROX                       /* log2_LC(energy) call BASOP only */ /* only applied to 1p25 ms global gain estimation loop */
+#define    FIX_1p25_FLEX_BISECT_LOOP            /* bisect optimization BASOP only  !! */
+
+# endif 
+
+#  define FIX_LTPFDEC_BASOP                               /* added saturation and apply L_max()  */
+
+/* all 1p25ms  precision optimizations */
+
+#  define FIX_BASOP_ENC_LRSNS_CBC_MSE            /* recalculate CB_C MSE to better match CFL cbC vs st2 decision    */
+#  define FIX_BASOP_ENC_LRSNS_ST2FULL_PROJ       /* less optimistic pre-projection for Y_FULL ,  better match CFL     */
+
+#  define FIX_BASOP_LT_NORMCORR_AR1              /*    better exact representation of 0.8 LT normcorr  limit        */
+#  define FIX_BASOP_PREEMPH_CALC                 /* only1p25ms higher precision in adaptive preemphasis addition , average increase by ~6dB,  minSNR increased  by  ~1dB  */
+
+# define FIX_SNS_BASOP_MEAN64_CALC             /* norm for all energy bands to reduce SCF  target variations before log2 domain */ 
+# ifdef FIX_SNS_BASOP_MEAN64_CALC
+# define FIX_SNS_BASOP_NF_APPL               /* apply noisefill 1/10000  in the W32*exp energy domain, not in the inexact 1/9998  W16Q9  log2 domain */
+# endif
+# define FIX_SNS_BASOP_MEAN16_APPLY            /* norm for all 16 scg log2  bands to reduce SCF target variations */ 
+
+#endif
+
+#ifdef CR9_C_ADD_1p25MS_LRSNS 
+  /*NB CR9_C_ADD_1p25MS_LRSNS   requires NEW_SIGNALLING_SCHEME_1p25 */
+#   define LRSNS_PC_SIGNAL_FIX              /*correct handling of incoming bfi==2 to DEC_ENTROPY for conformance */
+/*  #define USE_LC3_OPERATORS */
+
+#   define LRSNS_10MS_BFISIGNAL_FIX          /* correct signaling of detected BER in both 10ms SNS/and in 1.25ms LRSNS */
+
+#  define LRSNS_ALLZERO_FIX               /* BASOP_Util_InvLog2_pos(), incorrect  exponent for 2^0,  became appearant for an all zero vector in LRSNS CB_A */
+#  define LRSNS_MORE_SCRATCH              /* set BASOP SCRATCH to max values  */
+/*  #define LRSNS_CBC_NO_LTPF_DEPENDENCY   */    /* turn off LRSNS CB_C dependency on LTPF activation flag */
+
+#  define SNSLR_N_FIXENV   4              /* 4 fix envelopes multiplexed inside  the full codeword */
+#  define SNSLR_N_FIXENV_SHIFTS   4       /* 2 bits */
+#  define SNSLR_MAX_PVQ_CAND  6           /* splitLF(0), full(1), fixed_env 2+{0,1,2,3 },  */
+#  define SNSLR_MAX_PVQ_SEARCH_CAND (SNSLR_MAX_PVQ_CAND-SNSLR_N_FIXENV+1)     /* 3 = splitLF(0), full(1), fixed_envs(2), */
+#  define SNS_IDX_SHAPEJ 2               /* shape index location */
+
+#endif
+
+
+#   define FIX_LTPF_PITCH_1p25
+#   define FIX_LTPF_MEM_CONTINUATION
+#   define FIX_LTPF_PITCH_MEM_LEN
+#   define FIX_PLC_CONFORM_ISSUES
+#   define FIX_TDC_BURST_ERROR
+#   define FIX_LTPF_DEC_FLFX_MISMATCH
+#   define FIX_TX_RX_STRUCT_STEREO
+#   define NEW_SIGNALLING_SCHEME_1p25
+#   define FIX_LTPF_1p25
+
+#endif /* CR9_C_ADD_1p25MS */
 
 #endif /* NO_POST_REL_CHANGES Post-release changes */
+
+#  ifdef CR9_C_ADD_1p25MS
+#    define LEN_MEM_NORMCORR 5
+#  else
+#    define LEN_MEM_NORMCORR 2
+#  endif
 
 #      define THRESH_100_DMS_TDC_CNT    9
 #      define THRESH_100_DMS_NS_CNT     7
@@ -129,11 +249,11 @@
 #define G192_ONE 0x0081
 #define READ_G192FER      /* allow C executable to also read G192 formatted FER files */
 
-#ifdef DEBUG 
+#ifdef DEBUG
 #ifdef READ_G192FER
-#  define  READ_G192_FER_BYTE  /* Allow C executable to also read G192 byte formatted FER files  0x20=BAD , 0x21=Good  */ 
-#endif 
-#endif 
+#  define  READ_G192_FER_BYTE  /* Allow C executable to also read G192 byte formatted FER files  0x20=BAD , 0x21=Good  */
+#endif
+#endif
 
 
 #define DYNMEM_COUNT
@@ -181,6 +301,11 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #      define MAX_BR_100DMS_SSWB 314400  /* for 100ms at 24kHz */
 #    endif
 
+#  ifdef CR9_C_ADD_1p25MS
+#    define MIN_BR_0125DMS   128000  /*       20 * 800 * 100/ 12.5  */
+#    define MAX_BR_0125DMS   512000
+#  endif
+
 #  define MIN_BR_075DMS_48KHZ_HR ((int)124800/ 800/2)* 800
 #  define MIN_BR_075DMS_96KHZ_HR ((int)149600/ 800/2)* 800
 #  define MIN_BR_075DMS   21334 /* ceil( 20 * 800 * 100/ 75) */
@@ -220,7 +345,7 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #else /* ENABLE_HR_MODE */
 #  define MAX_RESBITS MAX_LEN
 #endif /* ENABLE_HR_MODE */
-    
+
 /* BW Cutoff-Detection */
 #define MAX_BW_BANDS_NUMBER 5
 
@@ -258,6 +383,18 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #define MAX_BW_BIN 400
 #define FEC_SLOT_BYTES_MIN 40
 #  define FEC_SLOT_BYTES_MAX 400
+#  ifdef CR12_D_FIX_BITRATE_LIMITS
+#    ifdef ENABLE_HR_MODE
+#      define FEC_SLOT_BYTES_MIN_025DMS_48KHZ_HR 54
+#      define FEC_SLOT_BYTES_MIN_025DMS_96KHZ_HR 61
+#      define FEC_SLOT_BYTES_MIN_050DMS_48KHZ_HR 87
+#      define FEC_SLOT_BYTES_MIN_050DMS_96KHZ_HR 101
+#      define FEC_SLOT_BYTES_MIN_075DMS_48KHZ_HR 110
+#      define FEC_SLOT_BYTES_MIN_075DMS_96KHZ_HR 126
+#      define FEC_SLOT_BYTES_MIN_100DMS_48KHZ_HR 140
+#      define FEC_SLOT_BYTES_MIN_100DMS_96KHZ_HR 164
+#    endif
+#  endif
 #if MAX_BW_BIN > MAX_LEN
 #  define MAX_BW MAX_LEN
 #else
@@ -288,6 +425,37 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #    define SNS_DAMPING_HRMODE_UB_5MS   4915 /* 0.15 in Q15 */
 #    define SNS_DAMPING_HRMODE_UB_2_5MS 4915 /* 0.15 in Q15 */
 #endif
+
+#ifdef CR9_C_ADD_1p25MS_LRSNS
+#define N_SCF_SEARCH_SHAPES_ST2_LR  SNSLR_MAX_PVQ_SEARCH_CAND  /* {split, full, fix} */
+#define NA_LR 5
+#define NB_LR 8
+#define NC_LR 2        /* the 2 remaining positions also coded by full*/
+#define NFULL_LR (NA_LR+NB_LR+NC_LR)
+
+#define PULSES_SPLIT_A_LR 6
+#define PULSES_SPLIT_B_LR 2
+#define PULSES_FULL_LR 5  /* 'full'== ABC region */
+
+#define N_CANDS_FIX_LR SNSLR_N_FIXENV
+#define NSIGNS_FIX_012 12                     /* 15-4+1 */
+#define N_SHIFT_FIX    SNSLR_N_FIXENV_SHIFTS
+#define NSIGNS_FIX_3   (NSIGNS_FIX_012 -2)
+#define N_SHIFT_FIX_3   SNSLR_N_FIXENV_SHIFTS
+
+
+
+#define SNSLR_NST1         170     /*,    3*170 + 2 = 512  */
+#define SNSLR_NPVQ_L5K6    1970     /*  mux into  11 bits 2048 pos , 78 slots remaining,  6 whole bits  */
+#define SNSLR_NPVQ_L5K8    5890      /*  additional split LF part muxed into 13 bits,   log2(5980)= 12.5241    */
+#define SNSLR_NPVQ_L8K2    128      /*  1+6 = 7  bits  */
+#define SNSLR_NPVQ_L15K5   207006L  /*  1+ 16.6593 bits  ,  */
+
+#define SNSLR_A_CNST_WEIGHT 28672   /* 0.875 */
+
+#define  SNS_VQ_MAX_IDX  8
+
+#endif /* CR9_C_ADD_LRSNS */
 
 /* PVQ VQ setup */
 #define VQMODES26                                                                                                      \
@@ -355,14 +523,14 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 
 /* PLC */
 #define PLC_FADEOUT_TYPE_1_IN_MS 200
-#define PLC_FADEOUT_IN_MS         60    /* fade-out to zero in ms for TD-PLC and NS, minimum value is 20 */ 
+#define PLC_FADEOUT_IN_MS         60    /* fade-out to zero in ms for TD-PLC and NS, minimum value is 20 */
                                                     /* table settings */
 #  define PLC2_FADEOUT_IN_MS_MIN        30          /* table min */
 #  define PLC2_FADEOUT_IN_MS_MAX        140         /* table max  */
 #  define PLC2_FADEOUT_RES   10                     /* 10 ms steps used in fade tables  */
 
 /* current settings */
-#  define PLC2_FADEOUT_LONG_IN_MS   120         
+#  define PLC2_FADEOUT_LONG_IN_MS   120
 #  define PLC2_FADEOUT_IN_MS        30          /*  0 uses original constants for  PLC2
                                            -1 uses TDC::PLC_FADEOUT_IN_MS as basis for a PLC2 macro-re-calculation
                                            30..140 will use a separate settings for PLC2 fadeout
@@ -653,10 +821,10 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #endif
 
 #define scratchAlign(ptr, offset) (void *)(((uintptr_t)(ptr) + (offset) + 0x3) & ~0x3)
-#define ALIGN_BUFFER_STRUCT
+
 
 
 /* some configurations leave empty translation units. */
 extern int fix_empty_translation_unit_warning;
 
-#endif
+#endif /* DEFINES_H */

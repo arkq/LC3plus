@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -144,7 +144,7 @@ void processMdct_fx(
 
     /* N=20 only for 2.5ms possible */
     /* maybe implement this a pre init of shift */
-    if (sub(N, 20) <= 0)
+    if (sub(N, 30) <= 0)
     {
         *y_e = add(*y_e, 2);
     }

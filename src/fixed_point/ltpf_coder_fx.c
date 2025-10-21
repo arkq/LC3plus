@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.5.1                               *
+*                        ETSI TS 103 634 V1.6.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -9,14 +9,25 @@
 
 #include "functions.h"
 
+#ifdef CR9_C_ADD_1p25MS_LRSNS
+#include "constants.h"
+#endif
+
 /*************************************************************************/
 
 
 void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Word16 *mem_in_exp, Word16 mem_in[],
                            Word16 mem_in_len, Word16 param[], Word16 *xin, Word16 len, Word16 *mem_normcorr,
                            Word16 *mem_mem_normcorr, Word16 ol_normcorr, Word16 *mem_ltpf_on, Word16 *mem_ltpf_pitch,
-                           Word16 xin_exp, Word16 frame_dms, Word8 *scratchBuffer
-                           , Word16 hrmode
+                           Word16 xin_exp, LC3PLUS_FrameDuration frame_dms, Word8 *scratchBuffer
+                          , Word16 hrmode
+#ifdef CR9_C_ADD_1p25MS
+#ifdef NEW_SIGNALLING_SCHEME_1p25
+                            , Word16* Tx_ltpf
+#else
+                            , Word16  Tx_ltpf
+#endif
+#endif
 )
 {
     Word16  pitch_index, scale0, scale1, scale2, *x, x_exp, shift, prod_exp, ltpf_pitch;
@@ -27,6 +38,9 @@ void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Wo
     Word16  pitch, pitch_res, min_pitch_fr, pitch_int, pitch_fr, norm_corr, ltpf_active;
     Counter n, m, fr;
     Word16  tmp, acflen;
+#if defined (CR9_C_ADD_1p25MS)
+    Word16 activation_due_to_past_corr, activation_due_to_stable_pitch, activation;
+#endif
 
 #ifdef DYNMEM_COUNT
     Dyn_Mem_In("process_ltpf_coder_fx", sizeof(struct {
@@ -41,7 +55,7 @@ void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Wo
      }));
 #endif
 
-
+    UNUSED(mem_mem_normcorr);
 
     ac32      = (Word32 *)scratchAlign(scratchBuffer, 0);                         /* Size = 4 * 17 = 68 bytes;   */
     ac        = (Word16 *)scratchAlign(ac32, sizeof(*ac32) * 17);                 /* Size = 2 * 17 = 34 bytes    */
@@ -78,7 +92,7 @@ void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Wo
         *mem_in_exp = x_exp; move16();
     }
 
-    Word32 normCorrTh = 0; 
+    Word32 normCorrTh = 0;
     if (hrmode) {
         normCorrTh = 13107;
     } else {
@@ -95,12 +109,38 @@ void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Wo
         ac_min_pitch = sub(min_pitch, 4);
         ac_max_pitch = add(max_pitch, 4);
         acflen       = len; move16();
-        if (sub(frame_dms, 25) == 0)
+
+#ifndef FIX_LTPF_PITCH_MEM_LEN
+        IF ( sub( frame_dms, LC3PLUS_FRAME_DURATION_2p5MS ) == 0 )
         {
-            acflen = shl(len, 1);
-            x      = x - len;
+            acflen = shl( len, 1 );
+            x = x - len;
         }
 
+#ifdef CR9_C_ADD_1p25MS
+        IF ( sub( frame_dms, LC3PLUS_FRAME_DURATION_1p25MS ) == 0 )
+        {
+            acflen = shl( len, 2 );
+            x = x - 80;
+        }
+#endif
+#else
+        if (sub(frame_dms, LC3PLUS_FRAME_DURATION_5MS) == 0)
+        {
+            acflen = shl(len, 1);
+        }
+        if (sub(frame_dms, LC3PLUS_FRAME_DURATION_2p5MS) == 0)
+        {
+            acflen = shl(len, 2);
+        }
+#ifdef CR9_C_ADD_1p25MS
+        if (sub(frame_dms, LC3PLUS_FRAME_DURATION_1p25MS) == 0)
+        {
+            acflen = shl(len, 3);
+        }
+#endif
+        x = x - (mem_in_len - LTPF_MEMIN_LEN);
+#endif
         /* Compute norm */
         sum1 = L_mac0(1, x[0], x[0]);
         sum2 = L_mac0(1, x[-ac_min_pitch], x[-ac_min_pitch]);
@@ -150,9 +190,11 @@ void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Wo
         /* Find maximum */
         ac_max = ac[min_pitch - ac_min_pitch]; move16();
         pitch  = min_pitch;                    move16();
+
         FOR (n = min_pitch + 1; n <= max_pitch; n++)
         {
             tmp = sub_sat(ac[n - ac_min_pitch], ac_max);
+
             if (tmp > 0)
             {
                 pitch = n; move16();
@@ -272,11 +314,34 @@ void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Wo
         {
             test(); test(); test(); test();
             /* Decision if lptf active */
-            IF ((*mem_ltpf_on == 0 && sub(*mem_normcorr, 30802) > 0 && sub(norm_corr, 30802) > 0 &&
-                 (sub(frame_dms, 100) == 0 || sub(*mem_mem_normcorr, 30802) > 0)) ||
-                (sub(*mem_ltpf_on, 1) == 0 && sub(norm_corr, 29491) > 0) ||
-                (sub(*mem_ltpf_on, 1) == 0 && sub(abs_s(sub(ltpf_pitch, *mem_ltpf_pitch)), 8) < 0 &&
-                 add(sub(norm_corr, *mem_normcorr), 3277) > 0 && sub(norm_corr, 27525) > 0))
+#if defined (CR9_C_ADD_1p25MS)
+            activation_due_to_past_corr = sub(mem_normcorr[1], 30802) > 0;
+            activation_due_to_stable_pitch = 1;
+            IF (frame_dms == LC3PLUS_FRAME_DURATION_1p25MS)
+            {
+                activation_due_to_past_corr &= sub(mem_normcorr[2], 30802) > 0;
+                activation_due_to_past_corr &= sub(mem_normcorr[3], 30802) > 0;
+                activation_due_to_past_corr &= sub(mem_normcorr[4], 30802) > 0;
+
+                /* 0.7 * max(pitch,mem.pitch(1)) < min(pitch,mem.pitch(1)); */
+                Word16 tmp_max = s_max(ltpf_pitch, *mem_ltpf_pitch);
+                Word16 tmp_min = s_min(ltpf_pitch, *mem_ltpf_pitch);
+                activation_due_to_stable_pitch = shr(mult(shl(tmp_max,5),22938),5) < tmp_min;
+            }
+            activation = activation_due_to_past_corr && activation_due_to_stable_pitch;
+
+            IF( ( *mem_ltpf_on == 0 && sub( *mem_normcorr, 30802 ) > 0 && sub( norm_corr, 30802 ) > 0 &&
+                  ( sub( frame_dms, LC3PLUS_FRAME_DURATION_10MS ) == 0 || activation ) ) ||
+                ( sub( *mem_ltpf_on, 1 ) == 0 && sub( norm_corr, 29491 ) > 0 ) & activation_due_to_stable_pitch ||
+                ( sub( *mem_ltpf_on, 1 ) == 0 && sub( abs_s( sub( ltpf_pitch, *mem_ltpf_pitch ) ), 8 ) < 0 &&
+                  add( sub( norm_corr, *mem_normcorr ), 3277 ) > 0 && sub( norm_corr, 27525 ) > 0 ) )
+#  else
+            IF( ( *mem_ltpf_on == 0 && sub( mem_normcorr[0], 30802 ) > 0 && sub( norm_corr, 30802 ) > 0 &&
+                  ( sub( frame_dms, LC3PLUS_FRAME_DURATION_10MS ) == 0 || sub( mem_normcorr[1], 30802 ) > 0 ) ) ||
+                ( sub( *mem_ltpf_on, 1 ) == 0 && sub( norm_corr, 29491 ) > 0 ) ||
+                ( sub( *mem_ltpf_on, 1 ) == 0 && sub( abs_s( sub( ltpf_pitch, *mem_ltpf_pitch ) ), 8 ) < 0 &&
+                  add( sub( norm_corr, mem_normcorr[0] ), 3277 ) > 0 && sub( norm_corr, 27525 ) > 0 ) )
+#  endif
             {
                 ltpf_active = 1; move16();
             }
@@ -285,7 +350,7 @@ void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Wo
         param[0] = 1;           move16();
         param[1] = ltpf_active; move16();
         param[2] = pitch_index; move16();
-        *bits    = 11;          move16();   
+        *bits    = 11;          move16();
     }
     ELSE
     {
@@ -297,13 +362,62 @@ void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Wo
         ltpf_pitch = 0;           move16();
     }
 
+#ifdef CR9_C_ADD_1p25MS
+    if ( sub(frame_dms, LC3PLUS_FRAME_DURATION_1p25MS) == 0 )
+    {
+#  ifdef NEW_SIGNALLING_SCHEME_1p25
+        tmp = s_min(*Tx_ltpf, 1);  /* tmp == 0 == phaseA, tmp==1==PhaseB ) */
+        test(); test(); test();
+        if (param[0] == 0 && tmp != 0)
+        {
+            /* pitch correlation dropped from high(ltpf_active) to low(no ltp info at all ),
+              we select to NOT send the remaining phaseB laginfo  for use in a  possible  low corr  PLC frame */
+            *Tx_ltpf = 0;  move16();   /* kill the lag transmission state at  encoder side */
+        }
+
+        /* 00        (ltp=0, ltpf=0, no Phase, 2b),
+           010yyyy   (ltp=1, ltpf=0, phaseA,   7b),
+           011zzzz   (ltp=1, ltpf=0, phaseB ,  7b), "zzzz=lowered lag res for PLC use"
+           10yyyy    (ltp=1, ltpf=1) phaseA    6b)
+           11ZZZZZ   (ltp=1, ltpf=1) phaseB    7b)  "ZZZZZ= full lag resolution for LTPF use"
+        */
+        test();
+        IF(param[0] != 0)
+        {
+            test();
+            IF(param[1] == 0)
+            {   /* ltpf inactive  */
+                tmp = s_or(shl(param[0], 1), tmp);  /* LTP in b1 phase in LSB b0 , tmp becomes  2 or 3 */
+                ASSERT(tmp==2 || tmp == 3 );
+            }
+            ELSE
+            { /* ltpf  active  */
+                ASSERT(param[2] >= 0 && param[2] <= 511);
+                tmp = s_or(0x04, shl(tmp, 1));       /* LTPF in b2, phase b1,   always zero in b0 , tmp becomes  4 or 6 */
+                ASSERT(tmp == 4 || tmp == 6);
+            }
+        }
+        *bits = lrsns_ltp_bits_fx[tmp];  move16(); /*         one of { 2,2,  7,7 , 6,6, 7,7} */
+                                                   /* tmp as idx  is   0,1   2,3   4,5, 6,7  */
+        ASSERT(*bits >= 2 && *bits <= 7);
+#else
+        ASSERT(*bits == 1 || *bits == 11 );
+#endif
+    }
+#else
+        ASSERT(*bits == 1 || *bits == 11 );
+#endif /* CR9_C_ADD_1p25MS */
+
 /* Update memory */
     FOR (n = 0; n < mem_in_len; n++)
     {
         mem_in[n] = mem_in[n + len]; move16();
     }
 
-    *mem_mem_normcorr = *mem_normcorr; move16();
+    FOR (n = LEN_MEM_NORMCORR-2; n>=0; n--) {
+        mem_normcorr[n+1] = mem_normcorr[n]; move16();
+    }
+
     *mem_normcorr   = norm_corr;   move16();
     *mem_ltpf_on    = ltpf_active; move16();
     *mem_ltpf_pitch = ltpf_pitch;  move16();
@@ -312,4 +426,3 @@ void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Wo
     Dyn_Mem_Out();
 #endif
 }
-
