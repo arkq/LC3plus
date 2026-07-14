@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -35,7 +35,7 @@ void processMdct_fx(
     Word16       memLen,    /* i:   length of last sample block */
     Word32       y[],       /* o:   spectral data */
     Word16 *     y_e,       /* o:   spectal data exponent */
-    Word8 *      scratchBuffer)
+    lc3_scratch_t scratch)
 {
     Counter i;
     Word16  z, s, m;
@@ -44,24 +44,21 @@ void processMdct_fx(
 #else
     Word16 *buf;
 #endif
-    Word32 *workBuffer;
 
 #ifdef DYNMEM_COUNT
     Dyn_Mem_In("processMdct_fx", sizeof(struct {
                    Counter i;
                    Word16  z, s, m;
                    Word16 *buf;
-                   Word32 *workBuffer;
                }));
 #endif
 
     /* Buffers overlap since they are not used at the same time */
-#ifdef ENABLE_HR_MODE
-    buf        = (Word32 *)scratchAlign(scratchBuffer, 0); /* Size = 2 * MAX_LEN */
-#else
-    buf        = (Word16 *)scratchAlign(scratchBuffer, 0); /* Size = 2 * MAX_LEN */
-#endif
-    workBuffer = (Word32 *)scratchAlign(scratchBuffer, 0); /* Size = 4 * MAX_LEN */
+#  ifdef ENABLE_HR_MODE
+    buf = (Word32*) lc3_scratch_push( scratch, sizeof( *buf ) * MAX_LEN );
+#  else
+    buf = (Word16*) lc3_scratch_push( scratch, sizeof( *buf ) * MAX_LEN );
+#  endif
 
     /* Init (constant per sample rate) */
     z = (N << 1) - wLen; /* number of leading zeros in window */
@@ -153,12 +150,18 @@ void processMdct_fx(
         *y_e = add(*y_e, 1);
     }
 #ifdef ENABLE_HR_MODE
-    dct_IV(y, y_e, N, 
+    dct_IV(y, y_e, N,
            hrmode, 
-           workBuffer);
+           scratch);
 #else
-    dct_IV(y, y_e, N, workBuffer);
+    dct_IV(y, y_e, N, scratch);
 #endif
+  
+#  ifdef ENABLE_HR_MODE
+    buf = (Word32*) lc3_scratch_pop( scratch, buf );
+#  else
+    buf = (Word16*) lc3_scratch_pop( scratch, buf );
+#  endif
 
 #ifdef DYNMEM_COUNT
     Dyn_Mem_Out();

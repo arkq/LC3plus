@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -14,10 +14,13 @@ static Word32 IIRLattice(Word16 order, const Word16 *parCoeff, Word32 *state, Wo
 /*************************************************************************/
 
 void processTnsDecoder_fx(Word16 rc_idx[], Word32 x[], Word16 xLen, Word16 order[], Word16 *x_e, Word16 BW_stopband_idx,
-                          LC3PLUS_FrameDuration frame_dms, Word8 *scratchBuffer
+                          LC3PLUS_FrameDuration frame_dms, lc3_scratch_t scratch
 #ifdef ENABLE_HR_MODE
                           , Word16 hrmode
 #endif
+#  ifdef CR14_A_ADD_LOSSLESS_MODE
+                          , Word16 ll_adap_flag
+#  endif
 )
 {
     Dyn_Mem_Deluxe_In(
@@ -27,8 +30,8 @@ void processTnsDecoder_fx(Word16 rc_idx[], Word32 x[], Word16 xLen, Word16 order
         Word16  numfilters, startfreq[TNS_NUMFILTERS_MAX];
     );
 
-    state = (Word32 *)scratchAlign(scratchBuffer, 0);               /* Size = MAXLAG */
-    rc    = (Word16 *)scratchAlign(state, sizeof(*state) * MAXLAG); /* Size = MAXLAG */
+    state = (Word32*) lc3_scratch_push( scratch, sizeof( *state ) * MAXLAG );
+    rc = (Word16*) lc3_scratch_push( scratch, sizeof( *rc ) * MAXLAG );
 
     numfilters  = 1;
     
@@ -91,10 +94,25 @@ void processTnsDecoder_fx(Word16 rc_idx[], Word32 x[], Word16 xLen, Word16 order
         {
             f = startfreq[1]; move16();
         }
+        
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        if ( ll_adap_flag == 0 )
+        {
+            s1 = getScaleFactor32( x, f );
+            s2 = getScaleFactor32( x + f, sub( xLen, f ) );
+            s = s_min( s1, sub( s2, 7 ) ); /* 7 bits of headroom for IIR filtering */
+            *x_e = sub( *x_e, s );
+        }
+        else
+        {
+            s = 0;
+        }
+#else
         s1   = getScaleFactor32(x, f);
         s2   = getScaleFactor32(x + f, sub(xLen, f));
         s    = s_min(s1, sub(s2, 7)); /* 7 bits of headroom for IIR filtering */
         *x_e = sub(*x_e, s);
+#endif
 
 /* Init Filter */
         basop_memset(state, 0, MAXLAG * sizeof(Word32));
@@ -132,6 +150,10 @@ void processTnsDecoder_fx(Word16 rc_idx[], Word32 x[], Word16 xLen, Word16 order
             x[i] = L_shl(x[i], s); move32();
         }
     }
+    
+    rc = (Word16*) lc3_scratch_pop( scratch, rc );
+    state = (Word32*) lc3_scratch_pop( scratch, state );
+    
     Dyn_Mem_Deluxe_Out();
 }
 

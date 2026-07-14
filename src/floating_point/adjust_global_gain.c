@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -18,7 +18,15 @@ void processAdjustGlobalGain_fl(LC3_INT* gg_idx, LC3_INT gg_idx_min, LC3_INT gg_
     LC3_INT   gg_idx_inc;
     LC3_FLOAT factor;
 
+#ifdef CR14_A_ADD_1p25MS_HR
+    if (frame_dms == LC3PLUS_FRAME_DURATION_1p25MS)
+    {
+        factor = 4;
+    }
+    else if (frame_dms == LC3PLUS_FRAME_DURATION_2p5MS)
+#else
     if (frame_dms == LC3PLUS_FRAME_DURATION_2p5MS)
+#endif
     {
         if (target < 520)
         {

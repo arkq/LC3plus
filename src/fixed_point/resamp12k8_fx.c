@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -11,7 +11,7 @@
 
 void process_resamp12k8_fx(Word16 x[], Word16 x_len, Word16 mem_in[], Word16 mem_in_len, Word32 mem_50[],
                            Word16 mem_out[], Word16 mem_out_len, Word16 y[], Word16 *y_len, Word16 fs_idx,
-                           LC3PLUS_FrameDuration frame_dms, Word8 *scratchBuffer
+                           LC3PLUS_FrameDuration frame_dms, lc3_scratch_t scratch
                             , Word16 bps
                            )
 {
@@ -27,7 +27,7 @@ void process_resamp12k8_fx(Word16 x[], Word16 x_len, Word16 mem_in[], Word16 mem
         Word32        L_tmp;
     );
 
-    buf = (Word16 *)scratchAlign(scratchBuffer, 0); /* Size = 2 * (MAX_LEN + MAX_LEN / 8) bytes */
+    buf = (Word16*) lc3_scratch_push( scratch, sizeof( *buf ) * MAX( 128 + 24 + 40, ( x_len + mem_in_len ) ) );
     len_12k8 = 0;
     
     /* resamp parameters : {upsample-factor, 120 / upsample-factor, down_sample_int_part, down_sample_frac_part } 
@@ -127,6 +127,8 @@ void process_resamp12k8_fx(Word16 x[], Word16 x_len, Word16 mem_in[], Word16 mem
     basop_memmove(&buf[mem_out_len], y, len_12k8 * sizeof(Word16));
     basop_memmove(y, buf, (*y_len + 1) * sizeof(Word16));
     basop_memmove(mem_out, &buf[len_12k8], mem_out_len * sizeof(Word16));
+    
+    buf = (Word16*) lc3_scratch_pop( scratch, buf );
 
     Dyn_Mem_Deluxe_Out();
 }

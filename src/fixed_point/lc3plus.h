@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -25,6 +25,9 @@
 #ifndef LC3PLUS_H
 #define LC3PLUS_H
 
+#include "defines.h" /* Required for CR14_A_ADD_LOSSLESS_MODE */
+#include "lc3plus_scratch_allocator.h"
+
 #ifndef _MSC_VER
 #include <stdint.h>
 #else
@@ -36,39 +39,55 @@ typedef __int32 int32_t;
 #define LC3PLUS_VERSION_INT(major, minor, micro) (((major) << 16) | ((minor) << 8) | (micro))
 
 /*! Version number to ensure header and binary are matching. */
-#define LC3PLUS_VERSION LC3PLUS_VERSION_INT(1, 8, 0)
+#define LC3PLUS_VERSION LC3PLUS_VERSION_INT(1, 9, 2)
 
 /*! Maximum number of supported channels. The actual binary might support
  *  less, use lc3plus_channels_supported() to check. */
 #define LC3PLUS_MAX_CHANNELS 2
 
+#define LC3PLUS_ENC_MAX_USER_SYSTEM_SCRATCH_SIZE 200000
+#define LC3PLUS_DEC_MAX_USER_SYSTEM_SCRATCH_SIZE 200000
+
 /*! Maximum number of samples per channel that can be stored in one LC3plus frame. */
 #ifdef ENABLE_HR_MODE
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+#define LC3PLUS_MAX_SAMPLES 1920
+#else
 #define LC3PLUS_MAX_SAMPLES 960
+#endif
 #else
 #define LC3PLUS_MAX_SAMPLES 480
 #endif
 
 /*! Maximum number of bytes of one LC3plus frame. */
 #ifdef ENABLE_HR_MODE
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+#define LC3PLUS_MAX_BYTES   (6001 * LC3PLUS_MAX_CHANNELS)
+#else
 #define LC3PLUS_MAX_BYTES   (625 * LC3PLUS_MAX_CHANNELS)
+#endif
 #else
 #define LC3PLUS_MAX_BYTES 870
 #endif
 
-
-
-
 /*! Maximum size needed to store encoder state. */
 #ifdef ENABLE_HR_MODE
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+#define LC3PLUS_ENC_MAX_SIZE 30000
+#else
 #define LC3PLUS_ENC_MAX_SIZE 12628
+#endif
 #else
 #define LC3PLUS_ENC_MAX_SIZE 7226
 #endif
 
 /*! Maximum size needed to store decoder state. */
 #ifdef ENABLE_HR_MODE
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+#define LC3PLUS_DEC_MAX_SIZE 80000
+#else
 #define LC3PLUS_DEC_MAX_SIZE 42488
+#endif
 #else
 #define LC3PLUS_DEC_MAX_SIZE 28446
 #endif
@@ -76,8 +95,17 @@ typedef __int32 int32_t;
 #ifdef LRSNS_MORE_SCRATCH 
 
 #ifdef ENABLE_HR_MODE
-#  define LC3PLUS_ENC_MAX_SCRATCH_SIZE (2*32767)
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+#  define LC3PLUS_ENC_MAX_SCRATCH_SIZE (3*43000)
+#else
+#  define LC3PLUS_ENC_MAX_SCRATCH_SIZE (3*32767)
+#endif
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+#  define LC3PLUS_DEC_MAX_SCRATCH_SIZE (3*64000)
+#else
 #  define LC3PLUS_DEC_MAX_SCRATCH_SIZE (2*32767)
+#endif
 #else
 #  define LC3PLUS_ENC_MAX_SCRATCH_SIZE (2*32767)
 #  define LC3PLUS_DEC_MAX_SCRATCH_SIZE (2*32767)
@@ -87,14 +115,22 @@ typedef __int32 int32_t;
 
 /*! Maximum scratch size needed by lc3plus_enc16() or lc3plus_enc24().*/
 #ifdef ENABLE_HR_MODE
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+#  define LC3PLUS_ENC_MAX_SCRATCH_SIZE (39000 + 39000 + 3000)
+#else
 #  define LC3PLUS_ENC_MAX_SCRATCH_SIZE 45624
+#endif
 #else
 #  define LC3PLUS_ENC_MAX_SCRATCH_SIZE 6784
 #endif
 
 /*! Maximum scratch size needed by lc3plus_dec16() or lc3plus_dec24(). */
 #ifdef ENABLE_HR_MODE
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+#define LC3PLUS_DEC_MAX_SCRATCH_SIZE 64000
+#else
 #define LC3PLUS_DEC_MAX_SCRATCH_SIZE 59768
+#endif
 #else
 #define LC3PLUS_DEC_MAX_SCRATCH_SIZE 27474
 #endif
@@ -168,17 +204,25 @@ typedef enum
     LC3PLUS_PLCMODE_ERROR        = 15, /*!< Function called after bitrate has been set */
     LC3PLUS_EPMR_ERROR           = 16, /*!< Invalid external bad frame index */
     LC3PLUS_PADDING_ERROR        = 17, /*!< Incorrect padding value */
-    FRAMESIZE_ERROR              = 18, /*!< Incorrect frame size during decoding */
-    LC3PLUS_LFE_MODE_NOT_SUPPORTED = 19, /*!< LFE support not available */
+    LC3PLUS_SHIFT_ERROR          = 18,   /*!< Incorrect padding value */
+    FRAMESIZE_ERROR              = 19, /*!< Incorrect frame size during decoding */
+    LC3PLUS_LFE_MODE_NOT_SUPPORTED = 20, /*!< LFE support not available */
+    LC3PLUS_SCRATCH_INVALID_ERROR = 21,
 
     /* START WARNING */
-    LC3PLUS_WARNING    = 20,
-    LC3PLUS_BW_WARNING = 21 /*!< Invalid bandwidth cutoff frequency */
+    LC3PLUS_WARNING    = 21,
+    LC3PLUS_BW_WARNING = 22 /*!< Invalid bandwidth cutoff frequency */
 
 } LC3PLUS_Error;
 
 typedef struct LC3PLUS_Enc LC3PLUS_Enc; /*!< Opaque encoder struct. */
 typedef struct LC3PLUS_Dec LC3PLUS_Dec; /*!< Opaque decoder struct. */
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+
+LC3PLUS_Error update_enc_payload_sizes( LC3PLUS_Enc* encoder, int ch, int totalBytes, int carryOver);
+
+#endif
 
 /*! \addtogroup Misc
  *  \{ */
@@ -233,7 +277,10 @@ LC3PLUS_Error lc3plus_enc_init(LC3PLUS_Enc *encoder, int samplerate, int channel
 #ifdef ENABLE_HR_MODE
                                , int hrmode
 #endif
-                               , int32_t lfe_channel_array[]
+                               , int32_t lfe_channel_array[], int32_t* const scratchSize
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                               , int wavFormat, int padding
+#endif
                               );
 
 /*!
@@ -255,14 +302,14 @@ LC3PLUS_Error lc3plus_enc_init(LC3PLUS_Enc *encoder, int samplerate, int channel
  *                              purposes in between calls.
  *  \return                     LC3PLUS_OK on success or appropriate error code.
  */
-LC3PLUS_Error lc3plus_enc16(LC3PLUS_Enc *encoder, int16_t **input_samples, void *output_bytes, int *num_bytes, void *scratch);
+LC3PLUS_Error lc3plus_enc16(LC3PLUS_Enc *encoder, int16_t **input_samples, void *output_bytes, int *num_bytes, lc3_scratch_t scratch);
 
 /*! Encode LC3plus frame with 24 bit input.
  *
  *  The input samples are expected to be 24-bit values, sign-extended to 32-bit.
  *  See lc3plus_enc16() for parameter documentation.
  */
-LC3PLUS_Error lc3plus_enc24(LC3PLUS_Enc *encoder, int32_t **input_samples, void *output_bytes, int *num_bytes, void *scratch);
+LC3PLUS_Error lc3plus_enc24(LC3PLUS_Enc *encoder, int32_t **input_samples, void *output_bytes, int *num_bytes, lc3_scratch_t scratch);
 
 /*! Get the size of the LC3plus encoder struct for a samplerate / channel configuration.
  *  If memory is not restricted LC3PLUS_ENC_MAX_SIZE can be used for all configurations.
@@ -280,7 +327,7 @@ int lc3plus_enc_get_size(int samplerate, int channels);
  *  \param[in]  encoder     Encoder handle.
  *  \return                 Size in bytes or 0 on error.
  */
-int lc3plus_enc_get_scratch_size(const LC3PLUS_Enc *encoder);
+int lc3plus_enc_get_scratch_size(LC3PLUS_Enc *encoder, int* const scratch_size );
 
 /*! Get number of samples per channel expected by lc3plus_enc16() or lc3plus_enc24().
  *
@@ -331,6 +378,33 @@ LC3PLUS_Error lc3plus_enc_set_bitrate(LC3PLUS_Enc *encoder, int bitrate);
  *  \return                 LC3PLUS_OK on success or appropriate error code.
  */
 LC3PLUS_Error lc3plus_enc_set_lfe(LC3PLUS_Enc* encoder, int lfe);
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+/*! Enable or disable relative prioritization of residual LSBs in lossless
+ *  mode. Default 0 (absolute priority). No effect outside lossless mode. */
+LC3PLUS_Error lc3plus_enc_set_relative_priority(LC3PLUS_Enc *encoder, int enable);
+#endif
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+/*! Set a fixed LSB shift applied to every input sample in lossless mode.
+ *
+ *  When shift > 0, every input PCM sample is right-shifted by `shift` bits before
+ *  the MDCT, and the decoder L_shl's the output by the same amount. The
+ *  caller MUST guarantee that the bottom `shift` bits of every input sample
+ *  are zero; otherwise the round-trip is not bit-exact and the dropped LSBs
+ *  are silently lost.
+ *
+ *
+ *  Range: 0..8 (4-bit scaleSignal slot). 0 disables the feature.
+ *
+ *
+ *  \param[in]  encoder Encoder handle.
+ *  \param[in]  shift   Constant LSB shift, integer 0..8.
+ *  \return     LC3PLUS_OK on success; LC3PLUS_NULL_ERROR if encoder is NULL;
+ *              LC3PLUS_BITRATE_ERROR if shift is out of range.
+ */
+LC3PLUS_Error lc3plus_enc_set_ll_shift(LC3PLUS_Enc *encoder, int shift);
+#endif
 
 /*! Get the encoder delay in number of samples.
  *
@@ -402,7 +476,11 @@ LC3PLUS_Error lc3plus_enc_set_bandwidth(LC3PLUS_Enc *encoder, int bandwidth);
  *  \param[in]  samplerate      Bitstream sampling rate.
  *  \param[in]  channels        Bitstream number of channels.
  *  \param[in]  plc_mode        Packet loss concealment mode.
- *  \param[in]  hrmode        High resolution mode mode.
+ *  \param[in]  hrmode          High resolution mode mode.
+ *  \param[in]  wavFormat       waveform format for output signal (16 or 24). 
+ *                              For lossless mode (hrmode = 2), bit depth must 
+ *                              match the bit depth of the original input 
+ *                              signal used for encoding.
  *
  *  \return                     LC3PLUS_OK on success or appropriate error code.
  */
@@ -410,6 +488,10 @@ LC3PLUS_Error lc3plus_dec_init(LC3PLUS_Dec *decoder, int samplerate, int channel
 #ifdef ENABLE_HR_MODE
                                , int hrmode
 #endif
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                               , int wavFormat
+#endif
+                               , int32_t* const scratchSize
                               );
 
 /*!
@@ -439,16 +521,28 @@ LC3PLUS_Error lc3plus_dec_init(LC3PLUS_Dec *decoder, int samplerate, int channel
  *  \return                     Returns LC3PLUS_OK on success or appropriate error code. Note there is
  *                              a special case for LC3PLUS_DECODE_ERROR where the output is still valid.
  */
-LC3PLUS_Error lc3plus_dec16(LC3PLUS_Dec *decoder, void *input_bytes, int num_bytes, int16_t **output_samples, void *scratch,
-                    int bfi_ext);
+LC3PLUS_Error lc3plus_dec16(LC3PLUS_Dec *decoder, void *input_bytes, 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                            int *num_bytes,           
+#else
+                            int num_bytes, 
+#endif
+                            int16_t **output_samples, lc3_scratch_t scratch,
+                            int bfi_ext);
 
 /*! Decode compressed LC3plus frame to 24 bit PCM output.
  *
  *  The output samples are 24-bit values, sign-extended to 32-bit.
  *  See lc3plus_dec16() for parameter documentation.
  */
-LC3PLUS_Error lc3plus_dec24(LC3PLUS_Dec *decoder, void *input_bytes, int num_bytes, int32_t **output_samples, void *scratch,
-                    int bfi_ext);
+LC3PLUS_Error lc3plus_dec24(LC3PLUS_Dec *decoder, void *input_bytes, 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                            int *num_bytes,           
+#else
+                            int num_bytes, 
+#endif
+                            int32_t **output_samples, lc3_scratch_t scratch,
+                            int bfi_ext);
 
 /*! Get the size of the LC3plus decoder struct for a samplerate / channel / plc_mode configuration.
  *  If memory is not restricted LC3PLUS_DEC_MAX_SIZE can be used for all configurations.
@@ -467,7 +561,7 @@ int lc3plus_dec_get_size(int samplerate, int channels, LC3PLUS_PlcMode plc_mode)
  *  \param[in]  decoder     Decoder handle.
  *  \return                 Size in bytes or 0 on error.
  */
-int lc3plus_dec_get_scratch_size(const LC3PLUS_Dec *decoder);
+int lc3plus_dec_get_scratch_size(LC3PLUS_Dec *decoder, int* const scratch_size);
 
 /*! Get the number of samples per channel produced by lc3plus_dec16() or lc3plus_dec24().
  *
@@ -544,6 +638,48 @@ int lc3plus_dec_get_error_report(const LC3PLUS_Dec *decoder);
  *  cannot be retrieved, the m-1th bit of the return value will be 0.
  */
 int lc3plus_dec_get_epok_flags(const LC3PLUS_Dec *decoder);
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+/*! Get maximum number of bytes required for fully lossless coding of one frame.
+ *
+ *  Dependent on the input file configuration (sampling rate, frame size,
+ *  number of channels, bit depth).
+ *
+ *  Not all configurations may be enabled. For unsupported
+ *  configurations an appropriate error code is returned.
+ *
+ *  \param[in]  samplerate      Input sample rate. Allowed sample
+ *                              rates in Hz are: 44100, 48000, 96000.
+ *  \param[in]  channels        Input number of channels.
+ *  \param[in]  bitsPerSample   Input bit depth. Only 16 and 24 allowed.
+ *  \param[in]  frame_dms       Frame duration as enum value (i.e. 1, 2, 4, 
+ *                              6, 8 for 1.25, 2.5, 5, 7.5, 10 ms respectively).
+ *                              1.25 ms is not supported in lossless mode.
+ *  \param[out] maxBytes        Maximum number of bytes for one frame.
+ *  \return                     LC3_OK on success or appropriate error
+ *                              code.
+ */
+LC3PLUS_Error lc3_enc_get_max_frame_bytes( int32_t const samplerate, int32_t const channels, int32_t const bitsPerSample, LC3PLUS_FrameDuration const frame_dms, int32_t* const maxBytes );
+
+/*! Get lossless encoding status of the last encoded frame.
+ *
+ *  \param[in]  encoder     Encoder handle.
+ *  \param[out] is_lossless 1 if last frame was encoded losslessly, 0 otherwise.
+ *  \return                 LC3PLUS_OK on success or appropriate error code.
+ */
+LC3PLUS_Error lc3plus_enc_get_lossless_status( LC3PLUS_Enc* const encoder, int16_t* const is_lossless );
+
+/*! Get lossless decoding status of the last decoded frame.
+ *
+ *  \param[in]  decoder     Decoder handle.
+ *  \param[out] is_lossless 1 if last frame was decoded losslessly, 0 otherwise.
+ *  \return                 LC3PLUS_OK on success or appropriate error code.
+ */
+LC3PLUS_Error lc3plus_dec_get_lossless_status( LC3PLUS_Dec* const decoder, int16_t* const is_lossless );
+
+#endif
+
+LC3PLUS_Error lc3plus_get_decoder_min_max_bytes( LC3PLUS_Dec* decoder, int* min_bytes, int* max_bytes );
 
 /*! \} */
 #endif /* LC3PLUS_H */

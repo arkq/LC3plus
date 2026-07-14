@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -9,7 +9,7 @@
 
 #include "functions.h"
 
-void processLevinson_fx(Word32 *lpc, Word32 *ac, Word16 N, Word16 *rc, Word32 *pred_err, Word8 *scratchBuffer)
+void processLevinson_fx(Word32 *lpc, Word32 *ac, Word16 N, Word16 *rc, Word32 *pred_err, lc3_scratch_t scratch)
 {
 
     Word32 *lpc_tmp;
@@ -28,7 +28,7 @@ void processLevinson_fx(Word32 *lpc, Word32 *ac, Word16 N, Word16 *rc, Word32 *p
                }));
 #endif
 
-    lpc_tmp = (Word32 *)scratchAlign(scratchBuffer, 0); /* Size = 4 * (M_LTPF + 1) = 100 bytes */
+    lpc_tmp = (Word32*) lc3_scratch_push( scratch, sizeof( *lpc ) * ( M_LTPF + 1 ) );
 
     /* Init Prediction Error */
     err   = ac[0]; move32();
@@ -112,12 +112,13 @@ void processLevinson_fx(Word32 *lpc, Word32 *ac, Word16 N, Word16 *rc, Word32 *p
         err       = Mpy_32_32(err, L_sub(MAX_32, Mpy_32_32(rc32, rc32)));
         *pred_err = L_shr(err, shift);
     }
+  
+    lpc_tmp = (Word32*) lc3_scratch_pop( scratch, lpc_tmp );
 
 #ifdef DYNMEM_COUNT
     Dyn_Mem_Out();
 #endif
 }
-
 
 void lpc2rc(Word32 *lpc, Word16 *rc, Word16 N)
 {

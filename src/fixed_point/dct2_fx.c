@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -116,6 +116,37 @@ void dct32_fx(const Word32 *in, Word32 *out)
     Dyn_Mem_Deluxe_In(Word32 a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15;
                       Word32 b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15;);
 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    a0 = L_add_sat( in[15], in[0] );
+    a1 = L_add_sat( in[14], in[1] );
+    a2 = L_add_sat( in[13], in[2] );
+    a3 = L_add_sat( in[12], in[3] );
+    a4 = L_add_sat( in[11], in[4] );
+    a5 = L_add_sat( in[10], in[5] );
+    a6 = L_add_sat( in[9], in[6] );
+    a7 = L_add_sat( in[8], in[7] );
+    a10 = L_sub_sat( in[5], in[10] );
+    a11 = L_sub_sat( in[4], in[11] );
+    a12 = L_sub_sat( in[3], in[12] );
+    a13 = L_sub_sat( in[2], in[13] );
+
+    b0 = L_add_sat( a7, a0 );
+    b1 = L_add_sat( a6, a1 );
+    b2 = L_add_sat( a5, a2 );
+    b3 = L_add_sat( a4, a3 );
+    b4 = L_sub_sat( a3, a4 );
+    b5 = L_sub_sat( a2, a5 );
+    b6 = L_sub_sat( a1, a6 );
+    b7 = L_sub_sat( a0, a7 );
+    b8 = L_sub_sat( in[7], in[8] );
+    b9 = L_sub_sat( in[6], in[9] );
+    b10 = L_add_sat( Mpy_32_16( a10, -23170 ), Mpy_32_16( a13, 23170 ) ); /* -Cπ/4 Cπ/4 */
+    b11 = L_add_sat( Mpy_32_16( a11, -23170 ), Mpy_32_16( a12, 23170 ) ); /* -Cπ/4 Cπ/4 */
+    b12 = L_add_sat( Mpy_32_16( a12, 23170 ), Mpy_32_16( a11, 23170 ) );  /*  Cπ/4 Cπ/4 */
+    b13 = L_add_sat( Mpy_32_16( a13, 23170 ), Mpy_32_16( a10, 23170 ) );  /*  Cπ/4 Cπ/4 */
+    b14 = L_sub_sat( in[1], in[14] );
+    b15 = L_sub_sat( in[0], in[15] );
+#else
     a0  = L_add(in[15], in[0]);
     a1  = L_add(in[14], in[1]);
     a2  = L_add(in[13], in[2]);
@@ -145,25 +176,63 @@ void dct32_fx(const Word32 *in, Word32 *out)
     b13 = L_add(Mpy_32_16(a13, 23170), Mpy_32_16(a10, 23170));  /*  Cπ/4 Cπ/4 */
     b14 = L_sub(in[1], in[14]);
     b15 = L_sub(in[0], in[15]);
+#endif
 
     a0 = L_add(b3, b0);
+  
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    a1 = L_add_sat( b2, b1 );
+    a2 = L_sub_sat( b1, b2 );
+#else
     a1 = L_add(b2, b1);
     a2 = L_sub(b1, b2);
+#endif
     a3 = L_sub_sat(b0, b3);
     a4 = b4;
     move16();
+  
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    a5 = L_add_sat( Mpy_32_16( b5, -23170 ), Mpy_32_16( b6, 23170 ) ); /* -Cπ/4 Cπ/4 */
+    a6 = L_add_sat( Mpy_32_16( b6, 23170 ), Mpy_32_16( b5, 23170 ) );  /*  Cπ/4 Cπ/4 */
+#else
     a5 = L_add(Mpy_32_16(b5, -23170), Mpy_32_16(b6, 23170)); /* -Cπ/4 Cπ/4 */
     a6 = L_add(Mpy_32_16(b6, 23170), Mpy_32_16(b5, 23170));  /*  Cπ/4 Cπ/4 */
+#endif
+  
     a7 = b7;
     move16();
+  
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    a8 = L_add_sat( b11, b8 );
+    a9 = L_add_sat( b10, b9 );
+    a10 = L_sub_sat( b9, b10 );
+#else
     a8  = L_add(b11, b8);
     a9  = L_add(b10, b9);
     a10 = L_sub(b9, b10);
+#endif
+  
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    a11 = L_sub_sat( b8, b11 );
+    a12 = L_sub_sat( b15, b12 );
+    a13 = L_sub_sat( b14, b13 );
+#else
     a11 = L_sub(b8, b11);
     a12 = L_sub(b15, b12);
     a13 = L_sub(b14, b13);
+#endif
+  
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    a14 = L_add_sat( b13, b14 );
+#else
     a14 = L_add(b13, b14);
+#endif
+  
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    a15 = L_add_sat( b12, b15 );
+#else
     a15 = L_add(b12, b15);
+#endif
 
     out[0] = L_add(Mpy_32_16(a0, 8192), Mpy_32_16(a1, 8192));
     move16(); /*  Cπ/4/√8   Cπ/4/√8  */
@@ -173,20 +242,43 @@ void dct32_fx(const Word32 *in, Word32 *out)
     move16(); /*  Sπ/8/√8   Cπ/8/√8  */
     out[12] = L_add(Mpy_32_16(a3, 4433), Mpy_32_16(a2, -10703));
     move16(); /*  C3π/8/√8 -S3π/8/√8 */
+  
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    b4 = L_add_sat( a5, a4 );
+#else
     b4 = L_add(a5, a4);
+#endif
     b5 = L_sub(a4, a5);
     b6 = L_sub_sat(a7, a6);
+  
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    b7 = L_add_sat( a6, a7 );
+#else
     b7 = L_add(a6, a7);
+#endif
     b8 = a8;
     move16();
+  
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    b9 = L_add_sat( Mpy_32_16( a9, -30274 ), Mpy_32_16( a14, 12540 ) );    /* -Cπ/8  Sπ/8 */
+    b10 = L_add_sat( Mpy_32_16( a10, -12540 ), Mpy_32_16( a13, -30274 ) ); /* -Sπ/8 -Cπ/8 */
+#else
     b9  = L_add(Mpy_32_16(a9, -30274), Mpy_32_16(a14, 12540));   /* -Cπ/8  Sπ/8 */
     b10 = L_add(Mpy_32_16(a10, -12540), Mpy_32_16(a13, -30274)); /* -Sπ/8 -Cπ/8 */
+#endif
+  
     b11 = a11;
     move16();
     b12 = a12;
     move16();
+  
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    b13 = L_add_sat( Mpy_32_16( a13, 12540 ), Mpy_32_16( a10, -30274 ) ); /* C3π/8 -S3π/8 */
+    b14 = L_add_sat( Mpy_32_16( a14, 30274 ), Mpy_32_16( a9, 12540 ) );   /* S3π/8  C3π/8 */
+#else
     b13 = L_add(Mpy_32_16(a13, 12540), Mpy_32_16(a10, -30274)); /* C3π/8 -S3π/8 */
     b14 = L_add(Mpy_32_16(a14, 30274), Mpy_32_16(a9, 12540));   /* S3π/8  C3π/8 */
+#endif
     b15 = a15;
     move16();
 

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -324,10 +324,10 @@ Word16 BASOP_Util_InvLog2_16(Word16 x, Word16 *y_e);
 Word32 invFixp(Word32 op_m, Word16 *op_e);
 #endif
 
-#define BASOP_CFFT_MAX_LENGTH 480
-void BASOP_cfft(Word32 *re, Word32 *im, Word16 sizeOfFft, Word16 s, Word16 *scale, Word32 *x);
-void BASOP_rfftN(Word32 *re, Word16 sizeOfFft, Word16 *scale, Word8 *scratchBuffer);
-void BASOP_irfftN(Word32 *re, Word16 sizeOfFft, Word16 *scale, Word8 *scratchBuffer);
+#define BASOP_CFFT_MAX_LENGTH 960
+void BASOP_cfft(Word32 *re, Word32 *im, Word16 sizeOfFft, Word16 s, Word16 *scale, lc3_scratch_t scratch);
+void BASOP_rfftN(Word32 *re, Word16 sizeOfFft, Word16 *scale, lc3_scratch_t scratch);
+void BASOP_irfftN(Word32 *re, Word16 sizeOfFft, Word16 *scale, lc3_scratch_t scratch);
 
 static __inline void basop_memcpy(void *dst, const void *src, size_t n)
 {

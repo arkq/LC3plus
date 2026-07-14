@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -11,10 +11,8 @@
 
 /*************************************************************************/
 
-
-
 void processNoiseFilling_fx(Word32 xq[], Word16 nfseed, Word16 xq_e, Word16 fac_ns_idx, Word16 BW_cutoff_idx,
-                            LC3PLUS_FrameDuration frame_dms, Word16 fac_ns_pc, Word16 spec_inv_idx, Word8 *scratchBuffer
+                            LC3PLUS_FrameDuration frame_dms, Word16 fac_ns_pc, Word16 spec_inv_idx, lc3_scratch_t scratch
 #ifdef ENABLE_HR_MODE
                             , Word16 hrmode
 #endif
@@ -29,7 +27,6 @@ void processNoiseFilling_fx(Word32 xq[], Word16 nfseed, Word16 xq_e, Word16 fac_
 
     noisefillwidth = 0; move16();
     noisefillstart = 0; move16();
-    ind = (Word16 *)scratchAlign(scratchBuffer, 0); /* Size = 2 * MAX_LEN bytes */
 
     c = 0;                                move16();
     
@@ -44,6 +41,21 @@ void processNoiseFilling_fx(Word32 xq[], Word16 nfseed, Word16 xq_e, Word16 fac_
     {
         N = BW_cutoff_bin_all[BW_cutoff_idx];
         move16();
+    }
+    
+    if ( scratch->max_scratch_calculation_only )
+    {
+        N = 400;
+    }
+    
+    ind = (Word16*) lc3_scratch_push( scratch, sizeof( *ind ) * N );
+    
+    if ( scratch->max_scratch_calculation_only )
+    {
+        ind = (Word16*) lc3_scratch_pop( scratch, ind );
+        Dyn_Mem_Deluxe_Out();
+        
+        return;
     }
 
     SWITCH (frame_dms)
@@ -152,6 +164,6 @@ void processNoiseFilling_fx(Word32 xq[], Word16 nfseed, Word16 xq_e, Word16 fac_
         }
     }
 
+    ind = (Word16*) lc3_scratch_pop( scratch, ind );
     Dyn_Mem_Deluxe_Out();
 }
-

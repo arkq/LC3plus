@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -158,7 +158,7 @@ FEC_STATIC void fec_data_postproc(Word16 mode, Word16 *epmr, UWord8 *iobuf, Word
                                   Word16 slot_bytes, Word16 pc_split, int *bfi);
 
 FEC_STATIC int rs16_detect_and_correct(UWord8 *iobuf, int n_symb, int n_codewords, Word16 *epmr, Word16 *error_report,
-                                       int *bfi, UWord8 *array_of_trust, int ccc_flag_flag, Word16 *n_pccw, void *scratch);
+                                       int *bfi, UWord8 *array_of_trust, int ccc_flag_flag, Word16 *n_pccw, lc3_scratch_t scratch);
 
 FEC_STATIC void rs16_calculate_six_syndromes(UWord8 *syndromes, UWord8 *cw, int cw_poly_deg);
 
@@ -478,7 +478,7 @@ FEC_STATIC Word16 fec_data_preproc(Word16 mode, Word16 epmr, UWord8 *iobuf, UWor
 }
 
 void fec_encoder(Word16 mode, Word16 epmr, UWord8 *iobuf, Word16 data_bytes, Word16 slot_bytes, Word16 n_pccw,
-                 void *scratch)
+                 lc3_scratch_t scratch)
 {
     Dyn_Mem_Deluxe_In(
         Word16  n_codewords, codeword_length, hd, redundancy_nibbles, cw_offset, dw_offset, pc_split;
@@ -489,7 +489,7 @@ void fec_encoder(Word16 mode, Word16 epmr, UWord8 *iobuf, Word16 data_bytes, Wor
     cw_offset = 0; move16();
     dw_offset = 0; move16();
     pc_split  = 0; move16();
-    cw_buf    = scratch;
+    cw_buf = (UWord8*) lc3_scratch_push( scratch, 2 * slot_bytes * sizeof( *cw_buf ) );
 
     n_codewords = get_n_codewords(slot_bytes);
     assert(n_codewords == (2 * slot_bytes + RS16_CW_LEN_MAX - 1) / RS16_CW_LEN_MAX);
@@ -550,7 +550,7 @@ void fec_encoder(Word16 mode, Word16 epmr, UWord8 *iobuf, Word16 data_bytes, Wor
 
     fec_interleave_pack(iobuf, cw_buf, add(slot_bytes, slot_bytes), n_codewords);
 
-
+    cw_buf = (UWord8*) lc3_scratch_pop( scratch, cw_buf );
     Dyn_Mem_Deluxe_Out();
 }
 
@@ -708,10 +708,9 @@ FEC_STATIC void fec_data_postproc(Word16 mode, Word16 *epmr, UWord8 *obuf, Word1
 }
 
 int fec_decoder(UWord8 *iobuf, Word16 slot_bytes, int *data_bytes, Word16 *epmr, Word16 ccc_flag, Word16 *n_pccw,
-                int *bfi, Word16 *be_bp_left, Word16 *be_bp_right, Word16 *n_pc, Word16 *m_fec, void *scratch)
+                int *bfi, Word16 *be_bp_left, Word16 *be_bp_right, Word16 *n_pc, Word16 *m_fec, lc3_scratch_t scratch)
 {
     Dyn_Mem_Deluxe_In(
-        UWord8 *my_scratch;
         UWord8 *cw_buf;
         UWord8 *array_of_trust;
         Word16  i, j;
@@ -728,6 +727,11 @@ int fec_decoder(UWord8 *iobuf, Word16 slot_bytes, int *data_bytes, Word16 *epmr,
         Dyn_Mem_Deluxe_Out();
         return ERROR_REPORT_BEC_MASK;
     }
+  
+    if ( scratch->max_scratch_calculation_only )
+    {
+        slot_bytes = FEC_SLOT_BYTES_MAX;
+    }
 
     if (slot_bytes < FEC_SLOT_BYTES_MIN || slot_bytes > FEC_SLOT_BYTES_MAX)
     {
@@ -735,9 +739,7 @@ int fec_decoder(UWord8 *iobuf, Word16 slot_bytes, int *data_bytes, Word16 *epmr,
         return ERROR_REPORT_BEC_MASK;
     }
 
-    my_scratch = (UWord8 *)scratch; move32();
-    cw_buf     = my_scratch;        move32();
-    my_scratch += 2 * slot_bytes;
+    cw_buf = (UWord8*) lc3_scratch_push( scratch, 2 * slot_bytes * sizeof( *cw_buf ) );
 
     IF (ccc_flag == 0)
     {
@@ -747,15 +749,14 @@ int fec_decoder(UWord8 *iobuf, Word16 slot_bytes, int *data_bytes, Word16 *epmr,
 
     n_codewords = get_n_codewords(slot_bytes);
 
-    array_of_trust = my_scratch; move32();
-    my_scratch += n_codewords;
+    array_of_trust = (UWord8*) lc3_scratch_push( scratch, n_codewords * sizeof( *array_of_trust ) );
 
     /* extract and de-interleave nibbles */
     fec_deinterleave_unpack(cw_buf, iobuf, 2 * slot_bytes, n_codewords);
 
     /* mode detection and error correction */
     mode = rs16_detect_and_correct(cw_buf, 2 * slot_bytes, n_codewords, epmr, &error_report, bfi, array_of_trust,
-                                   ccc_flag, n_pccw, (void *)my_scratch);
+                                   ccc_flag, n_pccw, scratch);
 
     /* for normal slots the maximal number of bit errors is limited */
     test();
@@ -786,6 +787,8 @@ int fec_decoder(UWord8 *iobuf, Word16 slot_bytes, int *data_bytes, Word16 *epmr,
     {
         *data_bytes = 0; move16();
 
+        array_of_trust = (UWord8*) lc3_scratch_pop( scratch, array_of_trust );
+        cw_buf = (UWord8*) lc3_scratch_pop( scratch, cw_buf );
         Dyn_Mem_Deluxe_Out();
         return error_report;
     }
@@ -835,6 +838,9 @@ int fec_decoder(UWord8 *iobuf, Word16 slot_bytes, int *data_bytes, Word16 *epmr,
         *data_bytes = 0; move32();
         error_report &= ERROR_REPORT_BEC_MASK;
         Dyn_Mem_Deluxe_Out();
+      
+        array_of_trust = (UWord8*) lc3_scratch_pop( scratch, array_of_trust );
+        cw_buf = (UWord8*) lc3_scratch_pop( scratch, cw_buf );
         return error_report;
     }
 
@@ -877,7 +883,8 @@ int fec_decoder(UWord8 *iobuf, Word16 slot_bytes, int *data_bytes, Word16 *epmr,
         *m_fec = mode;     move16();
     }
 
-
+    array_of_trust = (UWord8*) lc3_scratch_pop( scratch, array_of_trust );
+    cw_buf = (UWord8*) lc3_scratch_pop( scratch, cw_buf );
     Dyn_Mem_Deluxe_Out();
     return error_report;
 }
@@ -1007,7 +1014,7 @@ FEC_STATIC Word16 fec_estimate_epmr_from_cw0(UWord8 *cw0, Word8 *t, UWord8 *synd
 }
 
 FEC_STATIC int rs16_detect_and_correct(UWord8 *iobuf, int n_symb, int n_codewords, Word16 *epmr, Word16 *error_report,
-                                       int *bfi, UWord8 *array_of_trust, int ccc_flag, Word16 *n_pccw, void *scratch)
+                                       int *bfi, UWord8 *array_of_trust, int ccc_flag, Word16 *n_pccw, lc3_scratch_t scratch)
 {
     Dyn_Mem_Deluxe_In(
         UWord8 *      syndromes;
@@ -1016,7 +1023,6 @@ FEC_STATIC int rs16_detect_and_correct(UWord8 *iobuf, int n_symb, int n_codeword
         UWord8 *      err_symb;
         Word8         t[FEC_N_MODES];
         Word8 *       deg_elp;
-        UWord8 *      my_scratch;
         UWord8        blacklist[FEC_N_MODES];
         UWord8 const *hamming_distance;
 
@@ -1055,7 +1061,6 @@ FEC_STATIC int rs16_detect_and_correct(UWord8 *iobuf, int n_symb, int n_codeword
     error_report_ep_ok[1] = ERROR_REPORT_EP2_OK;
     error_report_ep_ok[2] = ERROR_REPORT_EP3_OK;
     error_report_ep_ok[3] = ERROR_REPORT_EP4_OK;
-    my_scratch          = (UWord8 *)scratch;
     hamming_distance    = &hamming_distance_by_mode0[1];
     mode                = -1;                      move16();
     n_mode_candidates   = 0;                       move16();
@@ -1082,16 +1087,11 @@ FEC_STATIC int rs16_detect_and_correct(UWord8 *iobuf, int n_symb, int n_codeword
         t[i] = (Word8)shr(sub(hamming_distance[i], 1), 1); move16();
     }
     
-    syndromes = my_scratch;
-    my_scratch += FEC_TOTAL_SYNDROME_SIZE;
-    elp = my_scratch;
-    my_scratch += FEC_TOTAL_ELP_SIZE;
-    err_pos = my_scratch;
-    my_scratch += FEC_TOTAL_ERR_POS_SIZE;
-    err_symb = my_scratch;
-    my_scratch += FEC_TOTAL_ERROR_SIZE;
-    deg_elp = (Word8 *)my_scratch;
-    my_scratch += FEC_TOTAL_DEG_ELP_SIZE;
+    syndromes = (UWord8*) lc3_scratch_push( scratch, FEC_TOTAL_SYNDROME_SIZE * sizeof( *syndromes ) );
+    elp = (UWord8*) lc3_scratch_push( scratch, FEC_TOTAL_ELP_SIZE * sizeof( *elp ) );
+    err_pos = (UWord8*) lc3_scratch_push( scratch, FEC_TOTAL_ERR_POS_SIZE * sizeof( *err_pos ) );
+    err_symb = (UWord8*) lc3_scratch_push( scratch, FEC_TOTAL_ERROR_SIZE * sizeof( *err_symb ) );
+    deg_elp = (Word8*) lc3_scratch_push( scratch, FEC_TOTAL_DEG_ELP_SIZE * sizeof( *deg_elp ) );
     
     *error_report = 0; move16();
     *bfi          = 0; move32();
@@ -1116,6 +1116,12 @@ FEC_STATIC int rs16_detect_and_correct(UWord8 *iobuf, int n_symb, int n_codeword
             mode = 0; move16();
             *error_report |= ERROR_REPORT_ALL_OK;
             Dyn_Mem_Deluxe_Out();
+          
+            deg_elp = (Word8*) lc3_scratch_pop( scratch, deg_elp );
+            err_symb = (UWord8*) lc3_scratch_pop( scratch, err_symb );
+            err_pos = (UWord8*) lc3_scratch_pop( scratch, err_pos );
+            elp = (UWord8*) lc3_scratch_pop( scratch, elp );
+            syndromes = (UWord8*) lc3_scratch_pop( scratch, syndromes );
             return add(mode, 1);
         }
         ELSE
@@ -1295,6 +1301,11 @@ FEC_STATIC int rs16_detect_and_correct(UWord8 *iobuf, int n_symb, int n_codeword
             *epmr = fec_estimate_epmr_from_cw0(iobuf, t, syndromes, elp, deg_elp, err_pos, err_symb, n_codewords,
                                                n_symb);
             
+            deg_elp = (Word8*) lc3_scratch_pop( scratch, deg_elp );
+            err_symb = (UWord8*) lc3_scratch_pop( scratch, err_symb );
+            err_pos = (UWord8*) lc3_scratch_pop( scratch, err_pos );
+            elp = (UWord8*) lc3_scratch_pop( scratch, elp );
+            syndromes = (UWord8*) lc3_scratch_pop( scratch, syndromes );
             Dyn_Mem_Deluxe_Out();
             return mode;
         }
@@ -1454,6 +1465,12 @@ FEC_STATIC int rs16_detect_and_correct(UWord8 *iobuf, int n_symb, int n_codeword
             *error_report |= error_report_ep_ok[i];
         }
     }
+  
+    deg_elp = (Word8*) lc3_scratch_pop( scratch, deg_elp );
+    err_symb = (UWord8*) lc3_scratch_pop( scratch, err_symb );
+    err_pos = (UWord8*) lc3_scratch_pop( scratch, err_pos );
+    elp = (UWord8*) lc3_scratch_pop( scratch, elp );
+    syndromes = (UWord8*) lc3_scratch_pop( scratch, syndromes );
 
     Dyn_Mem_Deluxe_Out();
     IF (mode >= 0)

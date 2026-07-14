@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -163,9 +163,12 @@ void process_ltpf_decoder_fx(Word16 *x_e, Word16 L_frame, Word16 old_x_len, Word
                              Word16 concealMethod,
                              Word16 damping, Word16 *old_scale_fac_idx,                      
                              Word32 *rel_pitch_change, Word16 hrmode, LC3PLUS_FrameDuration frame_dms,
-                             Word8 *scratchBuffer
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                             Word16 lossless,
+#endif
+                             lc3_scratch_t scratch
 #ifdef CR9_C_ADD_1p25MS
-                             , Word16* mem_continuation, Word16* mem_pitch_int_prev, 
+                             , Word16* mem_continuation, Word16* mem_pitch_int_prev,
                              Word16* mem_pitch_fr_prev, Word16* mem_beta_idx_prev, Word16* mem_gain_prev,  Word16 *ltpf_mem_active_prev, Word16* pitch_stability_counter
 #endif
                              )
@@ -201,9 +204,6 @@ void process_ltpf_decoder_fx(Word16 *x_e, Word16 L_frame, Word16 old_x_len, Word
 #    endif 
 
 #  endif
-
-    z = (Word16 *)scratchAlign(scratchBuffer, 0); /* Size = MAX_LEN / 4 + 10 */
-
 
 #  ifdef CR9_C_ADD_1p25MS
     UNUSED( frame_dms );
@@ -277,9 +277,20 @@ void process_ltpf_decoder_fx(Word16 *x_e, Word16 L_frame, Word16 old_x_len, Word
             }
             pitch     = add(shl_pos(pitch_int, 2), pitch_fr);
 #ifdef ENABLE_HR_MODE
-            IF (sub(fs_idx, 5) == 0)
+            IF (sub(fs_idx, 5) >= 0)
             {
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                IF(sub( fs_idx, 6 ) == 0 )
+                {
+                    pitch = round_fx( L_shl_pos( 2 * L_mult(  pitch_scale[4] , shl_pos( pitch, 2 ) ), 1 ) );
+                }
+                ELSE
+                {
+                    pitch = round_fx( L_shl_pos( L_mult( shl_pos( pitch, 2 ), pitch_scale[4] ), 1 ) );
+                }
+#else
                 pitch = round_fx(L_shl_pos(L_mult(shl_pos(pitch, 2), pitch_scale[4]), 1));
+#endif
             }
             ELSE
 #endif
@@ -365,7 +376,11 @@ void process_ltpf_decoder_fx(Word16 *x_e, Word16 L_frame, Word16 old_x_len, Word
 #endif
 
 #  ifdef LTPF_ADAPTIVE_GAIN
+#    ifdef CR14_A_ADD_LOSSLESS_MODE
+    IF (frame_dms == LC3PLUS_FRAME_DURATION_1p25MS && !lossless)
+#    else
     IF (frame_dms == LC3PLUS_FRAME_DURATION_1p25MS)
+#    endif
     {
 #ifdef FIX_LTPF_DEC_FLFX_MISMATCH
         /* Control variables */
@@ -381,10 +396,10 @@ void process_ltpf_decoder_fx(Word16 *x_e, Word16 L_frame, Word16 old_x_len, Word
 #    endif
 
 #  ifdef LTPF_ADAPTIVE_GAIN_WITH_NORM_CORR
-        Word16 tmp_y[LTPF_MEM_Y_LEN] = {0};
+        Word16* tmp_y = (Word16*) lc3_scratch_push( scratch, sizeof( *tmp_y ) * (old_y_len + L_frame) );
         basop_memmove( tmp_y, old_y, ( old_y_len ) * sizeof( Word16 ) );
         basop_memmove( tmp_y + old_y_len, x_in, ( L_frame ) * sizeof( Word16 ) );
-       
+
         Word16 scale1 = sub( getScaleFactor16_0( tmp_y, old_y_len + L_frame ), 3 );
         Scale_sig( tmp_y, old_y_len + L_frame, scale1 );
 
@@ -392,6 +407,8 @@ void process_ltpf_decoder_fx(Word16 *x_e, Word16 L_frame, Word16 old_x_len, Word
         {
             pitch_was_stable = compare_normalized_corrs(tmp_y + old_y_len, L_frame, pitch_int, *old_pitch_int);
         }
+
+        tmp_y = (Word16*) lc3_scratch_pop( scratch, tmp_y );
 #  endif
 
 #ifdef FIX_LTPF_DEC_FLFX_MISMATCH
@@ -585,6 +602,8 @@ void process_ltpf_decoder_fx(Word16 *x_e, Word16 L_frame, Word16 old_x_len, Word
 #    endif
             N34 = sub( L_frame, N4 );
             move16();
+            
+            z = (Word16*) lc3_scratch_push( scratch, sizeof( *z ) * ( N4 + tilt_filter_len[fs_idx] ) );
 
         /* Input */
         basop_memmove(x, x_in, (L_frame) * sizeof(Word16));
@@ -739,11 +758,9 @@ void process_ltpf_decoder_fx(Word16 *x_e, Word16 L_frame, Word16 old_x_len, Word
             *mem_ltpf_active = ltpf_active;
             move16();
 #endif
+            z = (Word16*) lc3_scratch_pop( scratch, z );
         }
     }
-
-
-
 
     IF( bfi == 0 && sub( hrmode, 1 ) == 0 && ( sub( frame_dms, LC3PLUS_FRAME_DURATION_5MS ) == 0 || sub( frame_dms, LC3PLUS_FRAME_DURATION_2p5MS ) == 0 ) )
     {

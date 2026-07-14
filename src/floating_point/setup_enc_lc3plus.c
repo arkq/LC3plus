@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -240,7 +240,11 @@ void set_enc_frame_params(LC3PLUS_Enc* encoder)
             encoder->la_zeroes = MDCT_la_zeroes_1_25ms[encoder->fs_idx];
             if (encoder->hrmode)
             {
+#ifdef CR14_A_ADD_1p25MS_HR
+                encoder->bands_offset = ACC_COEFF_PER_BAND_1_25ms_HR[encoder->fs_idx];
+#else
                 assert(0);
+#endif
             }
             else
             {
@@ -252,7 +256,12 @@ void set_enc_frame_params(LC3PLUS_Enc* encoder)
             encoder->stEnc_mdct_mem_len = encoder->frame_length - encoder->la_zeroes;
             if (encoder->hrmode)
             {
+#ifdef CR14_A_ADD_1p25MS_HR
+                encoder->bands_number = bands_number_1_25ms_HR[encoder->fs_idx];
+                encoder->BW_cutoff_bits = 0; /* transmit no bw bits */
+#else
                 assert(0);
+#endif
             }
             else
             {
@@ -311,10 +320,9 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc* encoder, int bitrate)
         {
 #ifdef CR9_C_ADD_1p25MS
         case LC3PLUS_FRAME_DURATION_1p25MS:
-            assert(0);
-            maxBR = 672000;
-            if (encoder->fs == 48000) {minBR = MIN_BR_25MS_48KHZ_HR;}
-            else if (encoder->fs == 96000) {minBR = MIN_BR_25MS_96KHZ_HR;}
+            maxBR = 780800;
+            if (encoder->fs == 48000) {minBR = MIN_BR_125MS_48KHZ_HR;}
+            else if (encoder->fs == 96000) {minBR = MIN_BR_125MS_96KHZ_HR;}
             else { return LC3PLUS_HRMODE_ERROR;}
             break;
 #endif
@@ -423,6 +431,13 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc* encoder, int bitrate)
         if (encoder->hrmode){
             switch( encoder->frame_dms )
             {
+            case LC3PLUS_FRAME_DURATION_1p25MS:
+                if( encoder->fs_in == 48000){
+                    fec_slot_bytes_min = FEC_SLOT_BYTES_MIN_125DMS_48KHZ_HR;
+                } else {
+                    fec_slot_bytes_min = FEC_SLOT_BYTES_MIN_125DMS_96KHZ_HR;
+                }
+                break;
             case LC3PLUS_FRAME_DURATION_2p5MS:
                 if( encoder->fs_in == 48000){
                     fec_slot_bytes_min = FEC_SLOT_BYTES_MIN_025DMS_48KHZ_HR;
@@ -640,7 +655,14 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc* encoder, int bitrate)
             setup->ltpf_enable = 0;
         }
         if (encoder->hrmode) {
+#ifdef CR14_A_ADD_1p25MS_HR
+            if (encoder->frame_dms != LC3PLUS_FRAME_DURATION_1p25MS)
+            {
+                setup->ltpf_enable = 0;
+            }
+#else
             setup->ltpf_enable = 0;
+#endif
         }
 
         /* turn down SNS shaping for higher rates */
@@ -676,10 +698,13 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc* encoder, int bitrate)
 #ifdef CR9_C_ADD_1p25MS
                 if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_1p25MS)
                 {
-                    assert(0);
-                    if (setup->total_bits > 4600/4) {
+#ifdef CR14_A_ADD_1p25MS_HR
+                    if (setup->total_bits > 4600/8) {
                         encoder->sns_damping = 4915.0/32768.0;
                     }
+#else
+                    assert(0);
+#endif
                 }
 #endif
             }
@@ -707,7 +732,11 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc* encoder, int bitrate)
 #ifdef CR9_C_ADD_1p25MS
                 if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_1p25MS)
                 {
+#ifdef CR14_A_ADD_1p25MS_HR
+                    setup->regBits += 0;
+#else
                     assert(0);
+#endif
                 }
 #endif
             }
@@ -716,7 +745,11 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc* encoder, int bitrate)
 #ifdef CR9_C_ADD_1p25MS
                 if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_1p25MS)
                 {
+#ifdef CR14_A_ADD_1p25MS_HR
+                    setup->regBits += 0;
+#else
                     assert(0);
+#endif
                 }
 #endif
                 if (encoder->frame_ms == LC3PLUS_FRAME_DURATION_2p5MS)

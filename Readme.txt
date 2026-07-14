@@ -1,7 +1,7 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
-*                        Software Version V1.8.0ETSI                          *
+*                        Software Version V1.9.2ETSI                          *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
 * Rights Policy, 3rd April 2019. No patent licence is granted by implication, *
 * estoppel or otherwise.                                                      *
@@ -20,10 +20,8 @@ The following structure outlines the content of this package.
 -/conformance         : conformance script with example configuration file and
                         Readme
 -/fec_control_unit    : example fec control unit script and Readme
--/src/fixed_point     : fixed-point source files, makefile and Visual Studio
-                        solution
--/src/floating_point  : floating-point source files, makefile and Visual Studio
-                        solution
+-/src/fixed_point     : fixed-point source files and CMakeLists.txt
+-/src/floating_point  : floating-point source files and CMakeLists.txt
 -/testvec             : testvector package with script. Verification that LC3plus
                         build on your system operates as expected by comparing to
                         pre-calculated MD5 hashes
@@ -35,17 +33,40 @@ Please refer to the respective Readme files for more information.
 Features
 --------
     - Supported sampling rates: 8 kHz, 16 kHz, 24 kHz, 32 kHz, 44.1 kHz,
-                                48 kHz, 96 kHz
+                                48 kHz, 96 kHz, 192 kHz (lossless mode only)
     - Multichannel support by multi-mono coding
     - Support of audio sample depth: 16 bits and 24 bits
     - Frame duration of 10 ms, 7.5 ms, 5 ms, 2.5 ms and 1.25 ms
     - Supported bit rates as outlined in Table 5.1 and Table 5.2 of TS 103 634
     - Packet loss concealment as defined in ETSI TS 103 634
+    - Lossless audio coding mode for 44.1, 48, 96 and 192 kHz with automatic
+      frame-by-frame switching to high-resolution mode when the given bit
+      budget is not sufficient for lossless encoding
+    - Padding option for lossless mode with given bitrate; lossless frames
+      are padded up to the bitrate to maintain a constant frame size
 
 Changelog
 ---------
   Latest non-bitexact changes are encapsulated in defines listed in defines.h
   for review.
+  
+    - V1.9.2ETSI 2026-06-14 (ETSI TS 103 634 V1.7.1)
+       - General
+            - Final version of LC3plus Lossless mode
+            - Minor memory optimizations
+  
+    - V1.9.1ETSI 2026-06-01 (ETSI TS 103 634 V1.6.4)
+       - General
+            - Stable version of LC3plus Lossless mode
+
+    - V1.9.0ETSI 2026-05-01 (ETSI TS 103 634 V1.6.3)
+       - General
+            - First version of LC3plus Lossless mode
+            - Fix global gain estimation precision in fixed-point software for 1.25 ms High-Resolution execution mode
+  
+    - V1.8.1ETSI 2025-12-17 (ETSI TS 103 634 V1.6.2)
+       - General
+            - Enable 1.25 ms High-Resolution mode
   
     - V1.8.0ETSI 2025-10-21 (ETSI TS 103 634 V1.6.1)
        - General
@@ -76,7 +97,7 @@ Changelog
        - General
             - Implemented CR1 on ETSI TS 103 634 V1.4.3 (changes marked with CR10)
 
-    - V1.7.1ETSI 2024-02-09 (ETSI TS 103 634 V1.4.4)
+    - V1.6.3ETSI 2024-02-09 (ETSI TS 103 634 V1.4.4)
        - General
             - Implemented CR1 on ETSI TS 103 634 V1.4.2 (changes marked with CR9)
   
@@ -166,16 +187,38 @@ Changelog
 
 Building
 --------
+    Build system: CMake (>=3.13). Unix Makefiles, Ninja and Visual Studio
+    generators are all supported.
+
     Unix platforms:
         - Go to src/fixed_point or src/floating_point folder
-        - Call "make"
-        - Executable path and name "./LC3plus"
+        - cmake -B build -S . -G "Unix Makefiles"
+        - cmake --build build -j
+        - Executable ends up at "./LC3plus" alongside the source files
 
     Windows platforms:
-        - Go to src/fixed_point/msvc or src/floating_point/msvc folder
-        - Open up solution file LC3plus.sln and build it
-        - Standard config executable path and name ".\Win32\Release\LC3plus.exe"
-        - The solution is optimized for Visual Studio 2017
+        - Go to src/fixed_point or src/floating_point folder
+        - cmake -B build -G "Visual Studio 17 2022"
+        - Open the generated build/LC3plus_FX.sln (or build/LC3plus_FL.sln)
+          in Visual Studio and build it, or run
+          cmake --build build --config Release
+
+    Build options (pass via -D<NAME>=<VALUE> to cmake configure):
+        - HR                       [ON,OFF]  fixed-point only, default ON
+        - WMOPS                    [ON,OFF]  fixed-point only, default ON
+        - NO_POST_REL_CHANGES_TEST [ON,OFF]  default OFF
+        - SHORT_PLC_FADEOUT        [ON,OFF]  default OFF
+        - GCOV                     [ON,OFF]  default OFF
+        - SUBSET                   [NB,WB,SSWB,SWB,FB,UB,ALL]  default ALL
+        - OPTIM                    [0..3]    default 0
+        - CLANG                    [0,1,2,3] 0=gcc; 1=clang+msan;
+                                             2=clang+asan; 3=clang+ubsan
+        - WINDOWS                  [ON,OFF]  cross-compile to win32 with
+                                             i686-w64-mingw32-gcc
+        - NAME_LC3                 output binary name (default LC3plus)
+
+    Additional fixed-point targets:
+        - ccConvert: cmake --build build --target ccConvert
 
 
 The floating-point source code introduces a floating-point data type and
@@ -197,6 +240,42 @@ Usage
 
     To call decoder only
         ./LC3plus -D INPUT.bin OUTPUT.wav
+
+    The lossless mode allows bit-exact reconstruction of the encoded audio
+    input signal on the decoder side. Supported sampling rates are 44.1 kHz,
+    48 kHz, 96 kHz and 192 kHz. The lossless mode covers the frame durations
+    10 ms, 7.5 ms, 5 ms, 2.5 ms and 1.25 ms and a wide range of bitrates, see Table 5.2a of
+    TS 103 634. Lossless mode is only available in the fixed-point code.
+    The codec rates required for lossless coding are therefore higher
+    compared to regular or high-resolution mode.
+
+    In case of bitrate restrictions (constant-bitrate mode), the lossless
+    mode features an automatic and seamless switching on a frame-by-frame
+    basis to high-resolution mode if the given bit budget is not sufficient
+    for lossless encoding. Whenever the bit budget is sufficient again, the
+    codec switches back to lossless mode. LC3plus thereby provides at any
+    time the coding mode with the highest quality possible for any given
+    bit rate requirement, either lossless or high-resolution, dynamically
+    switching between the modes at runtime. Lossless mode with a bitrate
+    restriction therefore acts as a high-resolution mode whenever the bit
+    budget is too tight, and as a true lossless mode whenever it suffices.
+
+    If no bitrate restriction applies, the lossless mode continually
+    provides lossless coding and determines the required bitrate for
+    lossless coding itself.
+
+    To enable lossless mode in variable-bitrate (no BITRATE argument)
+        ./LC3plus -lossless INPUT.wav OUTPUT.wav
+
+    To enable lossless mode with a bitrate cap; frames that do not fit into
+    the cap are coded in high-resolution mode instead
+        ./LC3plus -lossless INPUT.wav OUTPUT.wav BITRATE
+
+    To pad lossless frames to a constant frame size in constant-bitrate mode
+        ./LC3plus -lossless -padding INPUT.wav OUTPUT.wav BITRATE
+
+    To use relative priority for residual LSBs in lossless mode
+        ./LC3plus -lossless -rel_prio 1 INPUT.wav OUTPUT.wav BITRATE
 
     To specify output bits per sample
         ./LC3plus -bps NUM INPUT.wav OUTPUT.wav BITRATE
@@ -311,13 +390,12 @@ Usage
     and protected LC3plus payloads within each other.
 
     Building:
-    On Unix:
-        - make ccConvert
+    From src/fixed_point:
+        - cmake -B build -S .
+        - cmake --build build --target ccConvert
 
-    On Windows:
-        - Go to src/fixed_point/msvc_ccc
-        - Open up solution file ccConvert.sln and build it
-        - Standard config executable path and name ".\Win32\Release\ccConvert.exe"
+    On Windows use a Visual Studio generator (e.g. -G "Visual Studio 17 2022")
+    and build the ccConvert target from the generated solution.
 
     Usage:
     The CCC can be used as follows:

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -22,8 +22,8 @@ void plc_phEcu_peak_locator_fx(const Word16 *inp, /* i: vector with values >=0  
    const Word16  sens,                 /* i  sensitivity,   Qx */
    const Word16  inp_high,             /* i  global high ,  Qx */
    const Word16  inp_low,              /* i:  global low,  Qx */
-   Word16 maxLprot_Red,                /* i:  optional size for wc memory alloc of scratch buffer  */
-   Word8 *scratchBuffer                /* i: : scratch buffer      2*  3*(1+1+(maxLprot_Red/2)+1) */
+   Word16 maxLprot_Red,               
+   lc3_scratch_t scratch
 )
 {
    Counter       j, k, n, idx_high, idx_low;
@@ -66,9 +66,9 @@ void plc_phEcu_peak_locator_fx(const Word16 *inp, /* i: vector with values >=0  
    }));
 #endif
    BASOP_sub_sub_start("PhECU::peak_locator_fx(1st)");
-   sc_idx          = (Word16 *)scratchAlign(scratchBuffer, 0);                      /* ByteSize = 2 * (1+ inp_len+1) */
-   cand_pairs_buf  = (Word16 *)scratchAlign(sc_idx, sizeof(*sc_idx) * (1+inp_len+1)); /* ByteSize = 2 * (1+ 1+ inp_len+1   ) */
-   fsc_idx         = (Word16 *)scratchAlign(cand_pairs_buf , sizeof(*cand_pairs_buf) * (1+ 1+ inp_len+1));  /* ByteSize = 2 * ( 1+ inp_len + 1) */
+    sc_idx = (Word16*) lc3_scratch_push( scratch, sizeof( *sc_idx ) * ( 1 + inp_len + 1 ) );
+    cand_pairs_buf = (Word16*) lc3_scratch_push( scratch, sizeof( *cand_pairs_buf ) * ( 1 + 1 + inp_len + 1 ) );
+    fsc_idx = (Word16*) lc3_scratch_push( scratch, sizeof( *fsc_idx ) * ( 1 + inp_len + 1 ) );
    ASSERT((4 * maxLprot_Red) >= 3 * (1 + 1 + inp_len + 1)); /* basic buffer check */
    UNUSED(maxLprot_Red);
 
@@ -373,6 +373,11 @@ void plc_phEcu_peak_locator_fx(const Word16 *inp, /* i: vector with values >=0  
          }
       }
    }
+   
+    fsc_idx = (Word16*) lc3_scratch_pop( scratch, fsc_idx );
+    cand_pairs_buf = (Word16*) lc3_scratch_pop( scratch, cand_pairs_buf );
+    sc_idx = (Word16*) lc3_scratch_pop( scratch, sc_idx );
+   
 #ifdef DYNMEM_COUNT
    Dyn_Mem_Out();
 #endif

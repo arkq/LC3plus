@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -49,9 +49,19 @@ static Word16 stage1_base(                    /* o  :  idx                      
     FOR (col = 0; col < M / 2; col++) /* fixed to 8 elements */
     {
 #ifdef ENABLE_HR_MODE
-        err = L_sub(cdbk[col], L_deposit_h(t[col])); /* cdbk max abs value is 2048 = 2.^11 , max nb col is 2^3  max
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        err = L_sub_sat(cdbk[col], L_deposit_h(t[col])); 
+#else
+        err = L_sub(cdbk[col], L_deposit_h(t[col])); 
+#endif
+      /* cdbk max abs value is 2048 = 2.^11 , max nb col is 2^3  max
                                          target is approx similar (2.^14/M)*2  = +/- 2048 , errmax is 4096   */
+      
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        L_min_mse = L_add_sat(L_min_mse, Mpy_32_32(err, err));
+#else
         L_min_mse = L_add(L_min_mse, Mpy_32_32(err, err));
+#endif
 #else
         err = sub(cdbk[col], t[col]); /* cdbk max abs value is 2048 = 2.^11 , max nb col is 2^3  max target is approx
                                          similar (2.^14/M)*2  = +/- 2048 , errmax is 4096   */
@@ -70,8 +80,13 @@ static Word16 stage1_base(                    /* o  :  idx                      
         FOR (col = 0; col < M / 2; col++) /* fixed to 8 elements */
         {
 #ifdef ENABLE_HR_MODE
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            err = L_sub_sat(cdbk[k_ptr++], L_deposit_h(t[col]));
+            L_mse = L_sub_sat(L_mse, Mpy_32_32(err, err));
+#else
             err = L_sub(cdbk[k_ptr++], L_deposit_h(t[col]));
             L_mse = L_sub(L_mse, Mpy_32_32(err, err));
+#endif
 #else
             err   = sub(cdbk[k_ptr++], t[col]);
             L_mse = L_msu0(L_mse, err,
@@ -220,7 +235,7 @@ static void pvq_enc_find_best_submode_pre_post_fx(
 #else
     Word16 *enc_adj_glob_warped_vec,
 #endif
-    Word8 *scratchBuffer) /* Size = 18 * M */
+    Word8* scratchBuffer) /* Size = 18 * M */
 {
 
     Counter       L_section, idx;
@@ -423,7 +438,7 @@ static void processQuantize_stage2ScfEncStage2_fx(
                                                   const Word16 *target_st2, Word16 *st2_vector,
 #endif
                                                   Word32 *L_prm_idx,
-                                                  Word16 submodes, Word8 *scratchBuffer) /* Size = 26 * M + 48 */
+                                                  Word16 submodes, lc3_scratch_t scratch) /* Size = 26 * M + 48 */
 {                                                                                        /*func */
 #ifdef ENABLE_HR_MODE
     Word32 *proc_target;
@@ -472,31 +487,24 @@ static void processQuantize_stage2ScfEncStage2_fx(
 #endif /* ENABLE_HR_MODE */
 #endif /* DYNMEM_COUNT */
 
-#ifdef ENABLE_HR_MODE
-    buffer_pvq_enc_find_best_submode_pre_post_fx = (Word8 *) scratchAlign(scratchBuffer, 0);
-    proc_target         = (Word32 *) scratchAlign(buffer_pvq_enc_find_best_submode_pre_post_fx, sizeof(*buffer_pvq_enc_find_best_submode_pre_post_fx) * 28 * M);
-#else
-    buffer_pvq_enc_find_best_submode_pre_post_fx = scratchAlign(scratchBuffer, 0); /* Size = 18 * M */
-    proc_target =
-        (Word16 *)scratchAlign(buffer_pvq_enc_find_best_submode_pre_post_fx,
-                               sizeof(*buffer_pvq_enc_find_best_submode_pre_post_fx) * 18 * M); /* Size = 2 * M */
-#endif
-
-    enc_pulses_near = (Word16 *)scratchAlign(proc_target, sizeof(*proc_target) * M);         /* Size = 2 * M */
-    enc_pulsesA     = (Word16 *)scratchAlign(enc_pulses_near, sizeof(*enc_pulses_near) * M); /* Size = 2 * N_SETA */
-    enc_pulsesB     = (Word16 *)scratchAlign(enc_pulsesA, sizeof(*enc_pulsesA) * N_SETA);    /* Size = 2 * N_SETB */
-    pulses_fin = (Word16 *)scratchAlign(enc_pulsesB, sizeof(*enc_pulsesB) * N_SETB); /* Size = 2 * N_SCF_SHAPES_ST2 */
-    pulses_proj =
-        (Word16 *)scratchAlign(pulses_fin, sizeof(*pulses_fin) * N_SCF_SHAPES_ST2); /* Size = 2 * N_SCF_SHAPES_ST2 */
-    L_search_corr =
-        (Word32 *)scratchAlign(pulses_proj, sizeof(*pulses_proj) * N_SCF_SHAPES_ST2); /* Size = 4 * N_SCF_SHAPES_ST2 */
-    L_search_en    = (Word32 *)scratchAlign(L_search_corr,
-                                         sizeof(*L_search_corr) * N_SCF_SHAPES_ST2); /* Size = 4 * N_SCF_SHAPES_ST2 */
-    enc_pulses_far = (Word16 *)scratchAlign(L_search_en, sizeof(*L_search_en) * N_SCF_SHAPES_ST2); /* Size = 2 * M */
-
-#ifdef ENABLE_HR_MODE
-    proc_target_lp      = (Word16 *)buffer_pvq_enc_find_best_submode_pre_post_fx; /* size = 2*M */
-#endif
+#  ifdef ENABLE_HR_MODE
+    buffer_pvq_enc_find_best_submode_pre_post_fx = (Word8*) lc3_scratch_push( scratch, 28 * M * sizeof( *buffer_pvq_enc_find_best_submode_pre_post_fx ) );
+    proc_target = (Word32*) lc3_scratch_push( scratch, 18 * M * sizeof( *proc_target ) );
+#  else
+    buffer_pvq_enc_find_best_submode_pre_post_fx = (Word8*) lc3_scratch_push( scratch, 18 * M * sizeof( *buffer_pvq_enc_find_best_submode_pre_post_fx ) );
+    proc_target = (Word16*) lc3_scratch_push( scratch, 18 * M * sizeof( *proc_target ) );
+#  endif
+    enc_pulses_near = (Word16*) lc3_scratch_push( scratch, M * sizeof( *enc_pulses_near ) );
+    enc_pulsesA = (Word16*) lc3_scratch_push( scratch, sizeof( *enc_pulsesA ) * N_SETA );
+    enc_pulsesB = (Word16*) lc3_scratch_push( scratch, sizeof( *enc_pulsesB ) * N_SETB );
+    pulses_fin = (Word16*) lc3_scratch_push( scratch, sizeof( *pulses_fin ) * N_SCF_SHAPES_ST2 );
+    pulses_proj = (Word16*) lc3_scratch_push( scratch, sizeof( *pulses_proj ) * N_SCF_SHAPES_ST2 );
+    L_search_corr = (Word32*) lc3_scratch_push( scratch, sizeof( *L_search_corr ) * N_SCF_SHAPES_ST2 );
+    L_search_en = (Word32*) lc3_scratch_push( scratch, sizeof( *L_search_en ) * N_SCF_SHAPES_ST2 );
+    enc_pulses_far = (Word16*) lc3_scratch_push( scratch, sizeof( *enc_pulses_far ) * M );
+#  ifdef ENABLE_HR_MODE
+    proc_target_lp = (Word16*) buffer_pvq_enc_find_best_submode_pre_post_fx; /* size = 2*M */
+#  endif
     
     BASOP_sub_sub_start("processQuantize_stage2ScfEncStage2_fx");
 
@@ -621,6 +629,21 @@ static void processQuantize_stage2ScfEncStage2_fx(
         }
         L_prm_idx[2] = L_deposit_l(enc_PVQ_OA.lead_sign_ind); /* LS shape single bit */
     }
+  
+    enc_pulses_far = (Word16*) lc3_scratch_pop( scratch, enc_pulses_far );
+    L_search_en = (Word32*) lc3_scratch_pop( scratch, L_search_en );
+    L_search_corr = (Word32*) lc3_scratch_pop( scratch, L_search_corr );
+    pulses_proj = (Word16*) lc3_scratch_pop( scratch, pulses_proj );
+    pulses_fin = (Word16*) lc3_scratch_pop( scratch, pulses_fin );
+    enc_pulsesB = (Word16*) lc3_scratch_pop( scratch, enc_pulsesB );
+    enc_pulsesA = (Word16*) lc3_scratch_pop( scratch, enc_pulsesA );
+    enc_pulses_near = (Word16*) lc3_scratch_pop( scratch, enc_pulses_near );
+#  ifdef ENABLE_HR_MODE
+    proc_target = (Word32*) lc3_scratch_pop( scratch, proc_target );
+#  else
+    proc_target = (Word16*) lc3_scratch_pop( scratch, proc_target );
+#  endif
+    buffer_pvq_enc_find_best_submode_pre_post_fx = (Word8*) lc3_scratch_pop( scratch, buffer_pvq_enc_find_best_submode_pre_post_fx );
 
     BASOP_sub_sub_end();
 #ifdef DYNMEM_COUNT
@@ -636,7 +659,7 @@ static Word16 scfdec_stage2_fx(                          /* o: ber flag */
 #else
                                Word16 *      st2_vector, /*o: Q14 */
 #endif
-                               Word8 *       scratchBuffer)
+                               lc3_scratch_t scratch)
 {
     /*   MPVQ deindexing, gainscaling transform and transform */
 #ifdef ENABLE_HR_MODE
@@ -667,14 +690,14 @@ static Word16 scfdec_stage2_fx(                          /* o: ber flag */
 
     BASOP_sub_sub_start("scfdec_stage2_fx");
 
-    dec_pulses       = (Word16 *)scratchAlign(scratchBuffer, 0);                      /* Size = 2 * M = 32 bytes */
-#ifdef ENABLE_HR_MODE
-    dec_en1_vec      = (Word32 *)scratchAlign(dec_pulses, sizeof(*dec_pulses) * M);   /* Size = 2 * M = 32 bytes */
-    dec_adj_glob_vec = (Word32 *)scratchAlign(dec_en1_vec, sizeof(*dec_en1_vec) * M); /* Size = 2 * M = 32 bytes */
-#else
-    dec_en1_vec      = (Word16 *)scratchAlign(dec_pulses, sizeof(*dec_pulses) * M);   /* Size = 2 * M = 32 bytes */
-    dec_adj_glob_vec = (Word16 *)scratchAlign(dec_en1_vec, sizeof(*dec_en1_vec) * M); /* Size = 2 * M = 32 bytes */
-#endif
+    dec_pulses = (Word16*) lc3_scratch_push( scratch, sizeof( *dec_pulses ) * M );
+#  ifdef ENABLE_HR_MODE
+    dec_en1_vec = (Word32*) lc3_scratch_push( scratch, sizeof( *dec_en1_vec ) * M );
+    dec_adj_glob_vec = (Word32*) lc3_scratch_push( scratch, sizeof( *dec_adj_glob_vec ) * M );
+#  else
+    dec_en1_vec = (Word16*) lc3_scratch_push( scratch, sizeof( *dec_en1_vec ) * M );
+    dec_adj_glob_vec = (Word16*) lc3_scratch_push( scratch, sizeof( *dec_adj_glob_vec ) * M );
+#  endif
 
     /* get submode   */
     submode = extract_l(L_prm_idx[0]); /* 0..3 */
@@ -726,6 +749,15 @@ static Word16 scfdec_stage2_fx(                          /* o: ber flag */
 
     /* scaling aligend with encoder search  */
     pvq_dec_scale_vec_fx(dec_adj_glob_vec, gValQ13, st2_vector);
+  
+#  ifdef ENABLE_HR_MODE
+    dec_adj_glob_vec = (Word32*) lc3_scratch_pop( scratch, dec_adj_glob_vec );
+    dec_en1_vec = (Word32*) lc3_scratch_pop( scratch, dec_en1_vec );
+#  else
+    dec_adj_glob_vec = (Word16*) lc3_scratch_pop( scratch, dec_adj_glob_vec );
+    dec_en1_vec = (Word16*) lc3_scratch_pop( scratch, dec_en1_vec );
+#  endif
+    dec_pulses = (Word16*) lc3_scratch_pop( scratch, dec_pulses );
 
     BASOP_sub_sub_end();
     Dyn_Mem_Deluxe_Out();
@@ -739,32 +771,28 @@ void processSnsQuantizeScfEncoder_fx(Word16  scf[],        /* i: input scf M */
 #else
                                      Word16 *scf_q,        /* o: quantized scf M */
 #endif
-                                     Word8 * scratchBuffer) /* Size = 28 * M + 52 */
+                                     lc3_scratch_t scratch) /* Size = 28 * M + 52 */
 {
 #ifdef ENABLE_HR_MODE
     Dyn_Mem_Deluxe_In(
         Word32 *target_st2; 
         Word16 *st1_idx; /* stage 1 indices */
-        Word8 * buffer_processQuantize_stage2ScfEncStage2_fx;
         Counter col;
     );
 #else
     Dyn_Mem_Deluxe_In(
         Word16 *target_st2;
         Word16 *st1_idx; /* stage 1 indices */
-        Word8 * buffer_processQuantize_stage2ScfEncStage2_fx;
         Counter col;
     );
 #endif
 
-#ifdef ENABLE_HR_MODE
-    target_st2 = (Word32 *)scratchAlign(scratchBuffer, 0);                    /* Size = 2 * M */
-#else
-    target_st2 = (Word16 *)scratchAlign(scratchBuffer, 0);                    /* Size = 2 * M */
-#endif
-    st1_idx    = (Word16 *)scratchAlign(target_st2, sizeof(*target_st2) * M); /* Size = 2 * 2 */
-    buffer_processQuantize_stage2ScfEncStage2_fx = (Word8 *)scratchAlign(st1_idx, sizeof(*st1_idx) * M);
-    /* Size = 26 * M + 48 */
+#  ifdef ENABLE_HR_MODE
+    target_st2 = (Word32*) lc3_scratch_push( scratch, sizeof( *target_st2 ) * M );
+#  else
+    target_st2 = (Word16*) lc3_scratch_push( scratch, sizeof( *target_st2 ) * M );
+#  endif
+    st1_idx = (Word16*) lc3_scratch_push( scratch, sizeof( *st1_idx ) * M );
 
     /* TBD needs update  */
 
@@ -777,14 +805,27 @@ void processSnsQuantizeScfEncoder_fx(Word16  scf[],        /* i: input scf M */
     FOR (col = 0; col < M; col++)
     {
 #ifdef ENABLE_HR_MODE
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        target_st2[col] = L_sub_sat(L_deposit_h(scf[col]), scf_q[col]);
+#else
         target_st2[col] = L_sub(L_deposit_h(scf[col]), scf_q[col]);
+#endif
 #else
         target_st2[col] = sub(scf[col], scf_q[col]);
 #endif
     }
 
     processQuantize_stage2ScfEncStage2_fx(target_st2, scf_q, &L_prm_idx[2], VQMODES26,   /* 0xF means all submodes */
-                                          buffer_processQuantize_stage2ScfEncStage2_fx); /*  PVQ  in stage 2 */
+                                          scratch); /*  PVQ  in stage 2 */
+  
+
+    st1_idx = (Word16*) lc3_scratch_pop( scratch, st1_idx );
+#  ifdef ENABLE_HR_MODE
+    target_st2 = (Word32*) lc3_scratch_pop( scratch, target_st2 );
+#  else
+    target_st2 = (Word16*) lc3_scratch_pop( scratch, target_st2 );
+#  endif
+  
     Dyn_Mem_Deluxe_Out();
 }
 
@@ -795,7 +836,7 @@ Word16 processSnsQuantizeScfDecoder_fx(                                      /* 
 #else 
                                        Word16 scf_q[],
 #endif
-                                       Word8 *scratchBuffer) /* o:  M */
+                                       lc3_scratch_t scratch) /* o:  M */
 {
     Dyn_Mem_Deluxe_In(
         Word16 BER_flag;
@@ -811,7 +852,7 @@ Word16 processSnsQuantizeScfDecoder_fx(                                      /* 
 #endif
 
     /* Decode Second Stage */
-    BER_flag = scfdec_stage2_fx(&(L_prm_idx[2]), scf_q, scratchBuffer);
+    BER_flag = scfdec_stage2_fx(&(L_prm_idx[2]), scf_q, scratch);
 
     Dyn_Mem_Deluxe_Out();
     return BER_flag;
@@ -821,35 +862,30 @@ Word16 processSnsQuantizeScfDecoder_fx(                                      /* 
 Word16 snsQuantScfDecLR_fx(Word32* L_sns_vq_idx_fx,
     Word32* L_scf_q_fx, /* o: Q26 */
     Word16* scf_q_fx,   /* o: Q11 */
-    Word16 pitch_rx_fx, Word16  ltpf_rx_fx, Word8 * scratch)
+    Word16 pitch_rx_fx, Word16  ltpf_rx_fx, lc3_scratch_t scratch)
 {
-
- 
-
     Dyn_Mem_Deluxe_In(
         Counter   i;
     Word32   L_mPVQ_ind_fx;         /* can be up to 17 bits  */
     Word16   shape_idx_fx, gain_idx_fx, cb_idx_fx, aux_idx_fx, LS_ind_fx;
     Word16   env_ind_fx, shift_ind_fx, sign_ind_fx, n_signs_fx;
 
-    Word16   *Y_shape_j_fx; /* Q0 */
-    Word16   *Xq_shape_j_fx;  /* Q14 */
-    Word32   *L_Xq_shape_j_fx;
-    const Word16 *cb_fx;
-    Word16 * st1_scf_q_fx;
-    Word16  CBCmeanp_ind_fx;
-    const Word16  *gainTab_fx;
-    Word16 gainValQ12_fx;
-    Word16 BER_dec;
-    Word32 L_y_en, L_norm_factor;
-    Word16 norm_factorQ, y_upshift;
-    );
+        Word16 * Y_shape_j_fx;  /* Q0 */
+        Word16 * Xq_shape_j_fx; /* Q14 */
+        Word32 * L_Xq_shape_j_fx;
+        const Word16* cb_fx;
+        Word16 * st1_scf_q_fx;
+        Word16 CBCmeanp_ind_fx;
+        const Word16* gainTab_fx;
+        Word16 gainValQ12_fx;
+        Word16 BER_dec;
+        Word32 L_y_en, L_norm_factor;
+        Word16 norm_factorQ, y_upshift; );
 
-    st1_scf_q_fx = (Word16*)scratchAlign(scratch, 0);
-    Y_shape_j_fx = (Word16*)scratchAlign(st1_scf_q_fx, sizeof(*st1_scf_q_fx) * M);                      /*1*16*/
-    L_Xq_shape_j_fx = (Word32*)scratchAlign(Y_shape_j_fx, sizeof(*Y_shape_j_fx) * M);                   /*1*16*/
-    Xq_shape_j_fx = (Word16*)scratchAlign(L_Xq_shape_j_fx, sizeof(*L_Xq_shape_j_fx) * M);               /*1*16*/
-                                                                                                       /*1*16*/
+    st1_scf_q_fx = lc3_scratch_push( scratch, sizeof( *st1_scf_q_fx ) * M );
+    Y_shape_j_fx = lc3_scratch_push( scratch, sizeof( *Y_shape_j_fx ) * M );
+    L_Xq_shape_j_fx = lc3_scratch_push( scratch, sizeof( *L_Xq_shape_j_fx ) * M );
+    Xq_shape_j_fx = lc3_scratch_push( scratch, sizeof( *Xq_shape_j_fx ) * M );
 
 #ifdef  LRSNS_CBC_NO_LTPF_DEPENDENCY
     UNUSED(ltpf_rx_fx);
@@ -1064,15 +1100,21 @@ Word16 snsQuantScfDecLR_fx(Word32* L_sns_vq_idx_fx,
             L_scf_q_fx[i] = L_shr_pos(L_deposit_h(scf_q_fx[i]), 1); /* 11+16-1 => Q26 */
         }
     }
+
+
+
+    Xq_shape_j_fx = lc3_scratch_pop( scratch, Xq_shape_j_fx );
+    L_Xq_shape_j_fx = lc3_scratch_pop( scratch, L_Xq_shape_j_fx );
+    Y_shape_j_fx = lc3_scratch_pop( scratch, Y_shape_j_fx );
+    st1_scf_q_fx = lc3_scratch_pop( scratch, st1_scf_q_fx );
+
     Dyn_Mem_Deluxe_Out();
 
     return BER_dec;
 }
  
 /* split out of LRSNS stage 1 functionality */
-Word32 snsQuantScfEncLRSt1ABC_fx(Word16* env, Word32* L_index, Word32 *L_min_mse_saveBCA_ptr_fx,
-    Word16* ind_saveB_ptr, Word16* st1_vectors,
-    Word16 pitch_rx, Word16 ltpf_rx, Word8 * scratch)
+Word32 snsQuantScfEncLRSt1ABC_fx( Word16* env, Word32* L_index, Word32* L_min_mse_saveBCA_ptr_fx, Word16* ind_saveB_ptr, Word16* st1_vectors, Word16 pitch_rx, Word16 ltpf_rx, lc3_scratch_t scratch )
 {
  
     Dyn_Mem_Deluxe_In(
@@ -1091,16 +1133,13 @@ Word32 snsQuantScfEncLRSt1ABC_fx(Word16* env, Word32* L_index, Word32 *L_min_mse
 
     stage1_mode = -1;   /* output */
 
-    st1_vectorB_idx_fx = scratchAlign(scratch, 0);
-    target_fx = scratchAlign(scratch, sizeof(*st1_vectorB_idx_fx) * M);
-   
-#ifdef  LRSNS_CBC_NO_LTPF_DEPENDENCY
-    UNUSED(ltpf_rx);
-#endif 
-    st1_vectorA_fx = &(st1_vectors[0]);
-    st1_vectorB_fx = &(st1_vectors[1 * M]);
-    st1_vectorC_fx = &(st1_vectors[2 * M]);
-    st1_vector_fx = &(st1_vectors[3 * M]);  /*selected winner */
+    st1_vectorB_idx_fx = lc3_scratch_push( scratch, sizeof( *st1_vectorB_idx_fx ) * M );
+    target_fx = lc3_scratch_push( scratch, sizeof( *target_fx ) * M );
+
+    st1_vectorA_fx = &( st1_vectors[0] );
+    st1_vectorB_fx = &( st1_vectors[1 * M] );
+    st1_vectorC_fx = &( st1_vectors[2 * M] );
+    st1_vector_fx = &( st1_vectors[3 * M] ); /*selected winner */
 
     BASOP_sub_sub_start("snsQuantScfEncLRSt1ABC_fx");
 
@@ -1270,80 +1309,79 @@ Word32 snsQuantScfEncLRSt1ABC_fx(Word16* env, Word32* L_index, Word32 *L_min_mse
 
     BASOP_sub_sub_end();
 
+    target_fx = lc3_scratch_pop( scratch, target_fx );
+    st1_vectorB_idx_fx = lc3_scratch_pop( scratch, st1_vectorB_idx_fx );
+
     Dyn_Mem_Deluxe_Out();
 
     return stage1_mode; /* return best mode */
 }
 
 /*  top level  lrsns BASOP code  calling both st1 and st2 */
-Word16  snsQuantScfEncLR_fx(   /* o:  bits spent on LRSNS-VQ  envelope */
-    Word16  scf_fx[],            /* i: input scf M W16Q11  */
-    Word32 *L_index_fx,          /* o: SNS  indeces . */
-#  ifdef ENABLE_HR_MODE
-    Word32 *L_scf_q_fx,          /* o: quantizefl_env scf M   ? W32Q11 or W32Q27 */
-#else
-    Word16 *scf_q_fx,            /* o: quantizefl_env scf M   W16Q11 */
-#endif
-    Word16  pitch_rx_fx,             /*i:  0 or 1 */
-    Word16  ltpf_rx_fx,               /*i:  o or 1 */
-    Word8 * scratch)
+Word16 snsQuantScfEncLR_fx(                     /* o:  bits spent on LRSNS-VQ  envelope */
+                            Word16 scf_fx[],    /* i: input scf M W16Q11  */
+                            Word32* L_index_fx, /* o: SNS  indeces . */
+#    ifdef ENABLE_HR_MODE
+                            Word32* L_scf_q_fx, /* o: quantizefl_env scf M   ? W32Q11 or W32Q27 */
+#    else
+                            Word16* scf_q_fx, /* o: quantizefl_env scf M   W16Q11 */
+#    endif
+                            Word16 pitch_rx_fx, /*i:  0 or 1 */
+                            Word16 ltpf_rx_fx,  /*i:  o or 1 */
+                            lc3_scratch_t scratch )
 {
 
     Dyn_Mem_Deluxe_In(
-        Counter    col;
- 
-    Word16 *st1_vectorA_fx, *st1_vectorB_fx, *st1_vectorC_fx, *st1_vector_fx;
-    Word16 ind_saveB_fx;
-    Word16 st1_mode_fx;
-    Word16 envelope_bits_fx; /* output */
-    Word32 L_min_mse_saveBCA_Q22_fx;
+        Counter col;
+        Word16 * st1_vectors_fx;
+        Word16 * st1_vectorA_fx, *st1_vectorB_fx, *st1_vectorC_fx, *st1_vector_fx;
 
-    Word16 gain_idx_fx; /* gain  index 0..3, 0..7,  0..7  */
-    Word16 s_idx_fx; /* shape index 0 =split, 1 = full,  2= fix*/
-    Word16 shape_idx_fx; /* expanded shape index 0 ..5 */
-    Word32 L_mse_st1B_st2_Q22_fx;
-    Word16  *y_split_fx, *y_full_fx, *y_fix_fx;
-    Word16  gainValQ12_fx;   /* output from PVQ search */
-    Word16  fixShapeNb;
-    Word16  fixShiftIdx;
-   
-    /* scratch ptrs */
-    Word16 *st1_vectors_fx;
-    Word16 *target_st2_fx; 
-    Word8  *scratch_ABC_fx;
-    Word32 *L_target_st2_fx;    /*  req. for dct32 use */
-    Word16 *pvq_target_fx;
-    Word32 *L_pvq_target_fx;
-    Word16  *y_Q0;
-    Word16  *y_normQ14_fx;
-    Word32  *L_y_normQ30_fx;
-    Word8  *scratch_pvq_fess_fx;
-    );
+        Word16 ind_saveB_fx;
+        Word16 st1_mode_fx;
+        Word16 envelope_bits_fx; /* output */
+        Word32 L_min_mse_saveBCA_Q22_fx;
 
+        Word16 * target_st2_fx;
+        Word32 * L_target_st2_fx; /*  req. for dct32 use */
 
-#ifdef   ENABLE_HR_MODE
-    Word16 scf_q_fx[M];            /*   W16Q11  always in use also for HR_MODE */
-    UNUSED(scf_q_fx);
-#endif 
-    UNUSED(st1_mode_fx);
-    UNUSED(st1_vectorA_fx);
-    UNUSED(st1_vectorC_fx);
+        Word16 * pvq_target_fx;
+        Word32 * L_pvq_target_fx;
+
+        Word16 gain_idx_fx;  /* gain  index 0..3, 0..7,  0..7  */
+        Word16 s_idx_fx;     /* shape index 0 =split, 1 = full,  2= fix*/
+        Word16 shape_idx_fx; /* expanded shape index 0 ..5 */
+        Word32 L_mse_st1B_st2_Q22_fx;
+        Word16 * y_split_fx, *y_full_fx, *y_fix_fx;
+        Word16 * y_Q0;
+        Word16 * y_normQ14_fx;
+        Word32 * L_y_normQ30_fx;
+        Word16 gainValQ12_fx; /* output from PVQ search */
+        Word16 fixShapeNb;
+        Word16 fixShiftIdx; );
+#    ifdef ENABLE_HR_MODE
+    Word16 scf_q_fx[M]; /*   W16Q11  always in use also for HR_MODE */
+    UNUSED( scf_q_fx );
+#    endif
+    UNUSED( st1_mode_fx );
+    UNUSED( st1_vectorA_fx );
+    UNUSED( st1_vectorC_fx );
 
     st1_mode_fx = -1;          move16();
     envelope_bits_fx = -1;     move16(); /* output information  */
     shape_idx_fx = 0;         move16();
 
-    st1_vectors_fx    = (Word16*)scratchAlign(scratch, 0);
-    scratch_ABC_fx    = (Word8*)scratchAlign(st1_vectors_fx, sizeof(*st1_vector_fx) * M * 4);
-    target_st2_fx     = (Word16*)scratch_ABC_fx;
-    L_target_st2_fx   = (Word32*)scratchAlign(target_st2_fx, sizeof(*target_st2_fx) * M);
+    st1_vectors_fx = lc3_scratch_push( scratch, sizeof( *st1_vector_fx ) * M * 4 );
 
-    pvq_target_fx = (Word16*)scratchAlign(L_target_st2_fx, sizeof(*L_target_st2_fx) * M);
-    L_pvq_target_fx = (Word32*)scratchAlign(pvq_target_fx, sizeof(*pvq_target_fx) * M);
-    y_Q0 = (Word16*)scratchAlign(L_pvq_target_fx, sizeof(*L_pvq_target_fx) * M);
-    y_normQ14_fx = (Word16*)scratchAlign(y_Q0, sizeof(*y_Q0) *SNSLR_MAX_PVQ_SEARCH_CAND*M);           
-    L_y_normQ30_fx = (Word32*)scratchAlign(y_normQ14_fx, sizeof(*y_normQ14_fx) *SNSLR_MAX_PVQ_SEARCH_CAND*M);                               
-    scratch_pvq_fess_fx = (Word8*)scratchAlign(L_y_normQ30_fx, sizeof(*L_y_normQ30_fx) * SNSLR_MAX_PVQ_SEARCH_CAND * M );  
+    target_st2_fx = lc3_scratch_push( scratch, sizeof( *target_st2_fx ) * M );
+    L_target_st2_fx = lc3_scratch_push( scratch, sizeof( *L_target_st2_fx ) * M );
+
+    pvq_target_fx = lc3_scratch_push( scratch, sizeof( *pvq_target_fx ) * M );
+    L_pvq_target_fx = lc3_scratch_push( scratch, sizeof( *L_pvq_target_fx ) * M );
+
+    y_Q0 = lc3_scratch_push( scratch, sizeof( *y_Q0 ) * SNSLR_MAX_PVQ_SEARCH_CAND * M ); /* 3*16 */
+
+    y_normQ14_fx = lc3_scratch_push( scratch, sizeof( *y_normQ14_fx ) * SNSLR_MAX_PVQ_SEARCH_CAND * M );     /* 3*16 */
+    L_y_normQ30_fx = lc3_scratch_push( scratch, sizeof( *L_y_normQ30_fx ) * SNSLR_MAX_PVQ_SEARCH_CAND * M ); /* 3*16 */
 
     y_split_fx = &(y_Q0[0 * M]); /* ptr init */
     y_full_fx = &(y_Q0[1 * M]);  /* ptr init */
@@ -1365,16 +1403,47 @@ Word16  snsQuantScfEncLR_fx(   /* o:  bits spent on LRSNS-VQ  envelope */
 
     st1_mode_fx = snsQuantScfEncLRSt1ABC_fx(
         scf_fx, L_index_fx, &L_min_mse_saveBCA_Q22_fx, &ind_saveB_fx, st1_vectors_fx,
-        pitch_rx_fx, ltpf_rx_fx, scratch_ABC_fx);
+        pitch_rx_fx, ltpf_rx_fx, scratch );
 
     Word32 L_mse_lim_smooth_Q22_fx = 22691185L; /* round(5.41*pow(2.0, 22.0))*//* 1.75 dB */
 
     /* mse_st1B_st2_fl = 2.0* min_mse_saveBCA + 1.0;*/   /*  safety indicate that st1B+st2 is not used by setting a higher MSE than st1BCA  */
     L_mse_st1B_st2_Q22_fx = L_add(L_shl_pos(L_min_mse_saveBCA_Q22_fx, 1), (1L << 22)); /* set st1B+st2 to a safety bad MSE value */
 
+    if ( scratch->max_scratch_calculation_only )
+    {
+        FOR( col = 0; col < M; col++ )
+        {
+            target_st2_fx[col] = sub( scf_fx[col], st1_vectorB_fx[col] ); /* Q11 */
+        }
 
-    IF((L_sub(L_min_mse_saveBCA_Q22_fx, L_mse_lim_smooth_Q22_fx) > 0))
-    {   /* stage 2 analysis */
+        /* both ENABLE_HR and DISABLE_HR runs the same analysis DCT-II(16)  */
+        /* for analysis use 16 bit i/o Word16 constants,  but Word32 internal states in DCT-II(M=16) */
+        basop_memcpy( pvq_target_fx, target_st2_fx, M * sizeof( *pvq_target_fx ) );
+
+        dct16_W32int_fx( pvq_target_fx, pvq_target_fx ); /*  Q11 to Q11,   enc-side  analysis with  W16 i/o internally W32 precision  */
+
+        pvq_target_fx[0] = 0;
+        move16();
+
+        pvq_fess_enc_search_fx(
+            pvq_target_fx,
+            y_Q0,
+            y_normQ14_fx,   /*  normally  calculated for DISABLE_HR_MODE */
+            L_y_normQ30_fx, /*  calculated for both DISABLE_HR_MODE and ENABLE_HR_MODE */
+            &s_idx_fx /*[0,1,2]*/,
+            &gain_idx_fx /* [0...7]*/,
+            &gainValQ12_fx,
+            &fixShapeNb,  /* 0,1,2,3, [-1] */
+            &fixShiftIdx, /* 0,1,2,3, [-1] */
+            &L_mse_st1B_st2_Q22_fx,
+            scratch );
+    }
+
+
+    IF( ( L_sub( L_min_mse_saveBCA_Q22_fx, L_mse_lim_smooth_Q22_fx ) > 0 ) )
+
+    { /* stage 2 analysis */
         /* prepare stage2 W16 target */
         FOR(col = 0; col < M; col++)
         {
@@ -1402,8 +1471,7 @@ Word16  snsQuantScfEncLR_fx(   /* o:  bits spent on LRSNS-VQ  envelope */
             &fixShapeNb, /* 0,1,2,3, [-1] */
             &fixShiftIdx, /* 0,1,2,3, [-1] */
             &L_mse_st1B_st2_Q22_fx,
-            scratch_pvq_fess_fx);
-
+            scratch);
 
         /* update to shape idx to one of 0...5 ] */
         shape_idx_fx = s_idx_fx; move16();
@@ -1606,6 +1674,24 @@ Word16  snsQuantScfEncLR_fx(   /* o:  bits spent on LRSNS-VQ  envelope */
     } /* end of stage2 premultiplexing ,  fractional packing aspects done within enc_entropy_fx()  */
 
     ASSERT(envelope_bits_fx == 9 || envelope_bits_fx == 10 || envelope_bits_fx == 29 || envelope_bits_fx == 30); 
+
+
+
+    /* pop scratchpad  buffers */
+    L_y_normQ30_fx = lc3_scratch_pop( scratch, L_y_normQ30_fx );
+    y_normQ14_fx = lc3_scratch_pop( scratch, y_normQ14_fx );
+
+    y_Q0 = lc3_scratch_pop( scratch, y_Q0 );
+
+    L_pvq_target_fx = lc3_scratch_pop( scratch, L_pvq_target_fx );
+    pvq_target_fx = lc3_scratch_pop( scratch, pvq_target_fx );
+
+    L_target_st2_fx = lc3_scratch_pop( scratch, L_target_st2_fx );
+    target_st2_fx = lc3_scratch_pop( scratch, target_st2_fx );
+
+    st1_vectors_fx = lc3_scratch_pop( scratch, st1_vectors_fx );
+
+    BASOP_sub_sub_end();
 
     Dyn_Mem_Deluxe_Out();
     return envelope_bits_fx;

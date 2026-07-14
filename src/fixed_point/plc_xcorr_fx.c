@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -12,13 +12,21 @@
 
 #define MAX_ACCS 3 /* sum(x.*y), sum(x.*x), sum(y.*y),  nb of always nonsaturated shorter sub_blocks*/
 #define MAX_BLOCKS 8
-#define MAX_ACC_LEN_BITS 7
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+#    define MAX_ACC_LEN_BITS 8
+#else
+#    define MAX_ACC_LEN_BITS 7
+#endif
 #define MIN_ACC_LEN_BITS 5
 #define MAX_ACC_LEN (1 << MAX_ACC_LEN_BITS)
 #define MIN_PITCH_8K 20 /* 8000* MIN_PITCH_12k8/12800 */
 
 static const Word16 pitch_min_2[] = {2 * MIN_PITCH_8K    , 2 * MIN_PITCH_8K * 2, 2 * MIN_PITCH_8K *  3,
-                                     2 * MIN_PITCH_8K * 4, 2 * MIN_PITCH_8K * 6, 2 * MIN_PITCH_8K * 12};
+                                     2 * MIN_PITCH_8K * 4, 2 * MIN_PITCH_8K * 6, 2 * MIN_PITCH_8K * 12
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                     , 2 * MIN_PITCH_8K * 24  
+#endif
+                                    };
 
 /* req headroom in bits, for safe summing of block results w/o downshift */
 /* also the safe pre subblock acc downshift for various number of blocks */
@@ -56,7 +64,11 @@ Word16 plc_norm_corr_blocks_fx(                     /* o:  norm_corr range  [-1 
 
     /* Calculate normalized correlation with added shift and  block interleaving possibility */
     ASSERT(n_blocks <= MAX_BLOCKS && n_blocks > 0);
+#ifdef CR14_B_REMOVE_FLOAT_IN_BASOP_CODE
+    ASSERT(tot_len <= ((1 << l2_base_len) * n_blocks));
+#else
     ASSERT(((float)tot_len / (float)n_blocks) <= (float)(1 << l2_base_len));
+#endif
     ASSERT(inshift > 0);
     UNUSED(l2_base_len);
 
@@ -203,7 +215,18 @@ Word16 plc_xcorr_lc_fx(                        /* o: quantized output xcorr in Q
         corr_len_fx = s_max(corr_len_fx, pitch_min_2[fs_idx]); /* at least 5 ms (=2*pitchmin*) corr length */
 
         ASSERT(corr_len_fx >= (pitch_min_2[fs_idx])); /* at least 2 x pitch min(fs) */
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        IF( sub( fs_idx , 6) != 0)
+        {
+             ASSERT( corr_len_fx <= ( (MAX_ACC_LEN >> 1) * MAX_BLOCKS ) );
+        }
+        ELSE
+        {
+             ASSERT( corr_len_fx <= ( MAX_ACC_LEN  * MAX_BLOCKS ) );
+        }
+#else
         ASSERT(corr_len_fx <= (MAX_ACC_LEN * MAX_BLOCKS));
+#endif
         ASSERT(corr_len_fx <= max_corr_len);
         ASSERT( max_len_pcm_plc - corr_len_fx - pitch_int + 1 > 0 );
 
@@ -218,8 +241,24 @@ Word16 plc_xcorr_lc_fx(                        /* o: quantized output xcorr in Q
         IF (sub(n_blocks, MAX_BLOCKS) > 0)
         {                    /* shift to 32 bit acc of up to 128 values ->  sum(over 128,  x_up>>3 * y_up>>3)    */
             inshift     = 3; move16();
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            IF( sub( fs_idx , 6) != 0)
+            {
+                l2_base_len = MAX_ACC_LEN_BITS - 1;
+                move16();
+                n_blocks = shr( add( corr_len_fx, ( ( 1 << (MAX_ACC_LEN_BITS - 1)  ) - 1 ) ), ( MAX_ACC_LEN_BITS -1 ));
+            }
+            ELSE
+            {
+                l2_base_len = MAX_ACC_LEN_BITS;
+                move16();
+                n_blocks = shr( add( corr_len_fx, ( ( 1 << MAX_ACC_LEN_BITS ) - 1 ) ), MAX_ACC_LEN_BITS );
+                inshift = 4;
+            }
+#else
             l2_base_len = MAX_ACC_LEN_BITS; move16();
             n_blocks    = shr(add(corr_len_fx, ((1 << MAX_ACC_LEN_BITS) - 1)), MAX_ACC_LEN_BITS);
+#endif
         }
 
         ASSERT(n_blocks <= MAX_BLOCKS); /* MAX_BLOCKS*(32 or 128)  is max possible total corr_length */

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -190,23 +190,37 @@ void set_dec_frame_params(LC3PLUS_Dec* decoder)
 
             if (decoder->hrmode)
             {
+#ifdef CR14_A_ADD_1p25MS_HR
+                decoder->bands_number = bands_number_1_25ms_HR[decoder->fs_idx];
+              
+                decoder->bands_offset = ACC_COEFF_PER_BAND_1_25ms_HR[decoder->fs_idx];
+	            decoder->BW_cutoff_bits = 0;
+	            decoder->cutoffBins     = BW_cutoff_bin_all_1_25ms;
+
+	            decoder->imdct_win     = MDCT_WINS_1_25ms[decoder->hrmode][decoder->fs_idx];
+	            decoder->imdct_laZeros = MDCT_la_zeroes_1_25ms[decoder->fs_idx];
+	            decoder->imdct_winLen  = MDCT_WINDOWS_LENGTHS_1_25ms[decoder->fs_idx];
+	            decoder->bands_offsetPLC = ACC_COEFF_PER_BAND_PLC_1_25ms_HR[decoder->fs_idx];
+	            decoder->n_bandsPLC      = decoder->frame_length;
+#else
                 assert(0);
+#endif
             }
             else
             {
                 decoder->bands_number = bands_number_1_25ms[decoder->fs_idx];
+				
+	            decoder->bands_offset = ACC_COEFF_PER_BAND_1_25ms[decoder->fs_idx];
+	            decoder->BW_cutoff_bits = 0;
+	            decoder->cutoffBins     = BW_cutoff_bin_all_1_25ms;
+
+	            decoder->imdct_win     = MDCT_WINS_1_25ms[decoder->hrmode][decoder->fs_idx];
+	            decoder->imdct_laZeros = MDCT_la_zeroes_1_25ms[decoder->fs_idx];
+	            decoder->imdct_winLen  = MDCT_WINDOWS_LENGTHS_1_25ms[decoder->fs_idx];
+
+	            decoder->bands_offsetPLC = ACC_COEFF_PER_BAND_PLC_1_25ms[decoder->fs_idx];
+	            decoder->n_bandsPLC      = decoder->frame_length;
             }
-
-            decoder->bands_offset = ACC_COEFF_PER_BAND_1_25ms[decoder->fs_idx];
-            decoder->BW_cutoff_bits = 0;
-            decoder->cutoffBins     = BW_cutoff_bin_all_1_25ms;
-
-            decoder->imdct_win     = MDCT_WINS_1_25ms[decoder->hrmode][decoder->fs_idx];
-            decoder->imdct_laZeros = MDCT_la_zeroes_1_25ms[decoder->fs_idx];
-            decoder->imdct_winLen  = MDCT_WINDOWS_LENGTHS_1_25ms[decoder->fs_idx];
-
-            decoder->bands_offsetPLC = ACC_COEFF_PER_BAND_PLC_1_25ms[decoder->fs_idx];
-            decoder->n_bandsPLC      = decoder->frame_length;
     }
 #endif
     if (decoder->frame_ms == LC3PLUS_FRAME_DURATION_2p5MS)
@@ -333,11 +347,27 @@ void set_dec_frame_params(LC3PLUS_Dec* decoder)
 #ifdef CR9_C_ADD_1p25MS
     else if (decoder->frame_ms == LC3PLUS_FRAME_DURATION_1p25MS)
     {
-        decoder->bands_offsetPLC = ACC_COEFF_PER_BAND_PLC_1_25ms[decoder->fs_idx];
-
         if (decoder->fs == 48000)
         {
             decoder->n_bandsPLC = 60;
+        }
+      
+#ifdef CR14_A_ADD_1p25MS_HR
+        if ( decoder->hrmode )
+        {
+            decoder->bands_number = bands_number_1_25ms_HR[decoder->fs_idx];
+            decoder->bands_offset = ACC_COEFF_PER_BAND_1_25ms_HR[decoder->fs_idx];
+            decoder->n_bandsPLC = MIN( decoder->frame_length, 40 );
+            decoder->bands_offsetPLC = ACC_COEFF_PER_BAND_PLC_1_25ms_HR[decoder->fs_idx];
+          
+            if ( decoder->fs == 48000 )
+            {
+                decoder->n_bandsPLC = 60;
+            }
+        } else
+#endif
+        {
+            decoder->bands_offsetPLC = ACC_COEFF_PER_BAND_PLC_1_25ms[decoder->fs_idx];
         }
     }
 #endif
@@ -481,7 +511,9 @@ LC3PLUS_Error update_dec_bitrate(LC3PLUS_Dec* decoder, int ch, int nBytes)
         {
 #ifdef CR9_C_ADD_1p25MS
         case LC3PLUS_FRAME_DURATION_1p25MS:
+#ifndef CR14_A_ADD_1p25MS_HR
             assert(0);
+#endif
             maxBytes = 210;
             minBytes = MIN_NBYTES;
             break;
@@ -614,8 +646,16 @@ LC3PLUS_Error update_dec_bitrate(LC3PLUS_Dec* decoder, int ch, int nBytes)
 
         /* No LTPF in hrmode */
         if (decoder->hrmode == 1) {
+#ifdef CR14_A_ADD_1p25MS_HR
+            if (decoder->frame_dms != LC3PLUS_FRAME_DURATION_1p25MS)
+            {
+                setup->ltpf_conf_beta = 0;
+                setup->ltpf_conf_beta_idx = -1;
+            }
+#else
             setup->ltpf_conf_beta     = 0;
             setup->ltpf_conf_beta_idx = -1;
+#endif
         }
 
     return LC3PLUS_OK;

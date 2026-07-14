@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -10,6 +10,121 @@
 #include "basop_util.h"
 #include "constants.h"
 #include "defines.h"
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word16 bands_offset_192000_5ms_HR[60] = {
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 17, 19, 21, 23, 25, 28,
+    31, 34, 37, 40, 44, 48, 53, 58, 64, 70, 77, 84, 92, 101, 110, 120, 132, 144, 158,
+    173, 189, 207, 227, 248, 272, 297, 325, 356, 390, 426, 467, 511, 559, 611, 669, 732, 801, 877, 960
+};
+
+RAM_ALIGN const Word16 lpc_warp_dee_emphasis_16_e_192000[16] = {(Word16)0x0001, (Word16)0x0000, (Word16)0xffff, (Word16)0xfffe,
+                                                                (Word16)0xfffd, (Word16)0xfffc, (Word16)0xfffb, (Word16)0xfffb,
+                                                                (Word16)0xfffa, (Word16)0xfff9, (Word16)0xfff8, (Word16)0xfff7,
+                                                                (Word16)0xfff6, (Word16)0xfff6,  (Word16)0xfff5, (Word16)0xfff4
+};
+
+RAM_ALIGN const Word16 lpc_warp_pre_emphasis_64_192000[64] = {
+  0x4000, 0x4989, 0x547e, 0x6115, 0x6f8c, 0x4015, 0x49a1, 0x549a, 0x6135, 0x6fb0, 0x402a, 0x49b9, 0x54b6, 0x6154, 0x6fd5, 0x403f,
+  0x49d2, 0x54d1, 0x6174, 0x6ffa, 0x4054, 0x49ea, 0x54ed, 0x6195, 0x701e, 0x4069, 0x4a02, 0x5509, 0x61b5, 0x7043, 0x407f, 0x4a1b,
+  0x5525, 0x61d5, 0x7068, 0x4094, 0x4a33, 0x5541, 0x61f5, 0x708d, 0x40a9, 0x4a4b, 0x555d, 0x6215, 0x70b2, 0x40be, 0x4a64, 0x5579,
+  0x6235, 0x70d7, 0x40d4, 0x4a7c, 0x5595, 0x6256, 0x70fc, 0x40e9, 0x4a95, 0x55b1, 0x6276, 0x7121, 0x40fe, 0x4aad, 0x55ce, 0x6296
+};
+
+RAM_ALIGN const Word16 lpc_warp_pre_emphasis_64_e_192000[64] = {
+  0x01, 0x01, 0x01, 0x01, 0x01, 0x02, 0x02, 0x02, 0x02, 0x02, 0x03, 0x03, 0x03, 0x03, 0x03, 0x04,
+  0x04, 0x04, 0x04, 0x04, 0x05, 0x05, 0x05, 0x05, 0x05, 0x06, 0x06, 0x06, 0x06, 0x06, 0x07, 0x07,
+  0x07, 0x07, 0x07, 0x08, 0x08, 0x08, 0x08, 0x08, 0x09, 0x09, 0x09, 0x09, 0x09, 0x0a, 0x0a, 0x0a,
+  0x0a, 0x0a, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0d, 0x0d, 0x0d, 0x0d
+};
+
+RAM_ALIGN const Word16 lpc_warp_dee_emphasis_16_192000[16] = { 0x4000, 0x476e, 0x4fb9, 0x58fa, 0x634e, 0x6ed5, 0x7bb2,
+                                                               0x4507, 0x4d0b, 0x55fc, 0x5ff7, 0x6b1b,
+                                                              0x778a, 0x42b5, 0x4a74, 0x5318 };
+RAM_ALIGN const Word16 resamp_filt_192k[240] = {
+    -1, -1, -2, -3, -4, -5, -6, -6, -7, -6, -6, -5, -4, -2, 0, 2, 5, 8, 10, 13, 15, 17, 18, 18, 17,
+    16, 13, 10, 5, 0, -6, -12, -18, -24, -29, -33, -36, -38, -38, -36, -33, -27, -19, -10, 0, 11, 23, 35,
+    46, 56, 64, 69, 72, 72, 68, 61, 50, 36, 19, 0, -21, -42, -63, -82, -100, -113, -123, -128, -127, -120, -107,
+    -88, -63, -33, 0, 36, 73, 110, 144, 174, 199, 216, 225, 224, 212, 189, 156, 113, 60, 0, -65, -134, -202, -268, -327,
+    -377, -415, -437, -441, -424, -386, -324, -239, -130, 0, 150, 318, 500, 692, 890, 1089, 1285, 1472, 1645, 1801, 1934, 2042,
+    2121, 2170, 2186, 2170, 2121, 2042, 1934, 1801, 1645, 1472, 1285, 1089, 890, 692, 500, 318, 150, 0, -130, -239, -324, -386,
+    -424, -441, -437, -415, -377, -327, -268, -202, -134, -65, 0, 60, 113, 156, 189, 212, 224, 225, 216, 199, 174, 144, 110, 73,
+    36, 0, -33, -63, -88, -107, -120, -127, -128, -123, -113, -100, -82, -63, -42, -21, 0, 19, 36, 50, 61, 68, 72, 72, 69, 64, 56,
+    46, 35, 23, 11, 0, -10, -19, -27, -33, -36, -38, -38, -36, -33, -29, -24, -18, -12, -6, 0, 5, 10, 13, 16, 17, 18, 18, 17, 15,
+    13, 10, 8, 5, 2, 0, -2, -4, -5, -6, -6, -7, -6, -6, -5, -4, -3, -2, -1, -1, 0
+};
+
+#endif
+
+#ifdef CR14_A_ADD_1p25MS_HR
+#ifdef CR15_A_LOSSLESS_1p25MS
+RAM_ALIGN const Word16 bands_offset_with_one_max_1_25ms_HR[NUM_OFFSETS] = { 10, 20, 20, 23, 20, 18, 15
+};
+#else
+RAM_ALIGN const Word16 bands_offset_with_one_max_1_25ms_HR[NUM_OFFSETS] = { 10, 20, 20, 23, 20, 18
+};
+#endif
+#ifdef CR15_A_LOSSLESS_1p25MS
+RAM_ALIGN const Word16 bands_offset_with_two_max_1_25ms_HR[NUM_OFFSETS] = { 10, 20, 20, 23, 28, 24, 21
+};
+#else
+RAM_ALIGN const Word16 bands_offset_with_two_max_1_25ms_HR[NUM_OFFSETS] = { 10, 20, 20, 23, 27, 18
+};
+#endif
+
+RAM_ALIGN const Word16 ACC_COEFF_PER_BAND_48_1_25ms_HR[36] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22, 24, 26, 28, 30, 32, 34, 36, 39, 42, 45, 48, 52, 56, 60};
+RAM_ALIGN const Word16 ACC_COEFF_PER_BAND_96_1_25ms_HR[42] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 22, 24, 26, 28, 30, 33, 36, 39, 42, 46, 50, 54, 58, 63, 68, 74, 80, 87, 94, 102, 110, 120};
+#ifdef CR15_A_LOSSLESS_1p25MS
+RAM_ALIGN const Word16 ACC_COEFF_PER_BAND_192_1_25ms_HR[46] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 19, 21, 23, 25, 27, 30, 33, 36, 39, 43, 47, 51, 56, 62, 68, 74, 81, 89, 97, 106, 116, 127, 139, 152, 167, 183, 200, 219, 240};
+#endif
+
+#ifdef CR15_A_LOSSLESS_1p25MS
+RAM_ALIGN const Word16* const bands_offset_1_25ms_HR[7] = {
+    NULL, NULL, NULL,
+    NULL, ACC_COEFF_PER_BAND_48_1_25ms_HR, ACC_COEFF_PER_BAND_96_1_25ms_HR, ACC_COEFF_PER_BAND_192_1_25ms_HR
+};
+#else
+RAM_ALIGN const Word16* const bands_offset_1_25ms_HR[6] = {
+    NULL, NULL, NULL,
+    NULL, ACC_COEFF_PER_BAND_48_1_25ms_HR, ACC_COEFF_PER_BAND_96_1_25ms_HR
+};
+#endif
+
+#ifdef CR15_A_LOSSLESS_1p25MS
+RAM_ALIGN const Word16 bands_number_1_25ms_HR[] = { 10, 20, 27, 31, 35, 41, 45 };
+#else
+RAM_ALIGN const Word16 bands_number_1_25ms_HR[] = { 10, 20, 27, 31, 35, 41 };
+#endif
+
+RAM_ALIGN const Word32 MDCT_WINDOW_FS_48000_frame_ms_1_25_HR[120] = {3300, 36721, 132951, 356024, 806524, 1633408, 3045470, 5321747, 8819511, 13978367, 21319020, 31435457, 44979686, 62638674, 85103812, 113033969, 147013934, 187510738, 234830882, 289081802, 350140987, 417635854, 490936971, 569166336, 651221362, 735814013, 821523293, 906858097, 990326506, 1070506850, 1146115597, 1216067140, 1279521109, 1335913678, 1384970619, 1426701305, 1461374544, 1489478690, 1511669994, 1528714220, 1541427127, 1550619339, 1557050288, 1561394498, 1564221595, 1565989533, 1567048906, 1567655161, 1567985232, 1568155406, 1568238018, 1568275516, 1568291285, 1568297358, 1568299464, 1568300107, 1568300274, 1568300309, 1568300314, 1568300315, -1568300315, -1568300314, -1568300309, -1568300274, -1568300107, -1568299464, -1568297358, -1568291285, -1568275516, -1568238018, -1568155406, -1567985232, -1567655161, -1567048906, -1565989533, -1564221595, -1561394498, -1557050288, -1550619339, -1541427127, -1528714220, -1511669994, -1489478690, -1461374544, -1426701305, -1384970619, -1335913678, -1279521109, -1216067140, -1146115597, -1070506850, -990326506, -906858097, -821523293, -735814013, -651221362, -569166336, -490936971, -417635854, -350140987, -289081802, -234830882, -187510738, -147013934, -113033969, -85103812, -62638674, -44979686, -31435457, -21319020, -13978367, -8819511, -5321747, -3045470, -1633408, -806524, -356024, -132951, -36721, -3300};
+
+RAM_ALIGN const Word32 MDCT_WINDOW_FS_96000_frame_ms_1_25_HR[240] = {1650, 7803, 19882, 41181, 76012, 129964, 210142, 325411, 486646, 706989, 1002107, 1390437, 1893418, 2535704, 3345343, 4353916, 5596632, 7112363, 8943626, 11136483, 13740368, 16807841, 20394248, 24557297, 29356548, 34852817, 41107502, 48181824, 56136013, 65028427, 74914625, 85846420, 97870897, 111029450, 125356826, 140880210, 157618369, 175580863, 194767363, 215167069, 236758259, 259507985, 283371916, 308294354, 334208407, 361036355, 388690175, 417072246, 446076220, 475588045, 505487130, 535647639, 565939889, 596231829, 626390586, 656284035, 685782385, 714759737, 743095595, 770676303, 797396372, 823159690, 847880568, 871484629, 893909505, 915105334, 935035050, 953674462, 971012124, 987048986, 1001797859, 1015282692, 1027537678, 1038606223, 1048539789, 1057396652, 1065240597, 1072139588, 1078164433, 1083387495, 1087881460, 1091718193, 1094967716, 1097697312, 1099970774, 1101847814, 1103383614, 1104628547, 1105628025, 1106422495, 1107047534, 1107534056, 1107908593, 1108193625, 1108407966, 1108567152, 1108683849, 1108768241, 1108828406, 1108870660, 1108899868, 1108919722, 1108932979, 1108941665, 1108947240, 1108950741, 1108952888, 1108954171, 1108954916, 1108955335, 1108955562, 1108955681, 1108955740, 1108955767, 1108955780, 1108955785, 1108955787, 1108955787, 1108955787, 1108955787, -1108955787, -1108955787, -1108955787, -1108955787, -1108955785, -1108955780, -1108955767, -1108955740, -1108955681, -1108955562, -1108955335, -1108954916, -1108954171, -1108952888, -1108950741, -1108947240, -1108941665, -1108932979, -1108919722, -1108899868, -1108870660, -1108828406, -1108768241, -1108683849, -1108567152, -1108407966, -1108193625, -1107908593, -1107534056, -1107047534, -1106422495, -1105628025, -1104628547, -1103383614, -1101847814, -1099970774, -1097697312, -1094967716, -1091718193, -1087881460, -1083387495, -1078164433, -1072139588, -1065240597, -1057396652, -1048539789, -1038606223, -1027537678, -1015282692, -1001797859, -987048986, -971012124, -953674462, -935035050, -915105334, -893909505, -871484629, -847880568, -823159690, -797396372, -770676303, -743095595, -714759737, -685782385, -656284035, -626390586, -596231829, -565939889, -535647639, -505487130, -475588045, -446076220, -417072246, -388690175, -361036355, -334208407, -308294354, -283371916, -259507985, -236758259, -215167069, -194767363, -175580863, -157618369, -140880210, -125356826, -111029450, -97870897, -85846420, -74914625, -65028427, -56136013, -48181824, -41107502, -34852817, -29356548, -24557297, -20394248, -16807841, -13740368, -11136483, -8943626, -7112363, -5596632, -4353916, -3345343, -2535704, -1893418, -1390437, -1002107, -706989, -486646, -325411, -210142, -129964, -76012, -41181, -19882, -7803, -1650};
+
+#ifdef CR15_A_LOSSLESS_1p25MS
+RAM_ALIGN const Word32 MDCT_WINDOW_FS_192000_frame_ms_1_25_HR[480] = {2259, 6190, 12140, 20679, 32475, 48308, 69082, 95837, 129763, 172209, 224705, 288969, 366923, 460713, 572717, 705568, 862162, 1045680, 1259599, 1507710, 1794133, 2123328, 2500115, 2929683, 3417603, 3969843, 4592775, 5293190, 6078299, 6955748, 7933619, 9020434, 10225161, 11557210, 13026436, 14643130, 16418021, 18362259, 20487412, 22805448, 25328725, 28069969, 31042255, 34258983, 37733856, 41480846, 45514169, 49848248, 54497676, 59477180, 64801581, 70485746, 76544547, 82992809, 89845265, 97116501, 104820904, 112972607, 121585435, 130672844, 140247865, 150323048, 160910398, 172021321, 183666562, 195856148, 208599329, 221904522, 235779257, 250230118, 265262699, 280881546, 297090114, 313890724, 331284514, 349271407, 367850075, 387017904, 406770972, 427104021, 448010441, 469482256, 491510112, 514083277, 537189638, 560815709, 584946638, 609566230, 634656962, 660200013, 686175297, 712561499, 739336117, 766475511, 793954955, 821748696, 849830012, 878171283, 906744061, 935519141, 964466644, 993556095, 1022756510, 1052036483, 1081364275, 1110707906, 1140035250, 1169314127, 1198512401, 1227598074, 1256539383, 1285304897, 1313863605, 1342185020, 1370239261, 1397997146, 1425430281, 1452511141, 1479213154, 1505510772, 1531379551, 1556796217, 1581738726, 1606186331, 1630119626, 1653520603, 1676372687, 1698660779, 1720371279, 1741492117, 1762012765, 1781924252, 1801219167, 1819891657, 1837937420, 1855353691, 1872139218, 1888294240, 1903820449, 1918720956, 1933000246, 1946664127, 1959719677, 1972175186, 1984040094, 1995324922, 2006041202, 2016201409, 2025818877, 2034907731, 2043482801, 2051559542, 2059153959, 2066282518, 2072962073, 2079209779, 2085043021, 2090479329, 2095536310, 2100231573, 2104582659, 2108606979, 2112321745, 2115743920, 2118890157, 2121776752, 2124419598, 2126834144, 2129035362, 2131037708, 2132855106, 2134500915, 2135987921, 2137328317, 2138533699, 2139615061, 2140582790, 2141446674, 2142215908, 2142899099, 2143504286, 2144038945, 2144510015, 2144923913, 2145286554, 2145603375, 2145879355, 2146119043, 2146326577, 2146505711, 2146659842, 2146792029, 2146905020, 2147001275, 2147082987, 2147152107, 2147210361, 2147259275, 2147300187, 2147334271, 2147362551, 2147385918, 2147405141, 2147420886, 2147433723, 2147444138, 2147452548, 2147459304, 2147464702, 2147468992, 2147472382, 2147475045, 2147477124, 2147478736, 2147479978, 2147480928, 2147481649, 2147482192, 2147482597, 2147482898, 2147483118, 2147483278, 2147483392, 2147483474, 2147483531, 2147483571, 2147483598, 2147483616, 2147483628, 2147483635, 2147483640, 2147483643, 2147483645, 2147483646, 2147483646, 2147483647, 2147483647, 2147483647, 2147483647, 2147483647, -2147483647, -2147483647, -2147483647, -2147483647, -2147483647, -2147483646, -2147483646, -2147483645, -2147483643, -2147483640, -2147483635, -2147483628, -2147483616, -2147483598, -2147483571, -2147483531, -2147483474, -2147483392, -2147483278, -2147483118, -2147482898, -2147482597, -2147482192, -2147481649, -2147480928, -2147479978, -2147478736, -2147477124, -2147475045, -2147472382, -2147468992, -2147464702, -2147459304, -2147452548, -2147444138, -2147433723, -2147420886, -2147405141, -2147385918, -2147362551, -2147334271, -2147300187, -2147259275, -2147210361, -2147152107, -2147082987, -2147001275, -2146905020, -2146792029, -2146659842, -2146505711, -2146326577, -2146119043, -2145879355, -2145603375, -2145286554, -2144923913, -2144510015, -2144038945, -2143504286, -2142899099, -2142215908, -2141446674, -2140582790, -2139615061, -2138533699, -2137328317, -2135987921, -2134500915, -2132855106, -2131037708, -2129035362, -2126834144, -2124419598, -2121776752, -2118890157, -2115743920, -2112321745, -2108606979, -2104582659, -2100231573, -2095536310, -2090479329, -2085043021, -2079209779, -2072962073, -2066282518, -2059153959, -2051559542, -2043482801, -2034907731, -2025818877, -2016201409, -2006041202, -1995324922, -1984040094, -1972175186, -1959719677, -1946664127, -1933000246, -1918720956, -1903820449, -1888294240, -1872139218, -1855353691, -1837937420, -1819891657, -1801219167, -1781924252, -1762012765, -1741492117, -1720371279, -1698660779, -1676372687, -1653520603, -1630119626, -1606186331, -1581738726, -1556796217, -1531379551, -1505510772, -1479213154, -1452511141, -1425430281, -1397997146, -1370239261, -1342185020, -1313863605, -1285304897, -1256539383, -1227598074, -1198512401, -1169314127, -1140035250, -1110707906, -1081364275, -1052036483, -1022756510, -993556095, -964466644, -935519141, -906744061, -878171283, -849830012, -821748696, -793954955, -766475511, -739336117, -712561499, -686175297, -660200013, -634656962, -609566230, -584946638, -560815709, -537189638, -514083277, -491510112, -469482256, -448010441, -427104021, -406770972, -387017904, -367850075, -349271407, -331284514, -313890724, -297090114, -280881546, -265262699, -250230118, -235779257, -221904522, -208599329, -195856148, -183666562, -172021321, -160910398, -150323048, -140247865, -130672844, -121585435, -112972607, -104820904, -97116501, -89845265, -82992809, -76544547, -70485746, -64801581, -59477180, -54497676, -49848248, -45514169, -41480846, -37733856, -34258983, -31042255, -28069969, -25328725, -22805448, -20487412, -18362259, -16418021, -14643130, -13026436, -11557210, -10225161, -9020434, -7933619, -6955748, -6078299, -5293190, -4592775, -3969843, -3417603, -2929683, -2500115, -2123328, -1794133, -1507710, -1259599, -1045680, -862162, -705568, -572717, -460713, -366923, -288969, -224705, -172209, -129763, -95837, -69082, -48308, -32475, -20679, -12140, -6190, -2259};
+#endif
+
+#ifdef CR15_A_LOSSLESS_1p25MS
+RAM_ALIGN const Word32* const LowDelayShapes_n960_1_25ms_HR[7] = {
+    NULL, NULL, NULL, NULL, MDCT_WINDOW_FS_48000_frame_ms_1_25_HR, MDCT_WINDOW_FS_96000_frame_ms_1_25_HR, MDCT_WINDOW_FS_192000_frame_ms_1_25_HR
+};
+#else
+RAM_ALIGN const Word32* const LowDelayShapes_n960_1_25ms_HR[6] = {
+    NULL, NULL, NULL, NULL, MDCT_WINDOW_FS_48000_frame_ms_1_25_HR, MDCT_WINDOW_FS_96000_frame_ms_1_25_HR
+};
+#endif
+
+RAM_ALIGN const Word16 lpc_lin_pre_emphasis_1p25ms_96khz[40] = {0x400d, 0x4e74, 0x5584, 0x4d4b, 0x7b03, 0x59d0, 0x7b65, 0x5106, 0x66c3, 0x7ec8, 0x4c78, 0x5a88, 0x697e, 0x7942, 0x44de, 0x4d69,
+  0x5634, 0x5f32, 0x6854, 0x718c, 0x7acb, 0x4201, 0x4692, 0x4b11, 0x4f77, 0x53bc, 0x57db, 0x5bcc, 0x5f89, 0x630d, 0x6652, 0x6953,
+  0x6c0b, 0x6e75, 0x708e, 0x7253, 0x73c1, 0x74d5, 0x758f, 0x75eb};
+
+RAM_ALIGN const Word16 lpc_lin_pre_emphasis_1p25ms_96khz_e[40] = {(Word16)0xfffa, (Word16)0xfffb, (Word16)0xfffc, (Word16)0xfffd, (Word16)0xfffd, (Word16)0xfffe, (Word16)0xfffe, (Word16)0xffff,
+  (Word16)0xffff, (Word16)0xffff, (Word16)0x0000, (Word16)0x0000, (Word16)0x0000, (Word16)0x0000, (Word16)0x0001, (Word16)0x0001,
+  (Word16)0x0001, (Word16)0x0001, (Word16)0x0001, (Word16)0x0001, (Word16)0x0001, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002,
+  (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002,
+  (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002};
+
+#endif
 
 #  ifdef LTPF_ADAPTIVE_GAIN
 RAM_ALIGN const Word16 adaptive_gain_step = 328;
@@ -36,28 +151,28 @@ RAM_ALIGN const Word16 tilt_filter_1p25ms[5][4][11] = {
 };
 #    endif
 
-RAM_ALIGN const Word16 lpc_warp_pre_adapt_emphasis_64_48000[64] = 
+RAM_ALIGN const Word16 lpc_warp_pre_adapt_emphasis_64_48000[64] =
 {
-  0x0000, 0x0334, 0x074e, 0x0c81, 0x1308, 0x1b27, 0x2532, 0x18c6, 0x2056, 0x298c, 0x34bd, 0x4247, 0x52a0, 0x3326, 0x3ef7, 0x4d21, 
-  0x5e12, 0x724e, 0x4537, 0x5395, 0x64aa, 0x78f3, 0x4883, 0x56c6, 0x67aa, 0x7ba5, 0x49a1, 0x5794, 0x680a, 0x7b75, 0x492c, 0x56a8, 
-  0x6688, 0x7937, 0x4798, 0x5484, 0x63b2, 0x7589, 0x453d, 0x5189, 0x5ff6, 0x70e3, 0x425f, 0x4e02, 0x5ba6, 0x6ba2, 0x7e5c, 0x4a25, 
-  0x56fd, 0x6607, 0x77a0, 0x461d, 0x522a, 0x6044, 0x70c2, 0x4207, 0x4d4e, 0x5a7f, 0x69ea, 0x7bf0, 0x4881, 0x54d0, 0x6333, 0x7402 
+  0x0000, 0x0334, 0x074e, 0x0c81, 0x1308, 0x1b27, 0x2532, 0x18c6, 0x2056, 0x298c, 0x34bd, 0x4247, 0x52a0, 0x3326, 0x3ef7, 0x4d21,
+  0x5e12, 0x724e, 0x4537, 0x5395, 0x64aa, 0x78f3, 0x4883, 0x56c6, 0x67aa, 0x7ba5, 0x49a1, 0x5794, 0x680a, 0x7b75, 0x492c, 0x56a8,
+  0x6688, 0x7937, 0x4798, 0x5484, 0x63b2, 0x7589, 0x453d, 0x5189, 0x5ff6, 0x70e3, 0x425f, 0x4e02, 0x5ba6, 0x6ba2, 0x7e5c, 0x4a25,
+  0x56fd, 0x6607, 0x77a0, 0x461d, 0x522a, 0x6044, 0x70c2, 0x4207, 0x4d4e, 0x5a7f, 0x69ea, 0x7bf0, 0x4881, 0x54d0, 0x6333, 0x7402
 };
 
-RAM_ALIGN const Word16 lpc_warp_pre_adapt_emphasis_64_32000[64] = 
+RAM_ALIGN const Word16 lpc_warp_pre_adapt_emphasis_64_32000[64] =
 {
-  0x0000, 0x02ba, 0x061d, 0x0a48, 0x0f5f, 0x158b, 0x1cff, 0x25f1, 0x1853, 0x1eb3, 0x2646, 0x2f3f, 0x39d9, 0x4658, 0x550b, 0x3326, 
-  0x3d43, 0x4919, 0x56ee, 0x6712, 0x79e2, 0x47e5, 0x54a1, 0x636e, 0x749c, 0x4445, 0x4fd1, 0x5d31, 0x6cab, 0x7e92, 0x49a1, 0x5595, 
-  0x6361, 0x734e, 0x42d6, 0x4d6d, 0x59a0, 0x67af, 0x77df, 0x4541, 0x4ff9, 0x5c4e, 0x6a7d, 0x7acb, 0x46c5, 0x5189, 0x5de7, 0x6c1c, 
-  0x7c6b, 0x4792, 0x5251, 0x5ea5, 0x6cca, 0x7d04, 0x47d0, 0x527b, 0x5eb7, 0x6cbc, 0x7ccf, 0x479d, 0x522a, 0x5e41, 0x6c1b, 0x7bf8 
+  0x0000, 0x02ba, 0x061d, 0x0a48, 0x0f5f, 0x158b, 0x1cff, 0x25f1, 0x1853, 0x1eb3, 0x2646, 0x2f3f, 0x39d9, 0x4658, 0x550b, 0x3326,
+  0x3d43, 0x4919, 0x56ee, 0x6712, 0x79e2, 0x47e5, 0x54a1, 0x636e, 0x749c, 0x4445, 0x4fd1, 0x5d31, 0x6cab, 0x7e92, 0x49a1, 0x5595,
+  0x6361, 0x734e, 0x42d6, 0x4d6d, 0x59a0, 0x67af, 0x77df, 0x4541, 0x4ff9, 0x5c4e, 0x6a7d, 0x7acb, 0x46c5, 0x5189, 0x5de7, 0x6c1c,
+  0x7c6b, 0x4792, 0x5251, 0x5ea5, 0x6cca, 0x7d04, 0x47d0, 0x527b, 0x5eb7, 0x6cbc, 0x7ccf, 0x479d, 0x522a, 0x5e41, 0x6c1b, 0x7bf8
 };
 
-RAM_ALIGN const Word8 lpc_warp_pre_adapt_emphasis_64_e_32000[64] = 
+RAM_ALIGN const Word8 lpc_warp_pre_adapt_emphasis_64_e_32000[64] =
 {
-  0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x03, 
-  0x03, 0x03, 0x03, 0x03, 0x03, 0x04, 0x04, 0x04, 0x04, 0x05, 0x05, 0x05, 0x05, 0x05, 0x06, 0x06, 
-  0x06, 0x06, 0x07, 0x07, 0x07, 0x07, 0x07, 0x08, 0x08, 0x08, 0x08, 0x08, 0x09, 0x09, 0x09, 0x09, 
-  0x09, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c 
+  0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x03,
+  0x03, 0x03, 0x03, 0x03, 0x03, 0x04, 0x04, 0x04, 0x04, 0x05, 0x05, 0x05, 0x05, 0x05, 0x06, 0x06,
+  0x06, 0x06, 0x07, 0x07, 0x07, 0x07, 0x07, 0x08, 0x08, 0x08, 0x08, 0x08, 0x09, 0x09, 0x09, 0x09,
+  0x09, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c
 };
 
 RAM_ALIGN const Word16 *const lpc_pre_adapt_emphasis[NUM_SAMP_FREQ] = {NULL,
@@ -67,12 +182,12 @@ RAM_ALIGN const Word16 *const lpc_pre_adapt_emphasis[NUM_SAMP_FREQ] = {NULL,
                                                                  lpc_warp_pre_adapt_emphasis_64_48000,
                                                                  NULL};
 
-RAM_ALIGN const Word8 lpc_warp_pre_adapt_emphasis_64_e_48000[64] = 
+RAM_ALIGN const Word8 lpc_warp_pre_adapt_emphasis_64_e_48000[64] =
 {
-  0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x03, 0x03, 0x03, 
-  0x03, 0x03, 0x04, 0x04, 0x04, 0x04, 0x05, 0x05, 0x05, 0x05, 0x06, 0x06, 0x06, 0x06, 0x07, 0x07, 
-  0x07, 0x07, 0x08, 0x08, 0x08, 0x08, 0x09, 0x09, 0x09, 0x09, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0b, 
-  0x0b, 0x0b, 0x0b, 0x0c, 0x0c, 0x0c, 0x0c, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0e, 0x0e, 0x0e, 0x0e 
+  0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x03, 0x03, 0x03,
+  0x03, 0x03, 0x04, 0x04, 0x04, 0x04, 0x05, 0x05, 0x05, 0x05, 0x06, 0x06, 0x06, 0x06, 0x07, 0x07,
+  0x07, 0x07, 0x08, 0x08, 0x08, 0x08, 0x09, 0x09, 0x09, 0x09, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0b,
+  0x0b, 0x0b, 0x0b, 0x0c, 0x0c, 0x0c, 0x0c, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0e, 0x0e, 0x0e, 0x0e
 };
 
 RAM_ALIGN const Word8 *const lpc_pre_adapt_emphasis_e[NUM_SAMP_FREQ] = {NULL,
@@ -133,23 +248,23 @@ const Word32 MDCT_WINDOW_FS_32000_frame_ms_1_25[80] = {
    };
 
 const Word32 MDCT_WINDOW_FS_48000_frame_ms_1_25[120] = {
-     20528417, 61571181, 102571748, 143502017, 184333937, 225039524, 265590880, 
-     305960213, 346119857, 386042287, 425700143, 465066245, 504113615, 542815489, 
-     581145346, 619076914, 656584198, 693641492, 730223399, 766304847, 801861108, 
-     836867813, 871300971, 905136983, 938352659, 970925235, 1002832388, 1034052249, 
-     1064563423, 1094344998, 1123376563, 1151638223, 1179110607, 1205774887, 1231612790, 
-     1256606606, 1280739208, 1303994054, 1326355209, 1347807345, 1368335762, 1387926390, 
-     1406565803, 1424241225, 1440940544, 1456652314, 1471365767, 1485070820, 1497758079, 
-     1509418850, 1520045141, 1529629668, 1538165864, 1545647877, 1552070581, 1557429573, 
-     1561721181, 1564942463, 1567091212, 1568165954, -1568165954, -1567091212, -1564942463, 
-     -1561721181, -1557429573, -1552070581, -1545647877, -1538165864, -1529629668, -1520045141, 
-     -1509418850, -1497758079, -1485070820, -1471365767, -1456652314, -1440940544, -1424241225, 
-     -1406565803, -1387926390, -1368335762, -1347807345, -1326355209, -1303994054, -1280739208, 
-     -1256606606, -1231612790, -1205774887, -1179110607, -1151638223, -1123376563, -1094344998, 
-     -1064563423, -1034052249, -1002832388, -970925235, -938352659, -905136983, -871300971, 
-     -836867813, -801861108, -766304847, -730223399, -693641492, -656584198, -619076914, 
-     -581145346, -542815489, -504113615, -465066245, -425700143, -386042287, -346119857, 
-     -305960213, -265590880, -225039524, -184333937, -143502017, -102571748, -61571181, 
+     20528417, 61571181, 102571748, 143502017, 184333937, 225039524, 265590880,
+     305960213, 346119857, 386042287, 425700143, 465066245, 504113615, 542815489,
+     581145346, 619076914, 656584198, 693641492, 730223399, 766304847, 801861108,
+     836867813, 871300971, 905136983, 938352659, 970925235, 1002832388, 1034052249,
+     1064563423, 1094344998, 1123376563, 1151638223, 1179110607, 1205774887, 1231612790,
+     1256606606, 1280739208, 1303994054, 1326355209, 1347807345, 1368335762, 1387926390,
+     1406565803, 1424241225, 1440940544, 1456652314, 1471365767, 1485070820, 1497758079,
+     1509418850, 1520045141, 1529629668, 1538165864, 1545647877, 1552070581, 1557429573,
+     1561721181, 1564942463, 1567091212, 1568165954, -1568165954, -1567091212, -1564942463,
+     -1561721181, -1557429573, -1552070581, -1545647877, -1538165864, -1529629668, -1520045141,
+     -1509418850, -1497758079, -1485070820, -1471365767, -1456652314, -1440940544, -1424241225,
+     -1406565803, -1387926390, -1368335762, -1347807345, -1326355209, -1303994054, -1280739208,
+     -1256606606, -1231612790, -1205774887, -1179110607, -1151638223, -1123376563, -1094344998,
+     -1064563423, -1034052249, -1002832388, -970925235, -938352659, -905136983, -871300971,
+     -836867813, -801861108, -766304847, -730223399, -693641492, -656584198, -619076914,
+     -581145346, -542815489, -504113615, -465066245, -425700143, -386042287, -346119857,
+     -305960213, -265590880, -225039524, -184333937, -143502017, -102571748, -61571181,
      -20528417
 };
 
@@ -516,7 +631,7 @@ const Word16 *const bands_offset_1_25ms[6] = {
 
 #  ifdef ENABLE_HR_MODE
 /* RAM_ALIGN const Word16 bands_number_1_25ms_HR[] = NULL; */
-const Word16 bands_number_1_25ms   [] = {-1, 20, 27, 31, 33, 0};
+const Word16 bands_number_1_25ms   [] = {-1, 20, 27, 31, 33, 33};
 #  else
 const Word16 bands_number_1_25ms   [] = {-1, 20, 27, 31, 33};
 #  endif
@@ -542,7 +657,7 @@ const Word16 bands_offset_with_one_max_lin_1_25ms[NUM_SAMP_FREQ] = {-1, 20, 30, 
 const Word16 bands_offset_with_two_max_lin_1_25ms[NUM_SAMP_FREQ] = {0, 0, 0, 0, 0
 #      ifdef ENABLE_HR_MODE
                                                                              , 0
-#      endif                                                                    
+#      endif
                                                                    };
 #endif
 #endif /* CR9_C_ADD_1p25MS */
@@ -1285,23 +1400,47 @@ RAM_ALIGN const Word32 LowDelayShapes_n960_N960_HRA_IP[1560] = {
 #endif /* ENABLE_HR_MODE */
 
 #ifdef ENABLE_HR_MODE
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word32 *const LowDelayShapes_n960_HRA_2_5ms[3] = { LowDelayShapes_n960_N480_HRA_2_5ms_IP,
+                                                                     LowDelayShapes_n960_N960_HRA_2_5ms_IP, NULL };
+#else
 RAM_ALIGN const Word32 *const LowDelayShapes_n960_HRA_2_5ms[2] = { LowDelayShapes_n960_N480_HRA_2_5ms_IP,
                                                                      LowDelayShapes_n960_N960_HRA_2_5ms_IP };
+#endif
 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word32 *const LowDelayShapes_n960_HRA_5ms[3] = { LowDelayShapes_n960_N480_HRA_5ms_IP,
+                                                                   LowDelayShapes_n960_N960_HRA_5ms_IP, NULL };
+#else
 RAM_ALIGN const Word32 *const LowDelayShapes_n960_HRA_5ms[2] = { LowDelayShapes_n960_N480_HRA_5ms_IP,
                                                                    LowDelayShapes_n960_N960_HRA_5ms_IP };
+#endif
 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word32 *const LowDelayShapes_n960_HRA[3] = { LowDelayShapes_n960_N480_HRA_IP,
+                                                               LowDelayShapes_n960_N960_HRA_IP, NULL };
+#else
 RAM_ALIGN const Word32 *const LowDelayShapes_n960_HRA[2] = { LowDelayShapes_n960_N480_HRA_IP,
                                                                LowDelayShapes_n960_N960_HRA_IP };
+#endif
 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word32 *const LowDelayShapes_n960_HRA_7_5ms[3] = { LowDelayShapes_n960_N480_HRA_7_5ms_IP,
+                                                                     LowDelayShapes_n960_N960_HRA_7_5ms_IP, NULL };
+#else
 RAM_ALIGN const Word32 *const LowDelayShapes_n960_HRA_7_5ms[2] = { LowDelayShapes_n960_N480_HRA_7_5ms_IP,
                                                                      LowDelayShapes_n960_N960_HRA_7_5ms_IP };
+#endif
+
 #endif /* ENABLE_HR_MODE */
 
 RAM_ALIGN const Word16 pitch_max[5]       = {MAX_PITCH_8K, MAX_PITCH_16K, MAX_PITCH_24K, MAX_PITCH_32K, MAX_PITCH_48K};
 RAM_ALIGN const Word16 plc_preemph_fac[NUM_SAMP_FREQ] = {20316, 23592, 26869, 30146, 30146
 #      ifdef ENABLE_HR_MODE
                                                          , 30146
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+  , 30146
+#endif
 #      endif
                                                         };
 /* high pass filter Q15 */
@@ -1739,7 +1878,18 @@ RAM_ALIGN const Word32 lag_win_96k[16] = {0x7fffbf52, 0x7ffefd47, 0x7ffdb9e3, 0x
 #        define lag_win_96k NULL
 #      endif
 
-RAM_ALIGN const Word32 *const lag_win[NUM_SAMP_FREQ] = {lag_win_8k, lag_win_16k, lag_win_24k, lag_win_32k, lag_win_48k, lag_win_96k};
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word32 lag_win_192k[16] = {0x7fffefd4, 0x7fffbf52, 0x7fff6e78, 0x7ffefd47, 0x7ffe6bc0, 0x7ffdb9e3,
+                                           0x7ffce7b1, 0x7ffbf529, 0x7ffae24e, 0x7ff9af1f, 0x7ff85b9d, 0x7ff6e7cb,
+                                          0x7ff553a7, 0x7ff39f35, 0x7ff1ca75, 0x7fefd569
+};
+#endif
+
+RAM_ALIGN const Word32 *const lag_win[NUM_SAMP_FREQ] = {lag_win_8k, lag_win_16k, lag_win_24k, lag_win_32k, lag_win_48k, lag_win_96k
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+  , lag_win_192k
+#endif
+                                                       };
 
 RAM_ALIGN const Word16 sqrt_table_phecu[49] = {/* used by Sqrt_l */
                                                16384, 16888, 17378, 17854, 18318, 18770, 19212, 19644, 20066, 20480,
@@ -1774,10 +1924,10 @@ RAM_ALIGN const Word16 gwlpr_fx[MAX_LGW + 1]        = {
     65 * QUOT_LPR_LTR,
     81 * QUOT_LPR_LTR,
     97 * QUOT_LPR_LTR}; /* frequency group start bins for transient analysis */
-    
+
  /* puretone_ana  compressed ATH bandborder weights */
 RAM_ALIGN const Word16 scATHFx[MAX_LGW - 2] = { 14924 ,      30499 ,      31886 ,      32767 ,      29770 ,      25417  ,     16384 };
-				                           /* 0.455444335937500   0.930755615234375   0.973083496093750   0.999969482421875   0.908508300781250   0.775665283203125   0.5*/				  
+				                           /* 0.455444335937500   0.930755615234375   0.973083496093750   0.999969482421875   0.908508300781250   0.775665283203125   0.5*/
 
 RAM_ALIGN const Word16 e_tot_headroom[5] = {3, 3, 4, 4, 4}; /*   smallest head room to use for each fs */
 
@@ -2322,7 +2472,11 @@ RAM_ALIGN const Word16 xavg_N_grp_fx[5]              = {4, 5, 6, 7, 8};
 
 
 RAM_ALIGN const Word16 spec_shape_headroom[5] = {3, 4, 4, 4, 4};
-RAM_ALIGN const Word16 rectLengthTab[NUM_SAMP_FREQ] = {80, 160, 240, 320, 480, 960}; /* 10ms */
+RAM_ALIGN const Word16 rectLengthTab[NUM_SAMP_FREQ] = {80, 160, 240, 320, 480, 960
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                                      , 1920
+#endif
+                                                      }; /* 10ms */
 RAM_ALIGN const Word16 hamm_len2Tab[5]        = {24, 48, 72, 96, 144};    /* 3 ms*/
 
 RAM_ALIGN const Word16 PLC_FADEOUT_TYPE_2_SELECTOR = 10; /* can take values from 0 to 10, default is 10 for longer fadeout*/
@@ -2335,7 +2489,7 @@ RAM_ALIGN const Word32 TD_HR_thresh_10ms = 83402;
 RAM_ALIGN const Word32 TD_HR_thresh_7_5ms = 743496;
 RAM_ALIGN const Word32 TD_HR_thresh_5ms = 382564;
 RAM_ALIGN const Word32 TD_HR_thresh_2_5ms = 301695;
-#  endif /* ENABLE_HR_MODE */ 
+#  endif /* ENABLE_HR_MODE */
 RAM_ALIGN const Word32 BW_thresh_quiet[4]     = {0x14000000, 0xA000000, 0xA000000, 0xA000000}; /* [20,10,10,10]*2^24 */
 RAM_ALIGN const Word16 BW_thresh_quiet_exp    = 31 - 24;
 RAM_ALIGN const Word16 BW_thresh_brickwall[4] = {
@@ -2402,15 +2556,28 @@ RAM_ALIGN const Word16 *const BW_warp_idx_stop_all_7_5ms[] = {
 
 #ifdef ENABLE_HR_MODE
 RAM_ALIGN const Word16 BW_cutoff_bin_all[]    = {80, 160, 240, 320, 400, 400};
-RAM_ALIGN const Word16 BW_cutoff_bin_all_HR[] = {80, 160, 240, 320, 400, 400};
-RAM_ALIGN const Word16 BW_cutoff_bits_all[]   = {0, 1, 2, 2, 3, 0};
+RAM_ALIGN const Word16 BW_cutoff_bin_all_HR[] = {80, 160, 240, 320, 400, 400
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                                , 400
+#endif
+                                                };
+
+RAM_ALIGN const Word16 BW_cutoff_bits_all[]   = {0, 1, 2, 2, 3, 0
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                                , 0
+#endif
+                                                };
 #else /* ENABLE_HR_MODE */
 RAM_ALIGN const Word16 BW_cutoff_bin_all[]  = {80, 160, 240, 320, 400};
 RAM_ALIGN const Word16 BW_cutoff_bits_all[] = {0, 1, 2, 2, 3};
 #endif /* ENABLE_HR_MODE */
 
 #ifdef ENABLE_HR_MODE
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word16 LowDelayShapes_n960_len[7] = { 130, 260, 390, 520, 780, 1560, 3120 };
+#else
 RAM_ALIGN const Word16 LowDelayShapes_n960_len[6]                   = {130, 260, 390, 520, 780, 1560};
+#endif
 #else
 RAM_ALIGN const Word16 LowDelayShapes_n960_len[5]                   = {130, 260, 390, 520, 780};
 #endif
@@ -2421,17 +2588,27 @@ RAM_ALIGN const Word16 LowDelayShapes_n960_la_zeroes[NUM_SAMP_FREQ] = {30,
                                                                        180
 #ifdef ENABLE_HR_MODE
                                                                        , 360
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                                                       , 720
+#endif
 #endif
 };
 
 #  ifdef ENABLE_HR_MODE
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word16 LowDelayShapes_n960_len_7_5ms[7] = { 106, 212, 318, 424, 636, 1272,0 };
+#else
 const Word16 LowDelayShapes_n960_len_7_5ms[6]       = {106, 212, 318, 424, 636, 1272};
+#endif
 #  else
 const Word16 LowDelayShapes_n960_len_7_5ms[5]       = {106, 212, 318, 424, 636};
 #  endif
 const Word16 LowDelayShapes_n960_la_zeroes_7_5ms[NUM_SAMP_FREQ] = {14, 28, 42, 56, 84
 #  ifdef ENABLE_HR_MODE
                                                                              , 168
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                                                             , 336
+#endif
 #  endif
 };
 #  ifdef ENABLE_HR_MODE
@@ -3070,7 +3247,11 @@ RAM_ALIGN const Word16 *const LowDelayShapes_n960[6] = {LowDelayShapes_n960_N80,
 #endif
 
 #  ifdef ENABLE_HR_MODE
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word16 LowDelayShapes_n960_len_5ms[7] = { 70, 140, 210, 280, 420, 840,0 };
+#else
 RAM_ALIGN const Word16 LowDelayShapes_n960_len_5ms[6]                   = {70, 140, 210, 280, 420, 840};
+#endif
 #  else
 RAM_ALIGN const Word16 LowDelayShapes_n960_len_5ms[5]                   = {70, 140, 210, 280, 420};
 #  endif
@@ -3082,6 +3263,9 @@ RAM_ALIGN const Word16 LowDelayShapes_n960_la_zeroes_5ms[NUM_SAMP_FREQ] = {10,
                                                                            60
 #  ifdef ENABLE_HR_MODE
                                                                            , 120
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                                                           , 240
+#endif
 #  endif
 };
 
@@ -3351,7 +3535,11 @@ RAM_ALIGN const Word16 *const LowDelayShapes_n960_5ms[6] = {LowDelayShapes_n960_
 #endif
 
 #  ifdef ENABLE_HR_MODE
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word16 LowDelayShapes_n960_len_2_5ms[7] = { 40, 80, 120, 160, 240, 480 ,0};
+#else
 RAM_ALIGN const Word16 LowDelayShapes_n960_len_2_5ms[6]                   = {40, 80, 120, 160, 240, 480};
+#endif
 #  else
 RAM_ALIGN const Word16 LowDelayShapes_n960_len_2_5ms[5]                   = {40, 80, 120, 160, 240};
 #  endif
@@ -3361,6 +3549,9 @@ RAM_ALIGN const Word16 LowDelayShapes_n960_la_zeroes_2_5ms[NUM_SAMP_FREQ] = {0,
                                                                              0,
                                                                              0,
                                                                              0
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                                                             , 0
+#endif
 };
 
 #ifdef ENABLE_HR_MODE
@@ -3373,32 +3564,69 @@ RAM_ALIGN const Word16 *const LowDelayShapes_n960_2_5ms[6] = {
 #endif
 
 #    ifdef ENABLE_HR_MODE
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word16 tns_subdiv_startfreq_192k_HR[6] = { 12, 74, 137, 200, 266, 333 };
+RAM_ALIGN const Word16 tns_subdiv_stopfreq_192k_HR[6] = { 74, 137, 200, 266, 333, 400 };
+
+RAM_ALIGN const Word16 tns_subdiv_startfreq_192k_5ms_HR[4] = { 6, 53, 100, 150 };
+RAM_ALIGN const Word16 tns_subdiv_stopfreq_192k_5ms_HR[4] = { 53, 100, 150, 200 };
+#endif
+
 RAM_ALIGN const Word16 tns_subdiv_startfreq_48k_HR[6]    = {12, 74, 137, 200, 266, 333};
 RAM_ALIGN const Word16 tns_subdiv_stopfreq_48k_HR[6]     = {74, 137, 200, 266, 333, 400};
 RAM_ALIGN const Word16 tns_subdiv_startfreq_96k_HR[6]    = {12, 74, 137, 200, 266, 333};
 RAM_ALIGN const Word16 tns_subdiv_stopfreq_96k_HR[6]     = {74, 137, 200, 266, 333, 400};
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word16 *const tns_subdiv_startfreq_HR[3] = {tns_subdiv_startfreq_48k_HR, tns_subdiv_startfreq_96k_HR, tns_subdiv_startfreq_192k_HR};
+#else
 RAM_ALIGN const Word16 *const tns_subdiv_startfreq_HR[2] = {tns_subdiv_startfreq_48k_HR, tns_subdiv_startfreq_96k_HR};
+#endif
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word16 *const tns_subdiv_stopfreq_HR[3]  = {tns_subdiv_stopfreq_48k_HR, tns_subdiv_stopfreq_96k_HR, tns_subdiv_stopfreq_192k_HR};
+#else
 RAM_ALIGN const Word16 *const tns_subdiv_stopfreq_HR[2]  = {tns_subdiv_stopfreq_48k_HR, tns_subdiv_stopfreq_96k_HR};
+#endif
 
 RAM_ALIGN const Word16 tns_subdiv_startfreq_48k_5ms_HR[4] = {6, 53, 100, 150};
 RAM_ALIGN const Word16 tns_subdiv_stopfreq_48k_5ms_HR[4]  = {53, 100, 150, 200};
 RAM_ALIGN const Word16 tns_subdiv_startfreq_96k_5ms_HR[4] = {6, 53, 100, 150};
 RAM_ALIGN const Word16 tns_subdiv_stopfreq_96k_5ms_HR[4]  = {53, 100, 150, 200};
 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word16 *const tns_subdiv_startfreq_5ms_HR[3] = {tns_subdiv_startfreq_48k_5ms_HR,
+                                                                tns_subdiv_startfreq_96k_5ms_HR, tns_subdiv_startfreq_192k_5ms_HR};
+RAM_ALIGN const Word16 *const tns_subdiv_stopfreq_5ms_HR[3]  = {tns_subdiv_stopfreq_48k_5ms_HR,
+                                                               tns_subdiv_stopfreq_96k_5ms_HR, tns_subdiv_stopfreq_192k_5ms_HR};
+#else
 RAM_ALIGN const Word16 *const tns_subdiv_startfreq_5ms_HR[2] = {tns_subdiv_startfreq_48k_5ms_HR,
                                                                 tns_subdiv_startfreq_96k_5ms_HR};
 RAM_ALIGN const Word16 *const tns_subdiv_stopfreq_5ms_HR[2]  = {tns_subdiv_stopfreq_48k_5ms_HR,
                                                                tns_subdiv_stopfreq_96k_5ms_HR};
+#endif
 
 RAM_ALIGN const Word16 tns_subdiv_startfreq_48k_2_5ms_HR[2] = {3, 51};
 RAM_ALIGN const Word16 tns_subdiv_stopfreq_48k_2_5ms_HR[2]  = {51, 100};
 RAM_ALIGN const Word16 tns_subdiv_startfreq_96k_2_5ms_HR[2] = {3, 51};
 RAM_ALIGN const Word16 tns_subdiv_stopfreq_96k_2_5ms_HR[2]  = {51, 100};
 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word16 tns_subdiv_startfreq_192k_2_5ms_HR[2] = { 3, 51, };
+RAM_ALIGN const Word16 tns_subdiv_stopfreq_192k_2_5ms_HR[2] = { 51, 100 };
+
+RAM_ALIGN const Word16 *const tns_subdiv_startfreq_2_5ms_HR[3] = {tns_subdiv_startfreq_48k_2_5ms_HR,
+                                                                  tns_subdiv_startfreq_96k_2_5ms_HR, tns_subdiv_startfreq_192k_2_5ms_HR};
+RAM_ALIGN const Word16 *const tns_subdiv_stopfreq_2_5ms_HR[3]  = {tns_subdiv_stopfreq_48k_2_5ms_HR,
+                                                                 tns_subdiv_stopfreq_96k_2_5ms_HR, tns_subdiv_stopfreq_192k_2_5ms_HR};
+
+#else
 RAM_ALIGN const Word16 *const tns_subdiv_startfreq_2_5ms_HR[2] = {tns_subdiv_startfreq_48k_2_5ms_HR,
                                                                   tns_subdiv_startfreq_96k_2_5ms_HR};
 RAM_ALIGN const Word16 *const tns_subdiv_stopfreq_2_5ms_HR[2]  = {tns_subdiv_stopfreq_48k_2_5ms_HR,
                                                                  tns_subdiv_stopfreq_96k_2_5ms_HR};
+#endif
 #    endif
 
 
@@ -3475,11 +3703,19 @@ RAM_ALIGN const Word16 tns_subdiv_startfreq_96k_7_5ms[6]                      = 
 RAM_ALIGN const Word16 tns_subdiv_stopfreq_96k_7_5ms[6]                       = {56, 103, 150, 200, 250, 300};
 #  endif
 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word16 tns_subdiv_startfreq_192k_7_5ms[6] = { 9, 56, 103, 150, 200, 250 };
+RAM_ALIGN const Word16 tns_subdiv_stopfreq_192k_7_5ms[6] = { 56, 103, 150, 200, 250, 300 };
+#endif
+
 RAM_ALIGN const Word16 *const tns_subdiv_startfreq_7_5ms[] = {
     tns_subdiv_startfreq_8k_7_5ms, tns_subdiv_startfreq_16k_7_5ms, tns_subdiv_startfreq_24k_7_5ms,
     tns_subdiv_startfreq_32k_7_5ms, tns_subdiv_startfreq_48k_7_5ms
 #  ifdef ENABLE_HR_MODE
     , tns_subdiv_startfreq_96k_7_5ms
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    , tns_subdiv_startfreq_192k_7_5ms
+#endif
 #  endif
 };
 RAM_ALIGN const Word16 *const tns_subdiv_stopfreq_7_5ms[] = {
@@ -3487,6 +3723,9 @@ RAM_ALIGN const Word16 *const tns_subdiv_stopfreq_7_5ms[] = {
     tns_subdiv_stopfreq_32k_7_5ms, tns_subdiv_stopfreq_48k_7_5ms
 #  ifdef ENABLE_HR_MODE
     , tns_subdiv_stopfreq_96k_7_5ms
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    , tns_subdiv_stopfreq_192k_7_5ms
+#endif
 #  endif
 };
 
@@ -4079,6 +4318,9 @@ RAM_ALIGN const Word16 *const lpc_pre_emphasis[NUM_SAMP_FREQ] = {lpc_warp_pre_em
                                                                  lpc_warp_pre_emphasis_64_32000,
                                                                  lpc_warp_pre_emphasis_64_48000,
                                                                  lpc_warp_pre_emphasis_64_96000
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                                                 , lpc_warp_pre_emphasis_64_192000
+#endif
 };
 
 RAM_ALIGN const Word16 *const lpc_pre_emphasis_e[NUM_SAMP_FREQ] = {lpc_warp_pre_emphasis_64_e_8000,
@@ -4087,6 +4329,9 @@ RAM_ALIGN const Word16 *const lpc_pre_emphasis_e[NUM_SAMP_FREQ] = {lpc_warp_pre_
                                                                    lpc_warp_pre_emphasis_64_e_32000,
                                                                    lpc_warp_pre_emphasis_64_e_48000,
                                                                    lpc_warp_pre_emphasis_64_e_96000
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                                                   , lpc_warp_pre_emphasis_64_e_192000
+#endif
 };
 
 #ifdef SUBSET_NB
@@ -4143,13 +4388,13 @@ RAM_ALIGN const Word16 lpc_lin_pre_emphasis_80_e_8000[80] = {
 #ifdef SUBSET_WB
 # ifdef FIX_PLC_CONFORM_ISSUES
 RAM_ALIGN const Word16 lpc_lin_pre_emphasis_20_16000[20] = {
-  0x54d4, 0x7906, 0x6043, 0x4a65, 0x6c65, 0x4aa6, 0x620c, 0x7bd2, 0x4baa, 0x59f2, 0x6869, 0x76b1, 0x4239, 0x48aa, 0x4e84, 0x53a1, 
-  0x57e1, 0x5b29, 0x5d65, 0x5e87 
+  0x54d4, 0x7906, 0x6043, 0x4a65, 0x6c65, 0x4aa6, 0x620c, 0x7bd2, 0x4baa, 0x59f2, 0x6869, 0x76b1, 0x4239, 0x48aa, 0x4e84, 0x53a1,
+  0x57e1, 0x5b29, 0x5d65, 0x5e87
 };
 RAM_ALIGN const Word16 lpc_lin_pre_emphasis_20_e_16000[20] = {
-  (Word16)0xfffd, (Word16)0xfffd, (Word16)0xfffe, (Word16)0xffff, (Word16)0xffff, (Word16)0x0000, (Word16)0x0000, (Word16)0x0000, 
-  (Word16)0x0001, (Word16)0x0001, (Word16)0x0001, (Word16)0x0001, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, 
-  (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002 
+  (Word16)0xfffd, (Word16)0xfffd, (Word16)0xfffe, (Word16)0xffff, (Word16)0xffff, (Word16)0x0000, (Word16)0x0000, (Word16)0x0000,
+  (Word16)0x0001, (Word16)0x0001, (Word16)0x0001, (Word16)0x0001, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002,
+  (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002
 };
 #endif
 RAM_ALIGN const Word16 lpc_lin_pre_emphasis_40_16000[40] = {
@@ -4193,14 +4438,14 @@ RAM_ALIGN const Word16 lpc_lin_pre_emphasis_80_e_16000[80] = {
 #ifdef SUBSET_SSWB
 # ifdef FIX_PLC_CONFORM_ISSUES
 RAM_ALIGN const Word16 lpc_lin_pre_emphasis_30_24000[30] = {
-  0x46f5, 0x6bb5, 0x5a67, 0x485c, 0x6c1c, 0x4c07, 0x65dc, 0x41a2, 0x51f6, 0x63bd, 0x76c4, 0x456b, 0x4fde, 0x5a9d, 0x658a, 0x7087, 
-  0x7b74, 0x431a, 0x4853, 0x4d58, 0x5219, 0x568b, 0x5aa0, 0x5e4d, 0x6188, 0x6447, 0x6683, 0x6835, 0x695a, 0x69ed 
+  0x46f5, 0x6bb5, 0x5a67, 0x485c, 0x6c1c, 0x4c07, 0x65dc, 0x41a2, 0x51f6, 0x63bd, 0x76c4, 0x456b, 0x4fde, 0x5a9d, 0x658a, 0x7087,
+  0x7b74, 0x431a, 0x4853, 0x4d58, 0x5219, 0x568b, 0x5aa0, 0x5e4d, 0x6188, 0x6447, 0x6683, 0x6835, 0x695a, 0x69ed
 };
 RAM_ALIGN const Word16 lpc_lin_pre_emphasis_30_e_24000[30] = {
-  (Word16)0xfffc, (Word16)0xfffc, (Word16)0xfffd, (Word16)0xfffe, (Word16)0xfffe, (Word16)0xffff, (Word16)0xffff, (Word16)0x0000, 
-  (Word16)0x0000, (Word16)0x0000, (Word16)0x0000, (Word16)0x0001, (Word16)0x0001, (Word16)0x0001, (Word16)0x0001, (Word16)0x0001, 
-  (Word16)0x0001, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, 
-  (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002 
+  (Word16)0xfffc, (Word16)0xfffc, (Word16)0xfffd, (Word16)0xfffe, (Word16)0xfffe, (Word16)0xffff, (Word16)0xffff, (Word16)0x0000,
+  (Word16)0x0000, (Word16)0x0000, (Word16)0x0000, (Word16)0x0001, (Word16)0x0001, (Word16)0x0001, (Word16)0x0001, (Word16)0x0001,
+  (Word16)0x0001, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002,
+  (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002
 };
 #endif
 RAM_ALIGN const Word16 lpc_lin_pre_emphasis_40_24000[40] = {
@@ -4262,20 +4507,20 @@ RAM_ALIGN const Word16 lpc_lin_pre_emphasis_80_e_24000[80] = {
 #endif
 
 #ifdef SUBSET_SWB
-RAM_ALIGN const Word16 lpc_lin_pre_emphasis_40_32000[40] = 
+RAM_ALIGN const Word16 lpc_lin_pre_emphasis_40_32000[40] =
 {
-  0x400d, 0x4e74, 0x5584, 0x4d4b, 0x7b03, 0x59d0, 0x7b65, 0x5106, 0x66c3, 0x7ec8, 0x4c78, 0x5a88, 0x697e, 0x7942, 0x44de, 0x4d69, 
-  0x5634, 0x5f32, 0x6854, 0x718c, 0x7acb, 0x4201, 0x4692, 0x4b11, 0x4f77, 0x53bc, 0x57db, 0x5bcc, 0x5f89, 0x630d, 0x6652, 0x6953, 
-  0x6c0b, 0x6e75, 0x708e, 0x7253, 0x73c1, 0x74d5, 0x758f, 0x75eb 
+  0x400d, 0x4e74, 0x5584, 0x4d4b, 0x7b03, 0x59d0, 0x7b65, 0x5106, 0x66c3, 0x7ec8, 0x4c78, 0x5a88, 0x697e, 0x7942, 0x44de, 0x4d69,
+  0x5634, 0x5f32, 0x6854, 0x718c, 0x7acb, 0x4201, 0x4692, 0x4b11, 0x4f77, 0x53bc, 0x57db, 0x5bcc, 0x5f89, 0x630d, 0x6652, 0x6953,
+  0x6c0b, 0x6e75, 0x708e, 0x7253, 0x73c1, 0x74d5, 0x758f, 0x75eb
 };
 
-RAM_ALIGN const Word16 lpc_lin_pre_emphasis_40_e_32000[40] = 
+RAM_ALIGN const Word16 lpc_lin_pre_emphasis_40_e_32000[40] =
 {
-  (Word16)0xfffa, (Word16)0xfffb, (Word16)0xfffc, (Word16)0xfffd, (Word16)0xfffd, (Word16)0xfffe, (Word16)0xfffe, (Word16)0xffff, 
-  (Word16)0xffff, (Word16)0xffff, (Word16)0x0000, (Word16)0x0000, (Word16)0x0000, (Word16)0x0000, (Word16)0x0001, (Word16)0x0001, 
-  (Word16)0x0001, (Word16)0x0001, (Word16)0x0001, (Word16)0x0001, (Word16)0x0001, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, 
-  (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, 
-  (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002 
+  (Word16)0xfffa, (Word16)0xfffb, (Word16)0xfffc, (Word16)0xfffd, (Word16)0xfffd, (Word16)0xfffe, (Word16)0xfffe, (Word16)0xffff,
+  (Word16)0xffff, (Word16)0xffff, (Word16)0x0000, (Word16)0x0000, (Word16)0x0000, (Word16)0x0000, (Word16)0x0001, (Word16)0x0001,
+  (Word16)0x0001, (Word16)0x0001, (Word16)0x0001, (Word16)0x0001, (Word16)0x0001, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002,
+  (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002,
+  (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002, (Word16)0x0002
 };
 
 RAM_ALIGN const Word16 lpc_lin_pre_emphasis_80_32000[80] = {
@@ -4378,6 +4623,9 @@ RAM_ALIGN const Word16 *const lpc_lin_pre_emphasis[NUM_SAMP_FREQ]   = {lpc_lin_p
                                                          lpc_lin_pre_emphasis_80_48000
 #ifdef ENABLE_HR_MODE
     , lpc_lin_pre_emphasis_80_0_92
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    , lpc_lin_pre_emphasis_80_0_92
+#endif
 #endif
                                                                       };
 
@@ -4386,6 +4634,9 @@ RAM_ALIGN const Word16 *const lpc_lin_pre_emphasis_e[NUM_SAMP_FREQ] = {
     lpc_lin_pre_emphasis_80_e_32000, lpc_lin_pre_emphasis_80_e_48000
 #ifdef ENABLE_HR_MODE
     , lpc_lin_pre_emphasis_80_e_0_92
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    , lpc_lin_pre_emphasis_80_e_0_92
+#endif
 #endif
 };
 
@@ -4394,6 +4645,9 @@ RAM_ALIGN const Word16 *const lpc_lin_pre_emphasis_5ms[NUM_SAMP_FREQ] = {
     lpc_lin_pre_emphasis_80_32000, lpc_lin_pre_emphasis_80_48000
 #ifdef ENABLE_HR_MODE
     , lpc_lin_pre_emphasis_80_0_92
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    , lpc_lin_pre_emphasis_80_0_92
+#endif
 #endif
 };
 
@@ -4402,6 +4656,9 @@ RAM_ALIGN const Word16 *const lpc_lin_pre_emphasis_e_5ms[NUM_SAMP_FREQ] = {
     lpc_lin_pre_emphasis_80_e_32000, lpc_lin_pre_emphasis_80_e_48000
 #ifdef ENABLE_HR_MODE
     , lpc_lin_pre_emphasis_80_e_0_92
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    , lpc_lin_pre_emphasis_80_e_0_92
+#endif
 #endif
 };
 
@@ -4410,6 +4667,9 @@ RAM_ALIGN const Word16 *const lpc_lin_pre_emphasis_2_5ms[NUM_SAMP_FREQ] = {
     lpc_lin_pre_emphasis_80_32000, lpc_lin_pre_emphasis_60_48000
 #ifdef ENABLE_HR_MODE
     , lpc_lin_pre_emphasis_80_0_92
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    , lpc_lin_pre_emphasis_80_0_92
+#endif
 #endif
 };
 
@@ -4418,6 +4678,9 @@ RAM_ALIGN const Word16 *const lpc_lin_pre_emphasis_e_2_5ms[NUM_SAMP_FREQ] = {
     lpc_lin_pre_emphasis_80_e_32000, lpc_lin_pre_emphasis_60_e_48000
 #ifdef ENABLE_HR_MODE
     , lpc_lin_pre_emphasis_80_e_0_92
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    , lpc_lin_pre_emphasis_80_e_0_92
+#endif
 #endif
 };
 
@@ -4426,7 +4689,11 @@ RAM_ALIGN const Word16 *const lpc_lin_pre_emphasis_1_25ms[NUM_SAMP_FREQ] = {
     lpc_lin_pre_emphasis_20_8000, lpc_lin_pre_emphasis_20_16000, lpc_lin_pre_emphasis_30_24000,
     lpc_lin_pre_emphasis_40_32000, lpc_lin_pre_emphasis_60_48000
 #ifdef ENABLE_HR_MODE
-    , lpc_lin_pre_emphasis_80_0_92
+#ifdef CR14_A_ADD_1p25MS_HR
+    , lpc_lin_pre_emphasis_1p25ms_96khz
+#else
+    , NULL
+#endif
 #endif
 };
 
@@ -4434,7 +4701,11 @@ RAM_ALIGN const Word16* const lpc_lin_pre_emphasis_e_1_25ms[NUM_SAMP_FREQ] = {
     lpc_lin_pre_emphasis_20_e_8000, lpc_lin_pre_emphasis_20_e_16000, lpc_lin_pre_emphasis_30_e_24000,
     lpc_lin_pre_emphasis_40_e_32000, lpc_lin_pre_emphasis_60_e_48000
 #ifdef ENABLE_HR_MODE
-    , lpc_lin_pre_emphasis_80_e_0_92
+#ifdef CR14_A_ADD_1p25MS_HR
+    , lpc_lin_pre_emphasis_1p25ms_96khz_e
+#else
+    , NULL
+#endif
 #endif
 };
 #endif
@@ -4513,6 +4784,9 @@ RAM_ALIGN const Word16 *const lpc_lin_pre_emphasis_7_5ms[NUM_SAMP_FREQ] = {
     lpc_lin_pre_emphasis_80_0_92, lpc_lin_pre_emphasis_60_0_92
 #      ifdef ENABLE_HR_MODE
     , lpc_lin_pre_emphasis_80_0_92
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    , lpc_lin_pre_emphasis_80_0_92
+#endif
 #      endif
     };
 RAM_ALIGN const Word16 *const lpc_lin_pre_emphasis_e_7_5ms[NUM_SAMP_FREQ] = {
@@ -4520,6 +4794,9 @@ RAM_ALIGN const Word16 *const lpc_lin_pre_emphasis_e_7_5ms[NUM_SAMP_FREQ] = {
     lpc_lin_pre_emphasis_80_e_0_92, lpc_lin_pre_emphasis_60_e_0_92
 #      ifdef ENABLE_HR_MODE
     , lpc_lin_pre_emphasis_80_e_0_92
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    , lpc_lin_pre_emphasis_80_e_0_92
+#endif
 #      endif
     };
 
@@ -4607,12 +4884,25 @@ RAM_ALIGN const Word16 lpc_warp_dee_emphasis_16_e_96000[16] = {
 #      define lpc_warp_dee_emphasis_16_e_96000 NULL
 #    endif
 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word16* const lpc_warp_dee_emphasis[NUM_SAMP_FREQ] = {
+    lpc_warp_dee_emphasis_16_8000, lpc_warp_dee_emphasis_16_16000, lpc_warp_dee_emphasis_16_24000,
+    lpc_warp_dee_emphasis_16_32000, lpc_warp_dee_emphasis_16_48000, lpc_warp_dee_emphasis_16_96000,
+    lpc_warp_dee_emphasis_16_192000
+};
+RAM_ALIGN const Word16* const lpc_warp_dee_emphasis_e[NUM_SAMP_FREQ] = {
+    lpc_warp_dee_emphasis_16_e_8000, lpc_warp_dee_emphasis_16_e_16000, lpc_warp_dee_emphasis_16_e_24000,
+    lpc_warp_dee_emphasis_16_e_32000, lpc_warp_dee_emphasis_16_e_48000, lpc_warp_dee_emphasis_16_e_96000,
+    lpc_warp_dee_emphasis_16_e_192000
+};
+#else
 RAM_ALIGN const Word16 *const lpc_warp_dee_emphasis[NUM_SAMP_FREQ] = {
     lpc_warp_dee_emphasis_16_8000, lpc_warp_dee_emphasis_16_16000, lpc_warp_dee_emphasis_16_24000,
     lpc_warp_dee_emphasis_16_32000, lpc_warp_dee_emphasis_16_48000, lpc_warp_dee_emphasis_16_96000};
 RAM_ALIGN const Word16 *const lpc_warp_dee_emphasis_e[NUM_SAMP_FREQ] = {
     lpc_warp_dee_emphasis_16_e_8000, lpc_warp_dee_emphasis_16_e_16000, lpc_warp_dee_emphasis_16_e_24000,
     lpc_warp_dee_emphasis_16_e_32000, lpc_warp_dee_emphasis_16_e_48000, lpc_warp_dee_emphasis_16_e_96000};
+#endif
 
 RAM_ALIGN const Word16 bands_nrg_scale[32] = {0, 0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3,
                                               3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4};
@@ -4628,7 +4918,26 @@ RAM_ALIGN const Word16 bands_offset_96000_HR[65] = {
     33,  36,  39,  42,  46,  50,  54,  59,  64,  69,  75,  82,  89,  96,  104, 113, 122, 132, 143, 155, 168, 181,
     196, 213, 230, 249, 270, 292, 316, 342, 371, 401, 434, 470, 509, 551, 596, 646, 699, 757, 819, 887, 960};
 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word16 bands_offset_192000_HR[65] = {
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 15, 17, 19, 21, 23, 26, 29, 32, 35, 39, 43,
+    47, 51, 56, 62, 68, 74, 81, 89, 98, 107, 117, 128, 140, 154, 168, 184, 202, 221, 241, 264, 289, 316,
+    346, 379, 415, 454, 497, 544, 595, 651, 712, 780, 853, 934, 1022, 1118, 1223, 1339, 1465, 1603, 1755, 1920
+};
+
+RAM_ALIGN const Word16 bands_offset_192000_7_5ms_HR[65] = {
+0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 17, 19, 21, 23, 25, 28, 31, 34, 37,
+41, 45, 49, 54, 59, 64, 70, 77, 84, 92, 100, 110, 120, 131, 143, 156, 171, 187, 204, 223,
+ 244, 267, 291, 318, 348, 380, 416, 454, 496, 542, 593, 648, 708, 774, 845, 924, 1010, 1103,
+ 1206, 1318, 1440
+};
+#endif
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word16 *const bands_offset_HR[3] = {bands_offset_48000_HR, bands_offset_96000_HR, bands_offset_192000_HR};
+#else
 RAM_ALIGN const Word16 *const bands_offset_HR[2] = {bands_offset_48000_HR, bands_offset_96000_HR};
+#endif
 
 RAM_ALIGN const Word16 bands_offset_48000_5ms_HR[56] = {
     0,  1,  2,  3,  4,   5,   6,   7,   8,   9,   10,  11,  12,  13,  14,  15,  16,  17, 18,
@@ -4639,7 +4948,11 @@ RAM_ALIGN const Word16 bands_offset_96000_5ms_HR[59] = {
     23,  25,  27,  29,  31,  34,  37,  40,  44,  48,  52,  56,  61,  66,  71,  77,  83,  90,  98, 106,
     115, 124, 135, 146, 158, 171, 185, 200, 217, 235, 254, 275, 298, 323, 349, 378, 409, 443, 480};
 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word16 *const bands_offset_5ms_HR[3] = {bands_offset_48000_5ms_HR, bands_offset_96000_5ms_HR, bands_offset_192000_5ms_HR};
+#else
 RAM_ALIGN const Word16 *const bands_offset_5ms_HR[2] = {bands_offset_48000_5ms_HR, bands_offset_96000_5ms_HR};
+#endif
 
 RAM_ALIGN const Word16 bands_offset_48000_2_5ms_HR[46] = {
     0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21,  23,  25,
@@ -4648,18 +4961,51 @@ RAM_ALIGN const Word16 bands_offset_96000_2_5ms_HR[50] = {
     0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13,  14,  15,  16,  18,  20,  22,  24,  26,  28,  30,  32,
     35, 38, 41, 45, 49, 53, 57, 62, 67, 73, 79, 85, 92, 100, 108, 117, 127, 137, 149, 161, 174, 189, 204, 221, 240};
 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word16 bands_offset_192000_2_5ms_HR[53] = {
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 22, 24, 26, 29, 32, 35, 38,
+    42, 46, 50, 55, 60, 66, 72, 79, 86, 94, 103, 113, 124, 136, 148, 162, 178, 195, 213, 233, 255, 279, 305, 334, 366, 400, 438, 480
+};
+
+RAM_ALIGN const Word16 bands_offset_192000_lpc_lin[81] = {
+0x0, 0x18, 0x30, 0x48, 0x60, 0x78, 0x90, 0xa8, 0xc0, 0xd8, 0xf0, 0x108, 0x120, 0x138, 0x150, 0x168, 0x180, 0x198,
+0x1b0, 0x1c8, 0x1e0, 0x1f8, 0x210, 0x228, 0x240, 0x258, 0x270, 0x288, 0x2a0, 0x2b8, 0x2d0, 0x2e8, 0x300, 0x318,
+0x330, 0x348, 0x360, 0x378, 0x390, 0x3a8, 0x3c0, 0x3d8, 0x3f0, 0x408, 0x420, 0x438, 0x450, 0x468, 0x480, 0x498,
+0x4b0, 0x4c8, 0x4e0, 0x4f8, 0x510, 0x528, 0x540, 0x558, 0x570, 0x588, 0x5a0, 0x5b8, 0x5d0, 0x5e8, 0x600, 0x618,
+0x630, 0x648, 0x660, 0x678, 0x690, 0x6a8, 0x6c0, 0x6d8, 0x6f0, 0x708, 0x720, 0x738, 0x750, 0x768, 0x780
+};
+
+RAM_ALIGN const Word16 bands_offset_192000_lpc_lin_7_5ms[81] =
+{
+  (Word16)0x0000, (Word16)0x0012, (Word16)0x0024, (Word16)0x0036, (Word16)0x0048, (Word16)0x005a, (Word16)0x006c, (Word16)0x007e, (Word16)0x0090, (Word16)0x00a2, (Word16)0x00b4, (Word16)0x00c6, (Word16)0x00d8, (Word16)0x00ea, (Word16)0x00fc, (Word16)0x010e,
+  (Word16)0x0120, (Word16)0x0132, (Word16)0x0144, (Word16)0x0156, (Word16)0x0168, (Word16)0x017a, (Word16)0x018c, (Word16)0x019e, (Word16)0x01b0, (Word16)0x01c2, (Word16)0x01d4, (Word16)0x01e6, (Word16)0x01f8, (Word16)0x020a, (Word16)0x021c, (Word16)0x022e,
+  (Word16)0x0240, (Word16)0x0252, (Word16)0x0264, (Word16)0x0276, (Word16)0x0288, (Word16)0x029a, (Word16)0x02ac, (Word16)0x02be, (Word16)0x02d0, (Word16)0x02e2, (Word16)0x02f4, (Word16)0x0306, (Word16)0x0318, (Word16)0x032a, (Word16)0x033c, (Word16)0x034e,
+  (Word16)0x0360, (Word16)0x0372, (Word16)0x0384, (Word16)0x0396, (Word16)0x03a8, (Word16)0x03ba, (Word16)0x03cc, (Word16)0x03de, (Word16)0x03f0, (Word16)0x0402, (Word16)0x0414, (Word16)0x0426, (Word16)0x0438, (Word16)0x044a, (Word16)0x045c, (Word16)0x046e,
+  (Word16)0x0480, (Word16)0x0492, (Word16)0x04a4, (Word16)0x04b6, (Word16)0x04c8, (Word16)0x04da, (Word16)0x04ec, (Word16)0x04fe, (Word16)0x0510, (Word16)0x0522, (Word16)0x0534, (Word16)0x0546, (Word16)0x0558, (Word16)0x056a, (Word16)0x057c, (Word16)0x058e,
+  (Word16)0x05a0
+};
+#endif
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word16 *const bands_offset_2_5ms_HR[3] = {bands_offset_48000_2_5ms_HR, bands_offset_96000_2_5ms_HR, bands_offset_192000_2_5ms_HR};
+#else
 RAM_ALIGN const Word16 *const bands_offset_2_5ms_HR[2] = {bands_offset_48000_2_5ms_HR, bands_offset_96000_2_5ms_HR};
+#endif
 
 RAM_ALIGN const Word16 bands_offset_48000_7_5ms_HR[65] = {
-    0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,  16,  17,  18,  19,  20,  22,  24,  
-    26,  28,  30,  32,  34,  36,  38,  41,  44,  47,  50,  53,  56,  60,  64,  68,  73,  78,  83,  89,  95, 101, 108, 
+    0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,  16,  17,  18,  19,  20,  22,  24,
+    26,  28,  30,  32,  34,  36,  38,  41,  44,  47,  50,  53,  56,  60,  64,  68,  73,  78,  83,  89,  95, 101, 108,
     115, 122, 130, 139, 148, 158, 168, 179, 191, 203, 217, 231, 246, 262, 279, 298, 317, 338, 360};
 RAM_ALIGN const Word16 bands_offset_96000_7_5ms_HR[65] = {
-    0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,  16,  18,  20,  22,  24,  26,  28,  
-    30,  32,  35,  38,  41,  44,  48,  52,  56,  61,  66,  71,  77,  83,  90,  97, 105, 114, 123, 132, 143, 155, 167, 
+    0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,  16,  18,  20,  22,  24,  26,  28,
+    30,  32,  35,  38,  41,  44,  48,  52,  56,  61,  66,  71,  77,  83,  90,  97, 105, 114, 123, 132, 143, 155, 167,
     180, 195, 210, 227, 245, 265, 286, 309, 334, 360, 389, 420, 454, 490, 529, 572, 617, 667, 720};
 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word16 *const bands_offset_7_5ms_HR[3] = {bands_offset_48000_7_5ms_HR, bands_offset_96000_7_5ms_HR, bands_offset_192000_7_5ms_HR};
+#else
 RAM_ALIGN const Word16 *const bands_offset_7_5ms_HR[2] = {bands_offset_48000_7_5ms_HR, bands_offset_96000_7_5ms_HR};
+#endif
 #endif /* ENABLE_HR_MODE */
 
 #ifdef SUBSET_NB
@@ -4875,22 +5221,34 @@ RAM_ALIGN const Word16 *const bands_offset[6] = {bands_offset_8000_lpc_warp, ban
 RAM_ALIGN const Word16 bands_offset_with_one_max_7_5ms[NUM_OFFSETS] = {60, 34, 27, 24, 22
 #    ifdef ENABLE_HR_MODE
                                                                      , 20, 16
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+  , 13
+#endif
 #    endif
 };
 RAM_ALIGN const Word16 bands_offset_with_two_max_7_5ms[NUM_OFFSETS] = {0, 48, 38, 33, 31
 #    ifdef ENABLE_HR_MODE
                                                                      , 29, 24
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+  , 19
+#endif
 #    endif
 };
 
 RAM_ALIGN const Word16 bands_offset_with_one_max[NUM_OFFSETS] = {49, 28, 23, 20, 18
 #    ifdef ENABLE_HR_MODE
                                                                  , 17, 12
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+  , 9
+#endif
 #    endif
                                                                 };
 RAM_ALIGN const Word16 bands_offset_with_two_max[NUM_OFFSETS] = {63, 40, 33, 29, 27
 #    ifdef ENABLE_HR_MODE
                                                                  , 25, 21
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+  , 16
+#endif
 #    endif
                                                                 };
 
@@ -4900,22 +5258,36 @@ RAM_ALIGN const Word16 *const bands_offset_5ms[6] = {bands_offset_8000_lpc_warp_
 RAM_ALIGN const Word16 bands_offset_with_one_max_5ms[NUM_OFFSETS] = {38, 30, 24, 22, 21
 #    ifdef ENABLE_HR_MODE
                                                                      , 19, 17
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+  , 13
+#endif
 #    endif
                                                                     };
 RAM_ALIGN const Word16 bands_offset_with_two_max_5ms[NUM_OFFSETS] = {39, 42, 34, 32, 29
 #    ifdef ENABLE_HR_MODE
                                                                      , 27, 24
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+  , 19
+#endif
 #    endif
                                                                     };
 
 #  ifdef ENABLE_HR_MODE
-RAM_ALIGN const Word16 bands_number_7_5ms   [] = {60, 64, 64, 64, 64, 64};
+RAM_ALIGN const Word16 bands_number_7_5ms   [] = {60, 64, 64, 64, 64, 64
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                                  , 64
+#endif
+                                                 };
 #  else
 RAM_ALIGN const Word16 bands_number_7_5ms   [] = {60, 64, 64, 64, 64};
 #  endif
 
 #ifdef ENABLE_HR_MODE
-RAM_ALIGN const Word16 bands_number_5ms[NUM_SAMP_FREQ] = {39, 50, 52, 54, 55, 58};
+RAM_ALIGN const Word16 bands_number_5ms[NUM_SAMP_FREQ] = {39, 50, 52, 54, 55, 58
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                                          , 59
+#endif
+                                                         };
 #else
 RAM_ALIGN const Word16 bands_number_5ms[NUM_SAMP_FREQ] = {39, 50, 52, 54, 55};
 #endif
@@ -4927,16 +5299,26 @@ RAM_ALIGN const Word16 *const bands_offset_2_5ms[6] = {
 RAM_ALIGN const Word16 bands_offset_with_one_max_2_5ms[NUM_OFFSETS] = {20, 30, 26, 24, 21
 #    ifdef ENABLE_HR_MODE
                                                                        , 19, 16
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+  , 14
+#endif
 #    endif
                                                                       };
 RAM_ALIGN const Word16 bands_offset_with_two_max_2_5ms[NUM_OFFSETS] = {20, 35, 35, 32, 29
 #    ifdef ENABLE_HR_MODE
                                                                        , 28, 24
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+  , 20
+#endif
 #    endif
                                                                       };
 
 #  ifdef ENABLE_HR_MODE
-RAM_ALIGN const Word16 bands_number_2_5ms_HR[] = {20, 35, 40, 43, 45, 49};
+RAM_ALIGN const Word16 bands_number_2_5ms_HR[] = {20, 35, 40, 43, 45, 49
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                                  , 52
+#endif
+                                                 };
 RAM_ALIGN const Word16 bands_number_2_5ms   [] = {20, 35, 40, 43, 44, 49};
 #  else
 RAM_ALIGN const Word16 bands_number_2_5ms   [] = {20, 35, 40, 43, 44};
@@ -4970,6 +5352,9 @@ RAM_ALIGN const Word16 *const bands_offset_lin[NUM_SAMP_FREQ] = {bands_offset_80
                                                      bands_offset_48000_lpc_lin
 #      ifdef ENABLE_HR_MODE
                                                      , bands_offset_96000_lpc_lin
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+           , bands_offset_192000_lpc_lin
+#endif
 #      endif
                                                                 };
 
@@ -4978,6 +5363,9 @@ RAM_ALIGN const Word16 *const bands_offset_lin_7_5ms[NUM_SAMP_FREQ] = {bands_off
                                                                        bands_offset_48000_lpc_lin
 #      ifdef ENABLE_HR_MODE
                                                                        , bands_offset_96000_lpc_lin_7_5ms
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        , bands_offset_192000_lpc_lin_7_5ms
+#endif
 #      endif
                                                                        };
 
@@ -4986,6 +5374,9 @@ RAM_ALIGN const Word16 *const bands_offset_lin_5ms[NUM_SAMP_FREQ] = {bands_offse
                                                          bands_offset_24000_lpc_lin
 #      ifdef ENABLE_HR_MODE
                                                          , bands_offset_48000_lpc_lin
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+         , bands_offset_96000_lpc_lin
+#endif
 #      endif
                                                                     };
 RAM_ALIGN const Word16 *const bands_offset_lin_2_5ms[NUM_SAMP_FREQ] = {bands_offset_8000_lpc_lin, bands_offset_8000_lpc_lin,
@@ -4993,6 +5384,9 @@ RAM_ALIGN const Word16 *const bands_offset_lin_2_5ms[NUM_SAMP_FREQ] = {bands_off
                                                            bands_offset_16000_lpc_lin
 #      ifdef ENABLE_HR_MODE
                                                            , bands_offset_24000_lpc_lin
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+              , bands_offset_48000_lpc_lin
+#endif
 #      endif
                                                                       };
 
@@ -5125,13 +5519,13 @@ RAM_ALIGN const Word32 inv_odft_twiddle_40_im[16] = {
 
 # ifdef FIX_PLC_CONFORM_ISSUES
 RAM_ALIGN const Word32 inv_odft_twiddle_30_re[16] = {
-    0x7fd317b4, 0x7f4c7e54, 0x7e6c9251, 0x7d33f0ca, 0x7ba3751d, 0x79bc384d, 0x777f903c, 0x74ef0ebc, 
-    0x720c8075, 0x6ed9eba1, 0x6b598ea3, 0x678dde6e, 0x637984d4, 0x5f1f5ea1, 0x5a82799a, 0x55a6125c 
+    0x7fd317b4, 0x7f4c7e54, 0x7e6c9251, 0x7d33f0ca, 0x7ba3751d, 0x79bc384d, 0x777f903c, 0x74ef0ebc,
+    0x720c8075, 0x6ed9eba1, 0x6b598ea3, 0x678dde6e, 0x637984d4, 0x5f1f5ea1, 0x5a82799a, 0x55a6125c
 };
 
 RAM_ALIGN const Word32 inv_odft_twiddle_30_im[16] = {
-    0x06b2f1d2, 0x0d61304e, 0x14060b68, 0x1a9cd9ac, 0x2120fb83, 0x278dde6e, 0x2ddf0040, 0x340ff242, 
-    0x3a1c5c57, 0x40000000, 0x45b6bb5e, 0x4b3c8c12, 0x508d9211, 0x55a6125c, 0x5a82799a, 0x5f1f5ea1 
+    0x06b2f1d2, 0x0d61304e, 0x14060b68, 0x1a9cd9ac, 0x2120fb83, 0x278dde6e, 0x2ddf0040, 0x340ff242,
+    0x3a1c5c57, 0x40000000, 0x45b6bb5e, 0x4b3c8c12, 0x508d9211, 0x55a6125c, 0x5a82799a, 0x5f1f5ea1
 };
 #endif
 
@@ -5274,6 +5668,9 @@ RAM_ALIGN const Word16 *const resamp_filts[NUM_SAMP_FREQ] = {resamp_filt_8k,
                                                              resamp_filt_32k,
                                                              resamp_filt_48k,
                                                              resamp_filt_96k
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                                             , resamp_filt_192k
+#endif
 };
 
 RAM_ALIGN const Word16 resamp_params[NUM_SAMP_FREQ][4] = {
@@ -5304,6 +5701,9 @@ RAM_ALIGN const Word16 resamp_params[NUM_SAMP_FREQ][4] = {
 #endif
 #ifdef ENABLE_HR_MODE
     {2, 60, 7, 1},
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    {1, 120, 15, 0},
+#endif
 #endif
 };
 
@@ -5367,9 +5767,15 @@ RAM_ALIGN const UWord16 pitch_scale[NUM_SAMP_FREQ] = {5120,
                                                      15360,
                                                      20480,
                                                      30720
+#  ifdef CR14_A_ADD_LOSSLESS_MODE
+                                                     , 61440
+#  endif
 };
 
 RAM_ALIGN const Word16 ltpf_overlap_len[NUM_SAMP_FREQ] = {20, 40, 60, 80, 120
+#  ifdef CR14_A_ADD_LOSSLESS_MODE
+                                                         , 240
+#  endif
 };
 
 /* set up  of SNS  VQ stages 1 ( split VQ)   and SNS stage 2(Transformed PVQ) for bit rate 38 bits  */
@@ -5467,9 +5873,9 @@ RAM_ALIGN const Word32 st1SCF8_15_base5_32x8_Q27[256] = {
 
 #ifdef CR9_C_ADD_1p25MS_LRSNS
 RAM_ALIGN const Word16 st1SCF0_7_base5_32x8_Q11[32 * 8 * 2] =
-#else 
-RAM_ALIGN const Word16 st1SCF0_7_base5_32x8_Q11[256] = 
-#endif 
+#else
+RAM_ALIGN const Word16 st1SCF0_7_base5_32x8_Q11[256] =
+#endif
 {
     4634,  1666,  -1086, -2778, -3276, -2951, -2343, -1547, 6032,  4939, 1967, -908, -2517, -3186, -3066, -2287,
     -4477, -4038, -3660, -3929, -3674, -2780, -1445, -98,   1421,  1957, 1178, -235, -1323, -1950, -2200, -1553,
@@ -5521,14 +5927,14 @@ RAM_ALIGN const Word16 st1SCF0_7_base5_32x8_Q11[256] =
    -1943,   -4367,   -5578,   -5673,   -5208,   -4138,   -1700,      56,
     3851,    2589,    -638,   -3762,   -4621,   -4195,   -4496,   -4150,
     -505,   -1957,   -3114,   -4048,   -3974,   -4575,   -4072,   -2606
-#endif 
+#endif
 };
 
 #ifdef CR9_C_ADD_1p25MS_LRSNS
 RAM_ALIGN const Word16 st1SCF8_15_base5_32x8_Q11[8 * 32 * 2] =
-#else 
-RAM_ALIGN const Word16 st1SCF8_15_base5_32x8_Q11[256] = 
-#endif 
+#else
+RAM_ALIGN const Word16 st1SCF8_15_base5_32x8_Q11[256] =
+#endif
 {
     475,   -2066, -4387, -4865, -4568, -4456, -4691, -5187, -2652, -3685, -3865, -3707, -3611, -3756, -3696, -3557,
     285,   -529,  -1333, -2188, -3316, -4480, -5402, -6101, -648,  -978,  -1129, -993,  -488,  -293,  140,   181,
@@ -5631,7 +6037,7 @@ RAM_ALIGN const UWord32 h_memN10K22[22 + 2] = {0U,
 RAM_ALIGN const UWord32 h_memN6K2[2 + 2] = {0U, 1U, 11U, /*U*/ 30U};
 /*N=6,K=1, h_memN6K1={0U,1U, 5U,};  */
 
-#ifdef CR9_C_ADD_1p25MS_LRSNS 
+#ifdef CR9_C_ADD_1p25MS_LRSNS
 RAM_ALIGN const UWord32 h_memN5K8[8 + 2] = { 0U, 1U, 9U, 41U, 129U, 321U, 681U, 1289U, 2241U,  /*U*/ 1824U };
 RAM_ALIGN const UWord32 h_memN8K2[2 + 2] = { 0U, 1U, 15U, /*U*/ 56U };
 RAM_ALIGN const UWord32 h_memN15K5[5 + 2] = { 0U, 1U, 29U, 421U, 4089U, 29961U,  /*U*/ 88522U };
@@ -5646,11 +6052,11 @@ RAM_ALIGN const UWord32* const MPVQ_offs_ptr[M + 1] = { NULL /*0*/, NULL, NULL, 
 #endif
 
 /*maxK coefficents for MPVQ de-indexing lookup */
-#ifdef CR9_C_ADD_1p25MS_LRSNS 
+#ifdef CR9_C_ADD_1p25MS_LRSNS
 RAM_ALIGN const Word16 tabledKMAX[M + 1] = {
     0, 0, 0, 0, 0, 8/*N=5 LR*/, 2 /*N=6*/, 0, 2 /*N=8 LR*/, 0, 22 /*N=10*/, 0, 0, 0, 0, 5/*N==15 LR*/, 12 /*N=16*/
 };
-#else 
+#else
 RAM_ALIGN const Word16 tabledKMAX[M + 1] = {
     0, 0, 0, 0, 0, 0, 2 /*N=6*/, 0, 0, 0, 22 /*N=10*/, 0, 0, 0, 0, 0, 12 /*N=16*/
 };
@@ -5681,11 +6087,21 @@ RAM_ALIGN const Word32 isqrt_Q31tab[1 + 64] = {/* 2^31 / sqrt(idx) */
 #endif
 
 #  ifdef ENABLE_HR_MODE
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+RAM_ALIGN const Word16 adjust_global_gain_tables[5][NUM_SAMP_FREQ] = {
+    {   80,  230,  380,  530,  680,   830,       980 },
+    {  500, 1025, 1550, 2075, 2600,  3125,      3650 },
+    {  850, 1700, 2550, 3400, 4250,  5100,      5950 },
+    {  189,  164,  155,  151,  148,   146,       145 },
+    { 1310, 3241, 5268, 7326, 9400, 11482,     13568 }};
+#else
 RAM_ALIGN const Word16 adjust_global_gain_tables[5][NUM_SAMP_FREQ] = {{80, 230, 380, 530, 680, 830},
                                                                       {500, 1025, 1550, 2075, 2600, 3125},
                                                                       {850, 1700, 2550, 3400, 4250, 5100},
                                                                       {189, 164, 155, 151, 148, 146},
                                                                       {1310, 3241, 5268, 7326, 9400, 11482}};
+#endif
 #  else
 RAM_ALIGN const Word16 adjust_global_gain_tables[5][NUM_SAMP_FREQ] = {{80, 230, 380, 530, 680},
                                                                       {500, 1025, 1550, 2075, 2600},
@@ -5720,17 +6136,17 @@ RAM_ALIGN  const Word16 lrsns_cbA_fx[2 * 16] = {
     -154, 385, 927, 1129, 455, -760, -2567, -4719
 };
 
-#endif 
+#endif
 
 #ifdef CR9_C_ADD_1p25MS_LRSNS
 
 /*LRSNS tables to construct the 170x16 st1B from  legacy st1(LF,HF) tables */
 /*  each index point to two vector in the split 2x32 stage 1 cb ,  lower 12 bits  in use [1][5][1][5] */
 /*  ff,fr,rf,rr , handled by  counting the absoulte idx */
-RAM_ALIGN const Word16 lrsns_st1B_merged170orderSortedSegmCnt_fx[4] = { /*ff,fr,rf,rr */ 
+RAM_ALIGN const Word16 lrsns_st1B_merged170orderSortedSegmCnt_fx[4] = { /*ff,fr,rf,rr */
     88,     42,     24,     16
 };
-RAM_ALIGN const Word16 lrsns_st1B_merged170orderSortedSegmCum_fx[5] = { /*ff,fr,rf,rr */ 
+RAM_ALIGN const Word16 lrsns_st1B_merged170orderSortedSegmCum_fx[5] = { /*ff,fr,rf,rr */
      0,     88,    130,    154,    170
 };
 RAM_ALIGN const Word16 lrsns_st1B_merged170orderSort12bitIdx_fx[170] = { /* actually 14 bit index can also be saved  */
@@ -5770,13 +6186,13 @@ const RAM_ALIGN Word16 lrsns_st1C_pitch1_mp1Q11_fx[16] = {
 };
 #ifdef LRSNS_CBC_NO_LTPF_DEPENDENCY
 const RAM_ALIGN Word16* lrsns_st1CTrainedMapMeans_fx[2] = { lrsns_st1C_pitch0_mp0Q11_fx ,lrsns_st1C_pitch1_mp1Q11_fx };
-#else 
+#else
 const RAM_ALIGN  Word16 lrsns_st1C_pitch2_mp2Q11_fx[16] = {
   -421,    206,    399,    323,    383,     25,    233,    263,
    240,    381,    914,   1464,   1460,    397,  -1904,  -4361
 };
 const RAM_ALIGN Word16* lrsns_st1CTrainedMapMeans_fx[3] = { lrsns_st1C_pitch0_mp0Q11_fx ,lrsns_st1C_pitch1_mp1Q11_fx,lrsns_st1C_pitch2_mp2Q11_fx };
-#endif 
+#endif
 /*    BE representable in Q11 after Q4*Q7 multiplcation */
 const  RAM_ALIGN Word16 lrsns_st1C_Both_scaleQ4_7p4bits_fx[2] = {
 -1, 86 /* exact BASOP Q4 value, used in synthesis */ };
@@ -5982,7 +6398,7 @@ const RAM_ALIGN Word16  lrsns_st1C_Both_EnBy2Tab_fx[170] = /* 2*170 words = 340 
     9675, 9684, 13828, 8352, 10983, 9836, 9009, 11364,
     15100, 23026
 };
-#endif 
+#endif
 
 #ifdef CR9_C_ADD_1p25MS_LRSNS
 RAM_ALIGN const Word16 isqrt_Q15tab[1 + 6] = {
@@ -6035,5 +6451,483 @@ RAM_ALIGN const Word32 L_lrsns_fixenv_enNormQ35[SNSLR_N_FIXENV * SNSLR_N_FIXENV_
 RAM_ALIGN const Word16 lrsns_norm_factorQ_L[N_SCF_SEARCH_SHAPES_ST2_LR] = { 31, 31, 19 + 16 };  /* split, full, fixenv */
 /*maxamps = [8, 5, 12];  8*2^11 = 2^14 =16384 , 5*2^12 = 20480, 12*2^11= 24576   */
 RAM_ALIGN const Word16 lrsns_y_up_bits[N_SCF_SEARCH_SHAPES_ST2_LR] = { 11, 12, 11 };  /* split, full, fixenv, max uphifts for normaliztion */
+
+#endif
+
+#ifdef LL_INCL_HPVC
+#if 1
+
+
+#ifdef  LL_HPVC_KP_FRAC
+RAM_ALIGN const UWord16 hpvc_KpTab_cumfreq[LL_HPVC_KP_MAX+1] = {
+     0,     32,    125,    191,    245,    292,
+   334,    372,    407,    440,    471,    501,
+   529,    556,    582,    607,    631,    654,
+   677,    699,    720,    741,    761,    781,
+   800,    819,    838,    856,    874,    892,
+   909,    926,    943,    960,    976,    992,
+  1008
+};
+RAM_ALIGN const UWord16 hpvc_KpTab_freq[LL_HPVC_KP_MAX+1] = {
+    32,     93,     66,     54,     47,     42,
+    38,     35,     33,     31,     30,     28,
+    27,     26,     25,     24,     23,     23,
+    22,     21,     21,     20,     20,     19,
+    19,     19,     18,     18,     18,     17,
+    17,     17,     17,     16,     16,     16,
+    16
+};
+/*
+RAM_ALIGN float hpvc_KpTabBitsFlt[LL_HPVC_KP_MAX+1] = {
+5.000, 3.461, 3.957, 4.246, 4.447, 4.609, 4.754, 4.871,
+4.957, 5.047, 5.094, 5.193, 5.246, 5.301, 5.357, 5.416,
+5.477, 5.477, 5.541, 5.609, 5.609, 5.680, 5.680, 5.754,
+5.754, 5.754, 5.830, 5.830, 5.830, 5.914, 5.914, 5.914,
+5.914, 6.000, 6.000, 6.000, 6.000
+};
+*/
+RAM_ALIGN const Word16 hpvc_KpTabBitsQ9[LL_HPVC_KP_MAX+1] = {
+ 2560,   1772,   2026,   2174,   2277,   2360,   2434,   2494,
+ 2538,   2584,   2608,   2659,   2686,   2714,   2743,   2773,
+ 2804,   2804,   2837,   2872,   2872,   2908,   2908,   2946,
+ 2946,   2946,   2985,   2985,   2985,   3028,   3028,   3028,
+ 3028,   3072,   3072,   3072,   3072
+};
+#endif
+
+#ifdef  LL_HPVC_GLOBAL_FRAC
+RAM_ALIGN const UWord16 hpvc_GlobalTab_freq[3] = {
+  768,    128,    128
+};
+RAM_ALIGN const UWord16 hpvc_GlobalTab_cumfreq[3] = {
+    0,    768,    896   /*, 1024 */
+};
+/*
+RAM_ALIGN float hpvc_GlobalTabBitsFlt[3] = {
+0.414, 3.000, 3.000
+};*/
+
+RAM_ALIGN const Word16 hpvc_GlobalTabBitsQ9[3] = {
+  212,   1536,   1536
+};
+#endif
+
+
+
+RAM_ALIGN const Word16 splitRuleMaxPerNp[5] =
+{ -1 /*8 uniSafe, no bits*/, -1/*16 unisafe, no bits*/, 1 /*32 (unisafe+log)*/, 2/*64 (uniSafe+log+revlog)*/, 3/*128 (uniSafe+log+revlog+uniAggressive)*/ };
+
+RAM_ALIGN const Word16 splitRuleNsMinPerNp[5] =
+{ 3 /*8*/ , 3/*16*/,  4 /*32 */, 4/*64*/, 4 /*128*/ };
+
+
+# ifdef  AC_ENCODE_UNI_FX_TAB128
+/*(0)1/1, (1)1/3, ... , (126)1/253, (127)1/255 , maximum upshifted negative  odd divisors  (1/Nodd) ,  no rounding  */
+RAM_ALIGN const Word16 hpvc_odd_invNtotNegQx[128] = {
+(Word16)0Xc000 /*idx=  0, val=-16384=(1/  1.000)*/, (Word16)0Xaaab /*idx=  1, val=-21845=(1/  3.000)*/, (Word16)0X999a /*idx=  2, val=-26214=(1/  5.000)*/,
+(Word16)0Xb6dc /*idx=  3, val=-18724=(1/  7.000)*/, (Word16)0X8e39 /*idx=  4, val=-29127=(1/  9.000)*/, (Word16)0Xa2e9 /*idx=  5, val=-23831=(1/ 11.000)*/,
+(Word16)0Xb13c /*idx=  6, val=-20164=(1/ 13.001)*/, (Word16)0Xbbbc /*idx=  7, val=-17476=(1/ 15.000)*/, (Word16)0X8788 /*idx=  8, val=-30840=(1/ 17.000)*/,
+(Word16)0X9436 /*idx=  9, val=-27594=(1/ 19.000)*/, (Word16)0X9e7a /*idx= 10, val=-24966=(1/ 21.000)*/, (Word16)0Xa6f5 /*idx= 11, val=-22795=(1/ 23.000)*/,
+(Word16)0Xae15 /*idx= 12, val=-20971=(1/ 25.001)*/, (Word16)0Xb426 /*idx= 13, val=-19418=(1/ 27.000)*/, (Word16)0Xb962 /*idx= 14, val=-18078=(1/ 29.001)*/,
+(Word16)0Xbdf0 /*idx= 15, val=-16912=(1/ 31.001)*/, (Word16)0X83e1 /*idx= 16, val=-31775=(1/ 33.000)*/, (Word16)0X8af9 /*idx= 17, val=-29959=(1/ 35.000)*/,
+(Word16)0X914d /*idx= 18, val=-28339=(1/ 37.001)*/, (Word16)0X96fa /*idx= 19, val=-26886=(1/ 39.001)*/, (Word16)0X9c19 /*idx= 20, val=-25575=(1/ 41.000)*/,
+(Word16)0Xa0bf /*idx= 21, val=-24385=(1/ 43.001)*/, (Word16)0Xa4fb /*idx= 22, val=-23301=(1/ 45.001)*/, (Word16)0Xa8da /*idx= 23, val=-22310=(1/ 47.000)*/,
+(Word16)0Xac69 /*idx= 24, val=-21399=(1/ 49.001)*/, (Word16)0Xafb0 /*idx= 25, val=-20560=(1/ 51.001)*/, (Word16)0Xb2b8 /*idx= 26, val=-19784=(1/ 53.001)*/,
+(Word16)0Xb587 /*idx= 27, val=-19065=(1/ 55.000)*/, (Word16)0Xb824 /*idx= 28, val=-18396=(1/ 57.000)*/, (Word16)0Xba94 /*idx= 29, val=-17772=(1/ 59.002)*/,
+(Word16)0Xbcdb /*idx= 30, val=-17189=(1/ 61.003)*/, (Word16)0Xbefc /*idx= 31, val=-16644=(1/ 63.000)*/, (Word16)0X81f9 /*idx= 32, val=-32263=(1/ 65.002)*/,
+(Word16)0X85bc /*idx= 33, val=-31300=(1/ 67.002)*/, (Word16)0X8947 /*idx= 34, val=-30393=(1/ 69.001)*/, (Word16)0X8c9f /*idx= 35, val=-29537=(1/ 71.001)*/,
+(Word16)0X8fc8 /*idx= 36, val=-28728=(1/ 73.000)*/, (Word16)0X92c6 /*idx= 37, val=-27962=(1/ 75.000)*/, (Word16)0X959d /*idx= 38, val=-27235=(1/ 77.002)*/,
+(Word16)0X984e /*idx= 39, val=-26546=(1/ 79.001)*/, (Word16)0X9ade /*idx= 40, val=-25890=(1/ 81.002)*/, (Word16)0X9d4e /*idx= 41, val=-25266=(1/ 83.003)*/,
+(Word16)0X9fa0 /*idx= 42, val=-24672=(1/ 85.001)*/, (Word16)0Xa1d7 /*idx= 43, val=-24105=(1/ 87.001)*/, (Word16)0Xa3f5 /*idx= 44, val=-23563=(1/ 89.002)*/,
+(Word16)0Xa5fb /*idx= 45, val=-23045=(1/ 91.002)*/, (Word16)0Xa7ea /*idx= 46, val=-22550=(1/ 93.000)*/, (Word16)0Xa9c5 /*idx= 47, val=-22075=(1/ 95.001)*/,
+(Word16)0Xab8c /*idx= 48, val=-21620=(1/ 97.001)*/, (Word16)0Xad41 /*idx= 49, val=-21183=(1/ 99.002)*/, (Word16)0Xaee5 /*idx= 50, val=-20763=(1/101.004)*/,
+(Word16)0Xb078 /*idx= 51, val=-20360=(1/103.004)*/, (Word16)0Xb1fc /*idx= 52, val=-19972=(1/105.005)*/, (Word16)0Xb371 /*idx= 53, val=-19599=(1/107.003)*/,
+(Word16)0Xb4d9 /*idx= 54, val=-19239=(1/109.005)*/, (Word16)0Xb633 /*idx= 55, val=-18893=(1/111.002)*/, (Word16)0Xb782 /*idx= 56, val=-18558=(1/113.005)*/,
+(Word16)0Xb8c4 /*idx= 57, val=-18236=(1/115.001)*/, (Word16)0Xb9fc /*idx= 58, val=-17924=(1/117.002)*/, (Word16)0Xbb29 /*idx= 59, val=-17623=(1/119.001)*/,
+(Word16)0Xbc4d /*idx= 60, val=-17331=(1/121.006)*/, (Word16)0Xbd66 /*idx= 61, val=-17050=(1/123.000)*/, (Word16)0Xbe77 /*idx= 62, val=-16777=(1/125.002)*/,
+(Word16)0Xbf7f /*idx= 63, val=-16513=(1/127.000)*/, (Word16)0X80ff /*idx= 64, val=-32513=(1/129.004)*/, (Word16)0X82ef /*idx= 65, val=-32017=(1/131.002)*/,
+(Word16)0X84d0 /*idx= 66, val=-31536=(1/133.001)*/, (Word16)0X86a4 /*idx= 67, val=-31068=(1/135.004)*/, (Word16)0X8869 /*idx= 68, val=-30615=(1/137.002)*/,
+(Word16)0X8a22 /*idx= 69, val=-30174=(1/139.004)*/, (Word16)0X8bce /*idx= 70, val=-29746=(1/141.004)*/, (Word16)0X8d6e /*idx= 71, val=-29330=(1/143.004)*/,
+(Word16)0X8f02 /*idx= 72, val=-28926=(1/145.001)*/, (Word16)0X908c /*idx= 73, val=-28532=(1/147.004)*/, (Word16)0X920b /*idx= 74, val=-28149=(1/149.004)*/,
+(Word16)0X9380 /*idx= 75, val=-27776=(1/151.005)*/, (Word16)0X94eb /*idx= 76, val=-27413=(1/153.004)*/, (Word16)0X964c /*idx= 77, val=-27060=(1/155.000)*/,
+(Word16)0X97a5 /*idx= 78, val=-26715=(1/157.002)*/, (Word16)0X98f5 /*idx= 79, val=-26379=(1/159.002)*/, (Word16)0X9a3d /*idx= 80, val=-26051=(1/161.004)*/,
+(Word16)0X9b7d /*idx= 81, val=-25731=(1/163.006)*/, (Word16)0X9cb4 /*idx= 82, val=-25420=(1/165.000)*/, (Word16)0X9de5 /*idx= 83, val=-25115=(1/167.004)*/,
+(Word16)0X9f0e /*idx= 84, val=-24818=(1/169.002)*/, (Word16)0Xa030 /*idx= 85, val=-24528=(1/171.001)*/, (Word16)0Xa14c /*idx= 86, val=-24244=(1/173.004)*/,
+(Word16)0Xa261 /*idx= 87, val=-23967=(1/175.003)*/, (Word16)0Xa370 /*idx= 88, val=-23696=(1/177.005)*/, (Word16)0Xa479 /*idx= 89, val=-23431=(1/179.007)*/,
+(Word16)0Xa57c /*idx= 90, val=-23172=(1/181.007)*/, (Word16)0Xa679 /*idx= 91, val=-22919=(1/183.006)*/, (Word16)0Xa771 /*idx= 92, val=-22671=(1/185.007)*/,
+(Word16)0Xa863 /*idx= 93, val=-22429=(1/187.004)*/, (Word16)0Xa950 /*idx= 94, val=-22192=(1/189.001)*/, (Word16)0Xaa39 /*idx= 95, val=-21959=(1/191.006)*/,
+(Word16)0Xab1c /*idx= 96, val=-21732=(1/193.001)*/, (Word16)0Xabfb /*idx= 97, val=-21509=(1/195.002)*/, (Word16)0Xacd6 /*idx= 98, val=-21290=(1/197.008)*/,
+(Word16)0Xadac /*idx= 99, val=-21076=(1/199.009)*/, (Word16)0Xae7d /*idx=100, val=-20867=(1/201.002)*/, (Word16)0Xaf4b /*idx=101, val=-20661=(1/203.006)*/,
+(Word16)0Xb014 /*idx=102, val=-20460=(1/205.000)*/, (Word16)0Xb0da /*idx=103, val=-20262=(1/207.003)*/, (Word16)0Xb19c /*idx=104, val=-20068=(1/209.005)*/,
+(Word16)0Xb25a /*idx=105, val=-19878=(1/211.002)*/, (Word16)0Xb315 /*idx=106, val=-19691=(1/213.006)*/, (Word16)0Xb3cc /*idx=107, val=-19508=(1/215.004)*/,
+(Word16)0Xb480 /*idx=108, val=-19328=(1/217.007)*/, (Word16)0Xb530 /*idx=109, val=-19152=(1/219.001)*/, (Word16)0Xb5de /*idx=110, val=-18978=(1/221.009)*/,
+(Word16)0Xb688 /*idx=111, val=-18808=(1/223.006)*/, (Word16)0Xb72f /*idx=112, val=-18641=(1/225.004)*/, (Word16)0Xb7d3 /*idx=113, val=-18477=(1/227.001)*/,
+(Word16)0Xb875 /*idx=114, val=-18315=(1/229.009)*/, (Word16)0Xb913 /*idx=115, val=-18157=(1/231.002)*/, (Word16)0Xb9af /*idx=116, val=-18001=(1/233.004)*/,
+(Word16)0Xba48 /*idx=117, val=-17848=(1/235.001)*/, (Word16)0Xbadf /*idx=118, val=-17697=(1/237.006)*/, (Word16)0Xbb73 /*idx=119, val=-17549=(1/239.005)*/,
+(Word16)0Xbc05 /*idx=120, val=-17403=(1/241.010)*/, (Word16)0Xbc94 /*idx=121, val=-17260=(1/243.007)*/, (Word16)0Xbd21 /*idx=122, val=-17119=(1/245.009)*/,
+(Word16)0Xbdac /*idx=123, val=-16980=(1/247.014)*/, (Word16)0Xbe34 /*idx=124, val=-16844=(1/249.009)*/, (Word16)0Xbeba /*idx=125, val=-16710=(1/251.006)*/,
+(Word16)0Xbf3e /*idx=126, val=-16578=(1/253.004)*/, (Word16)0Xbfc0 /*idx=127, val=-16448=(1/255.004)*/
+ };
+#endif
+
+#ifdef  AC_DECODE_UNI_FX_TAB128
+RAM_ALIGN const Word16 hpvc_invDenNegQx[128] = {
+(Word16)0X8000 /*n=128, val=-32768=(1/128.000)*/ , (Word16)0X80ff /*n=129, val=-32513=(1/129.004)*/ , (Word16)0X81f9 /*n=130, val=-32263=(1/130.004)*/ , (Word16)0X82ef /*n=131, val=-32017=(1/131.002)*/ ,
+(Word16)0X83e1 /*n=132, val=-31775=(1/132.000)*/ , (Word16)0X84d0 /*n=133, val=-31536=(1/133.001)*/ , (Word16)0X85bc /*n=134, val=-31300=(1/134.003)*/ , (Word16)0X86a4 /*n=135, val=-31068=(1/135.004)*/ , (Word16)0X8788 /*n=136, val=-30840=(1/136.002)*/ , (Word16)0X8869 /*n=137, val=-30615=(1/137.002)*/ ,
+(Word16)0X8947 /*n=138, val=-30393=(1/138.002)*/ , (Word16)0X8a22 /*n=139, val=-30174=(1/139.004)*/ , (Word16)0X8af9 /*n=140, val=-29959=(1/140.001)*/ , (Word16)0X8bce /*n=141, val=-29746=(1/141.004)*/ , (Word16)0X8c9f /*n=142, val=-29537=(1/142.002)*/ , (Word16)0X8d6e /*n=143, val=-29330=(1/143.004)*/ ,
+(Word16)0X8e39 /*n=144, val=-29127=(1/144.001)*/ , (Word16)0X8f02 /*n=145, val=-28926=(1/145.001)*/ , (Word16)0X8fc8 /*n=146, val=-28728=(1/146.001)*/ , (Word16)0X908c /*n=147, val=-28532=(1/147.004)*/ , (Word16)0X914d /*n=148, val=-28339=(1/148.005)*/ , (Word16)0X920b /*n=149, val=-28149=(1/149.004)*/ ,
+(Word16)0X92c6 /*n=150, val=-27962=(1/150.000)*/ , (Word16)0X9380 /*n=151, val=-27776=(1/151.005)*/ , (Word16)0X9436 /*n=152, val=-27594=(1/152.001)*/ , (Word16)0X94eb /*n=153, val=-27413=(1/153.004)*/ , (Word16)0X959d /*n=154, val=-27235=(1/154.004)*/ , (Word16)0X964c /*n=155, val=-27060=(1/155.000)*/ ,
+(Word16)0X96fa /*n=156, val=-26886=(1/156.003)*/ , (Word16)0X97a5 /*n=157, val=-26715=(1/157.002)*/ , (Word16)0X984e /*n=158, val=-26546=(1/158.001)*/ , (Word16)0X98f5 /*n=159, val=-26379=(1/159.002)*/ , (Word16)0X999a /*n=160, val=-26214=(1/160.002)*/ , (Word16)0X9a3d /*n=161, val=-26051=(1/161.004)*/ ,
+(Word16)0X9ade /*n=162, val=-25890=(1/162.005)*/ , (Word16)0X9b7d /*n=163, val=-25731=(1/163.006)*/ , (Word16)0X9c19 /*n=164, val=-25575=(1/164.000)*/ , (Word16)0X9cb4 /*n=165, val=-25420=(1/165.000)*/ , (Word16)0X9d4e /*n=166, val=-25266=(1/166.006)*/ , (Word16)0X9de5 /*n=167, val=-25115=(1/167.004)*/ ,
+(Word16)0X9e7a /*n=168, val=-24966=(1/168.001)*/ , (Word16)0X9f0e /*n=169, val=-24818=(1/169.002)*/ , (Word16)0X9fa0 /*n=170, val=-24672=(1/170.003)*/ , (Word16)0Xa030 /*n=171, val=-24528=(1/171.001)*/ , (Word16)0Xa0bf /*n=172, val=-24385=(1/172.003)*/ , (Word16)0Xa14c /*n=173, val=-24244=(1/173.004)*/ ,
+(Word16)0Xa1d7 /*n=174, val=-24105=(1/174.001)*/ , (Word16)0Xa261 /*n=175, val=-23967=(1/175.003)*/ , (Word16)0Xa2e9 /*n=176, val=-23831=(1/176.002)*/ , (Word16)0Xa370 /*n=177, val=-23696=(1/177.005)*/ , (Word16)0Xa3f5 /*n=178, val=-23563=(1/178.004)*/ , (Word16)0Xa479 /*n=179, val=-23431=(1/179.007)*/ ,
+(Word16)0Xa4fb /*n=180, val=-23301=(1/180.005)*/ , (Word16)0Xa57c /*n=181, val=-23172=(1/181.007)*/ , (Word16)0Xa5fb /*n=182, val=-23045=(1/182.005)*/ , (Word16)0Xa679 /*n=183, val=-22919=(1/183.006)*/ , (Word16)0Xa6f5 /*n=184, val=-22795=(1/184.001)*/ , (Word16)0Xa771 /*n=185, val=-22671=(1/185.007)*/ ,
+(Word16)0Xa7ea /*n=186, val=-22550=(1/186.000)*/ , (Word16)0Xa863 /*n=187, val=-22429=(1/187.004)*/ , (Word16)0Xa8da /*n=188, val=-22310=(1/188.001)*/ , (Word16)0Xa950 /*n=189, val=-22192=(1/189.001)*/ , (Word16)0Xa9c5 /*n=190, val=-22075=(1/190.002)*/ , (Word16)0Xaa39 /*n=191, val=-21959=(1/191.006)*/ ,
+(Word16)0Xaaab /*n=192, val=-21845=(1/192.003)*/ , (Word16)0Xab1c /*n=193, val=-21732=(1/193.001)*/ , (Word16)0Xab8c /*n=194, val=-21620=(1/194.001)*/ , (Word16)0Xabfb /*n=195, val=-21509=(1/195.002)*/ , (Word16)0Xac69 /*n=196, val=-21399=(1/196.005)*/ , (Word16)0Xacd6 /*n=197, val=-21290=(1/197.008)*/ ,
+(Word16)0Xad41 /*n=198, val=-21183=(1/198.003)*/ , (Word16)0Xadac /*n=199, val=-21076=(1/199.009)*/ , (Word16)0Xae15 /*n=200, val=-20971=(1/200.005)*/ , (Word16)0Xae7d /*n=201, val=-20867=(1/201.002)*/ , (Word16)0Xaee5 /*n=202, val=-20763=(1/202.009)*/ , (Word16)0Xaf4b /*n=203, val=-20661=(1/203.006)*/ ,
+(Word16)0Xafb0 /*n=204, val=-20560=(1/204.003)*/ , (Word16)0Xb014 /*n=205, val=-20460=(1/205.000)*/ , (Word16)0Xb078 /*n=206, val=-20360=(1/206.007)*/ , (Word16)0Xb0da /*n=207, val=-20262=(1/207.003)*/ , (Word16)0Xb13c /*n=208, val=-20164=(1/208.010)*/ , (Word16)0Xb19c /*n=209, val=-20068=(1/209.005)*/ ,
+(Word16)0Xb1fc /*n=210, val=-19972=(1/210.009)*/ , (Word16)0Xb25a /*n=211, val=-19878=(1/211.002)*/ , (Word16)0Xb2b8 /*n=212, val=-19784=(1/212.005)*/ , (Word16)0Xb315 /*n=213, val=-19691=(1/213.006)*/ , (Word16)0Xb371 /*n=214, val=-19599=(1/214.006)*/ , (Word16)0Xb3cc /*n=215, val=-19508=(1/215.004)*/ ,
+(Word16)0Xb426 /*n=216, val=-19418=(1/216.001)*/ , (Word16)0Xb480 /*n=217, val=-19328=(1/217.007)*/ , (Word16)0Xb4d9 /*n=218, val=-19239=(1/218.010)*/ , (Word16)0Xb530 /*n=219, val=-19152=(1/219.001)*/ , (Word16)0Xb587 /*n=220, val=-19065=(1/220.000)*/ , (Word16)0Xb5de /*n=221, val=-18978=(1/221.009)*/ ,
+(Word16)0Xb633 /*n=222, val=-18893=(1/222.003)*/ , (Word16)0Xb688 /*n=223, val=-18808=(1/223.006)*/ , (Word16)0Xb6dc /*n=224, val=-18724=(1/224.007)*/ , (Word16)0Xb72f /*n=225, val=-18641=(1/225.004)*/ , (Word16)0Xb782 /*n=226, val=-18558=(1/226.011)*/ , (Word16)0Xb7d3 /*n=227, val=-18477=(1/227.001)*/ ,
+(Word16)0Xb824 /*n=228, val=-18396=(1/228.001)*/ , (Word16)0Xb875 /*n=229, val=-18315=(1/229.009)*/ , (Word16)0Xb8c4 /*n=230, val=-18236=(1/230.001)*/ , (Word16)0Xb913 /*n=231, val=-18157=(1/231.002)*/ , (Word16)0Xb962 /*n=232, val=-18078=(1/232.012)*/ , (Word16)0Xb9af /*n=233, val=-18001=(1/233.004)*/ ,
+(Word16)0Xb9fc /*n=234, val=-17924=(1/234.005)*/ , (Word16)0Xba48 /*n=235, val=-17848=(1/235.001)*/ , (Word16)0Xba94 /*n=236, val=-17772=(1/236.006)*/ , (Word16)0Xbadf /*n=237, val=-17697=(1/237.006)*/ , (Word16)0Xbb29 /*n=238, val=-17623=(1/238.002)*/ , (Word16)0Xbb73 /*n=239, val=-17549=(1/239.005)*/ ,
+(Word16)0Xbbbc /*n=240, val=-17476=(1/240.004)*/ , (Word16)0Xbc05 /*n=241, val=-17403=(1/241.010)*/ , (Word16)0Xbc4d /*n=242, val=-17331=(1/242.012)*/ , (Word16)0Xbc94 /*n=243, val=-17260=(1/243.007)*/ , (Word16)0Xbcdb /*n=244, val=-17189=(1/244.011)*/ , (Word16)0Xbd21 /*n=245, val=-17119=(1/245.009)*/ ,
+(Word16)0Xbd66 /*n=246, val=-17050=(1/246.000)*/ , (Word16)0Xbdac /*n=247, val=-16980=(1/247.014)*/ , (Word16)0Xbdf0 /*n=248, val=-16912=(1/248.008)*/ , (Word16)0Xbe34 /*n=249, val=-16844=(1/249.009)*/ , (Word16)0Xbe77 /*n=250, val=-16777=(1/250.003)*/ , (Word16)0Xbeba /*n=251, val=-16710=(1/251.006)*/ ,
+(Word16)0Xbefc /*n=252, val=-16644=(1/252.001)*/ , (Word16)0Xbf3e /*n=253, val=-16578=(1/253.004)*/ , (Word16)0Xbf7f /*n=254, val=-16513=(1/254.000)*/ , (Word16)0Xbfc0 /*n=255, val=-16448=(1/255.004)*/
+};
+#endif
+
+
+#if LL_HPVC_N_SIGNAL==64
+
+/* Np= [ 2(len64),  64,128 ] */
+RAM_ALIGN const UWord16 NpTabPDF[3] = {  410,    410,    204 };
+RAM_ALIGN const UWord16 NpTabCDF[3] = {   0,    410,    820 /*,   1024*/ };
+/*RAM_ALIGN float NpTabBitsFlt[3] = { 1.320, 1.320, 2.328 };*/
+RAM_ALIGN const Word16 NpTabBitsQ9[3] = { 676,    676,   1192 };
+
+/*single codeword limits for  S_MPVQ <31bits  , S_PVQ < 32 bits */
+
+RAM_ALIGN const Word16 KmaxHPVC[2] = { HPVC_KMAX_FX ,HPVC_KMAX_FX }; /* Np=64,Np=128, */
+
+
+#endif  /* 64 */
+
+/* HPVC safe split constants for  Smpvq <=31 bits leaf codewords */
+/* NB  HPVC split-rule starts from ternary split, Ns=3 , to increase chance of an all zero vector */
+
+///*kMaxVec(Np = 7)[1 + 1] = [1(NsMax value), 36(Ns = 1)] */
+//RAM_ALIGN const Word16 hpvc_kMaxVec7[1 + 1] = { 1, HPVC_KMAX_FX };
+
+/*kMaxVec(Np = 8)[1 + 1] = [1(NsMax value), 36(Ns = 1)] */
+RAM_ALIGN const Word16 hpvc_kMaxVec8[1 + 1] = { 1, HPVC_KMAX_FX };
+
+/*kMaxVec(Np = 16)[1 + 3] = [3(NsMax value), 12(Ns = 1), n/a, 36 (Ns = 3)] */
+RAM_ALIGN const Word16 hpvc_kMaxVec16[1 + 3] = { 3, 12, -1, HPVC_KMAX_FX };   /*  Ns=3 value 36 could also be set to 95  */
+
+/*kMaxVec(Np = 32)[1 + 4] = [4(NsMax value), 7(Ns = 1), n / a, 18(Ns = 3), 36(Ns = 4)]*/
+RAM_ALIGN const Word16 hpvc_kMaxVec32[1 + 4] = { 4, 7, -1, 18, HPVC_KMAX_FX };
+
+/*kMaxVec(Np = 64)[1 + 8] =
+[8(NsMax value), 5(Ns = 1), n / a, 9(Ns = 3), 12(Ns = 4), 15, 18, 22, 36(Ns = 8)] */
+RAM_ALIGN const Word16 hpvc_kMaxVec64[1 + 8] = { 8, 5, -1, 9, 12, 15/* */, 18, 22, HPVC_KMAX_FX };
+
+/* kMaxVec(Np = 128)[1 + 16] =
+[16(NsMax value), 4(Ns = 1), n / a, 6 (Ns = 3), 7 (Ns = 4), 8(Ns = 5), 9(Ns = 6), 10(Ns = 7), 12(Ns = 8), 12(Ns = 9), 15(Ns = 10), 15(Ns = 11), 18 (Ns = 12), 22(Ns = 13), 22(Ns = 14), 27(Ns = 15), 36(Ns = 16)]
+, and with  noHPVCsplitK[Ns]*/
+RAM_ALIGN const Word16 hpvc_kMaxVec128[1 + 16] = { 16, 4, -1, 6, 7 , 8, 9, 10, 12, 12, 15, 15, 18, 22, 22, 27, HPVC_KMAX_FX };
+
+#if  LL_HPVC_N_SIGNAL==8
+RAM_ALIGN const Word16* hpvc_kMax[5] = { hpvc_kMaxVec8, hpvc_kMaxVec16, hpvc_kMaxVec32, hpvc_kMaxVec64, hpvc_kMaxVec128 };
+#elif LL_HPVC_N_SIGNAL==16
+RAM_ALIGN const Word16* hpvc_kMax[4] = { hpvc_kMaxVec16, hpvc_kMaxVec32, hpvc_kMaxVec64, hpvc_kMaxVec128 };
+#elif LL_HPVC_N_SIGNAL==32
+RAM_ALIGN const Word16* hpvc_kMax[3] = { hpvc_kMaxVec32, hpvc_kMaxVec64, hpvc_kMaxVec128 };
+#elif LL_HPVC_N_SIGNAL==64
+RAM_ALIGN const Word16* hpvc_kMax[2] = { hpvc_kMaxVec64, hpvc_kMaxVec128 };
+#endif
+/* HPVC Header split vector limits Hdr will have width  3...16 */
+RAM_ALIGN const Word16 hpvc_noHdrSplitK[1 + 16] = {
+16 /*(header max width)*/, 32767 /*(NsHdr = 1)*/, 32767 /*(NsHdr = 2)*/ , 32767 /* (NsHdr = 3)*/,
+1172  /* (NsHdr = 4)*/ , 238 /* (NsHdr = 5)*/ , 95 /* (NsHdr = 6)*/ , 53 /* (NsHdr = 7)*/ ,
+HPVC_KMAX_FX  /* (NsHdr = 8)*/ , 27/*(NsHdr = 9)*/, 22/*(NsHdr = 10)*/, 18/*(NsHdr = 11)*/,
+16/*(NsHdr = 12)*/, 15/*(NsHdr = 13)*/, 13 /*(NsHdr = 14)*/, 12 /*(NsHdr = 15)*/, 12/*(NsHdr = 16)*/
+};
+
+
+/* table stored maxK coefficients for faster decoder HPVC and MPVQ de-indexing lookup  */
+/* if not tabled (a "-1")  they can be generated using MPVQ recursions   */
+
+RAM_ALIGN const Word16 HPVC_tabledKMAX[1 + (LL_HPVC_NP_MAX / 2) + 1] = {
+    -1/*N=0*/,     -1/*N=1*/,     -1,     HPVC_KMAX_FX ,  HPVC_KMAX_FX    ,     HPVC_KMAX_FX /*N=5*/,     HPVC_KMAX_FX /*N=6*/,   HPVC_KMAX_FX /*N=7*/ ,
+    HPVC_KMAX_FX /*N=8*/,     27,     22,     18,     16,     15/*N=13*/,     13/*N=14*/,     12/*N=15*/,
+    12/*N=16*/,     11/*17*/,     11,     10,     10/*20*/,      9,      9,     9/*23*/,
+    9/*24*/,      8,      8,     -1/*27*/,     8,     8,     7,     7/*31*/,
+     7/*N=32*/,     7,     7,     7/*N=35*/ ,     -1,     -1,     7,     -1/*39*/,
+    -1,     -1,      6,      6,     -1,     -1,     -1,     -1/*47*/,
+    -1,     6,     -1,     -1,     6,     -1,     -1,     -1/*55*/,
+    6,     -1,     -1,     -1,     -1 /*60*/,     -1,     -1,     -1/*63*/,
+     5/*N=64 */,
+     4/*N=128 */
+};
+
+
+
+
+
+
+    /* log size options for splitting leaves  */
+    /* evaluate for efficiency increase */
+
+RAM_ALIGN Word16 logSzNp8Ns1Kmax36[4] = { 8 };
+RAM_ALIGN const Word16* logSzNp8[3 + 1] = { NULL, logSzNp8Ns1Kmax36, NULL, NULL };
+
+RAM_ALIGN Word16 logSzNp16Ns3Kmax36[4] = {    3,      5,      8,     36  };
+RAM_ALIGN const Word16* logSzNp16[3+1] = { NULL,NULL,NULL,logSzNp16Ns3Kmax36 };
+
+RAM_ALIGN Word16 logSzNp32Ns3Kmax10[4] = { 3,      7,     22,    -10    };
+RAM_ALIGN Word16 logSzNp32Ns4Kmax12[5] = { 3,      5,      8,     16,    -12 };
+RAM_ALIGN const Word16* logSzNp32[3+2] = { NULL,NULL,NULL, logSzNp32Ns3Kmax10, logSzNp32Ns4Kmax12 };
+
+
+RAM_ALIGN Word16 logSzNp64Ns3Kmax6[4] = {    3,      9,     52,     -6   };
+RAM_ALIGN Word16 logSzNp64Ns4Kmax7[5] = {    3,      5,     14,     42,     -7   };
+RAM_ALIGN Word16 logSzNp64Ns5Kmax7[6] = {    3,      4,      8,     16,     33,     -7  };
+RAM_ALIGN Word16 logSzNp64Ns6Kmax9[7] = {    3,      4,      6,      9,     16,     26,     -9 };
+RAM_ALIGN Word16 logSzNp64Ns7Kmax10[8] = {   3,      4,      5,      7,     10,     15,     20,    -10 };
+RAM_ALIGN Word16 logSzNp64Ns8Kmax12[9] = {   3,      4,      4,      5,      7,     10,     14,     17,    -12   };
+RAM_ALIGN const Word16* logSzNp64[3+6] = { NULL,NULL,NULL,logSzNp64Ns3Kmax6 ,   logSzNp64Ns4Kmax7   ,logSzNp64Ns5Kmax7 ,logSzNp64Ns6Kmax9 ,logSzNp64Ns7Kmax10  , logSzNp64Ns8Kmax12 };
+
+
+RAM_ALIGN Word16 logSzNp128Ns3[4] = {   29,     35,     64,     -6  };   /* 64 is the widest limit due to enumeration tables */
+RAM_ALIGN Word16 logSzNp128Ns4[5] = {   10,     19,     35,     64,     -6   };
+RAM_ALIGN Word16 logSzNp128Ns5[6] = {    5,      9,     17,     33,     64,     -6  };
+RAM_ALIGN Word16 logSzNp128Ns6[7] = {    4,      4,      8,     16,     32,     64,     -6    }; /* 64 is the widest limit due to enumeration tables */
+RAM_ALIGN Word16 logSzNp128Ns7[8] = {    4,      4,      6,     10,     17,     31,     56,     -6   };
+RAM_ALIGN Word16 logSzNp128Ns8[9] = {    4,      4,      5,      7,     11,     18,     30,     49,     -6   };
+RAM_ALIGN Word16 logSzNp128Ns9[10] =  {  4,      4,      5,      6,      8,     12,     18,     28,     43,     -7   };
+RAM_ALIGN Word16 logSzNp128Ns10[11] = {  4,      4,      4,      5,      7,      9,     13,     18,     26,     38,     -7   };
+RAM_ALIGN Word16 logSzNp128Ns11[12] = {  4,      4,      4,      5,      6,      8,     10,     13,     18,     24,     32,     -8   };
+RAM_ALIGN Word16 logSzNp128Ns12[13] = {  4,      4,      4,      4,      5,      7,      8,     10,     13,     17,     23,     29,     -8   };
+RAM_ALIGN Word16 logSzNp128Ns13[14] = {  4,      4,      4,      4,      5,      6,      7,      8,     10,     13,     16,     21,     26,     -9  };
+RAM_ALIGN  Word16 logSzNp128Ns14[15] = { 4,      4,      4,      4,      5,      5,      6,      7,      9,     10,     13,     16,     19,     22,    -10    };
+RAM_ALIGN  Word16 logSzNp128Ns15[16] = { 4,      4,      4,      4,      4,      5,      6,      6,      7,      9,     10,     12,     15,     18,     20,    -10    };
+RAM_ALIGN Word16 logSzNp128Ns16[17] =  { 4,      4,      4,      4,      4,      5,      5,      6,      7,      8,      9,     10,     12,     14,     16,     16,    -12   };
+RAM_ALIGN const Word16* logSzNp128[3 + 14 ] = { NULL,NULL,NULL, logSzNp128Ns3 ,logSzNp128Ns4 ,logSzNp128Ns5, logSzNp128Ns6,logSzNp128Ns7,logSzNp128Ns8,
+                                                logSzNp128Ns9,logSzNp128Ns10,logSzNp128Ns11,logSzNp128Ns12,logSzNp128Ns13 ,logSzNp128Ns14,logSzNp128Ns15,logSzNp128Ns16 };
+
+
+
+RAM_ALIGN const UWord32 hp_memN3K36[38] = {
+0U, 1U, 5U, 13U, 25U, 41U, 61U,
+85U, 113U, 145U, 181U, 221U, 265U, 313U,
+365U, 421U, 481U, 545U, 613U, 685U, 761U,
+841U, 925U, 1013U, 1105U, 1201U, 1301U, 1405U,
+1513U, 1625U, 1741U, 1861U, 1985U, 2113U, 2245U,
+2381U, 2521U, 1332U };
+
+RAM_ALIGN const UWord32 hp_memN4K36[38] = {
+0U, 1U, 7U, 25U, 63U, 129U, 231U,
+377U, 575U, 833U, 1159U, 1561U, 2047U, 2625U,
+3303U, 4089U, 4991U, 6017U, 7175U, 8473U, 9919U,
+11521U, 13287U, 15225U, 17343U, 19649U, 22151U, 24857U,
+27775U, 30913U, 34279U, 37881U, 41727U, 45825U, 50183U,
+54809U, 59711U, 32448U };
+
+RAM_ALIGN const UWord32 hp_memN5K36[38] = {
+0U, 1U, 9U, 41U, 129U, 321U, 681U,
+1289U, 2241U, 3649U, 5641U, 8361U, 11969U, 16641U,
+22569U, 29961U, 39041U, 50049U, 63241U, 78889U, 97281U,
+118721U, 143529U, 172041U, 204609U, 241601U, 283401U, 330409U,
+383041U, 441729U, 506921U, 579081U, 658689U, 746241U, 842249U,
+947241U, 1061761U, 593184U
+};
+RAM_ALIGN const UWord32 hp_memN6K36[38] = {
+0U, 1U, 11U, 61U, 231U, 681U, 1683U,
+3653U, 7183U, 13073U, 22363U, 36365U, 56695U, 85305U,
+124515U, 177045U, 246047U, 335137U, 448427U, 590557U, 766727U,
+982729U, 1244979U, 1560549U, 1937199U, 2383409U, 2908411U, 3522221U,
+4235671U, 5060441U, 6009091U, 7095093U, 8332863U, 9737793U, 11326283U,
+13115773U, 15124775U, 8686452U
+};
+
+RAM_ALIGN const UWord32 hp_memN7K36[38] = {
+0U, 1U, 13U, 85U, 377U, 1289U, 3653U,
+8989U, 19825U, 40081U, 75517U, 134245U, 227305U, 369305U,
+579125U, 880685U, 1303777U, 1884961U, 2668525U, 3707509U, 5064793U,
+6814249U, 9041957U, 11847485U, 15345233U, 19665841U, 24957661U, 31388293U,
+39146185U, 48442297U, 59511829U, 72616013U, 88043969U, 106114625U, 127178701U,
+151620757U, 179861305U, 106179492U };
+
+RAM_ALIGN const UWord32 hp_memN8K36[38] = {
+0U, 1U, 15U, 113U, 575U, 2241U, 7183U,
+19825U, 48639U, 108545U, 224143U, 433905U, 795455U, 1392065U,
+2340495U, 3800305U, 5984767U, 9173505U, 13726991U, 20103025U, 28875327U,
+40754369U, 56610575U, 77500017U, 104692735U, 139703809U, 184327311U, 240673265U,
+311207743U, 398796225U, 506750351U, 638878193U, 799538175U, 993696769U, 1226990095U,
+1505789553U, 1837271615U, 1114745952U
+};
+RAM_ALIGN const UWord32 hp_memN9K27[29] = {
+0U, 1U, 17U, 145U, 833U, 3649U, 13073U,
+40081U, 108545U, 265729U, 598417U, 1256465U, 2485825U, 4673345U,
+8405905U, 14546705U, 24331777U, 39490049U, 62390545U, 96220561U, 145198913U,
+214828609U, 312193553U, 446304145U, 628496897U, 872893441U, 1196924561U, 1621925137U,
+1086903072U
+};
+RAM_ALIGN const UWord32 hp_memN10K22[24] = {
+0U, 1U, 19U, 181U, 1159U, 5641U, 22363U,
+75517U, 224143U, 598417U, 1462563U, 3317445U, 7059735U, 14218905U,
+27298155U, 50250765U, 89129247U, 152951073U, 254831667U, 413442773U, 654862247U,
+1014889769U, 1541911931U, 1150204814U
+};
+RAM_ALIGN const UWord32 hp_memN11K18[20] = {
+0U, 1U, 21U, 221U, 1561U, 8361U, 36365U,
+134245U, 433905U, 1256465U, 3317445U, 8097453U, 18474633U, 39753273U,
+81270333U, 158819253U, 298199265U, 540279585U, 948062325U, 808168382U
+};
+RAM_ALIGN const UWord32 hp_memN12K16[18] = {
+0U, 1U, 23U, 265U, 2047U, 11969U, 56695U,
+227305U, 795455U, 2485825U, 7059735U, 18474633U, 45046719U, 103274625U,
+224298231U, 464387817U, 921406335U, 879942592U
+};
+RAM_ALIGN const UWord32 hp_memN13K15[17] = {
+0U, 1U, 25U, 313U, 2625U, 16641U, 85305U,
+369305U, 1392065U, 4673345U, 14218905U, 39753273U, 103274625U, 251595969U,
+579168825U, 1267854873U, 1326824512U
+};
+RAM_ALIGN const UWord32 hp_memN14K13[15] = {
+0U, 1U, 27U, 365U, 3303U, 22569U, 124515U,
+579125U, 2340495U, 8405905U, 27298155U, 81270333U, 224298231U, 579168825U,
+704966809U
+};
+RAM_ALIGN const UWord32 hp_memN15K12[14] = {
+0U, 1U, 29U, 421U, 4089U, 29961U, 177045U,
+880685U, 3800305U, 14546705U, 50250765U, 158819253U, 464387817U, 633927436U
+};
+RAM_ALIGN const UWord32 hp_memN16K12[14] = {
+0U, 1U, 31U, 481U, 4991U, 39041U, 246047U,
+1303777U, 5984767U, 24331777U, 89129247U, 298199265U, 921406335U, 1326824512U
+};
+RAM_ALIGN const UWord32 hp_memN18K11[13] = {
+0U, 1U, 35U, 613U, 7175U, 63241U, 448427U,
+2668525U, 13726991U, 62390545U, 254831667U, 948062325U, 1624113547U
+};
+RAM_ALIGN const UWord32 hp_memN19K10[12] = {
+0U, 1U, 37U, 685U, 8473U, 78889U, 590557U,
+3707509U, 20103025U, 96220561U, 413442773U, 808168382U
+};
+RAM_ALIGN const UWord32 hp_memN21K9[11] = {
+0U, 1U, 41U, 841U, 11521U, 118721U, 982729U,
+6814249U, 40754369U, 214828609U, 507444884U
+};
+RAM_ALIGN const UWord32 hp_memN22K9[11] = {
+0U, 1U, 43U, 925U, 13287U, 143529U, 1244979U,
+9041957U, 56610575U, 312193553U, 770955965U
+};
+RAM_ALIGN const UWord32 hp_memN25K8[10] = {
+0U, 1U, 49U, 1201U, 19649U, 241601U, 2383409U,
+19665841U, 139703809U, 436446720U
+};
+RAM_ALIGN const UWord32 hp_memN26K8[10] = {
+0U, 1U, 51U, 1301U, 22151U, 283401U, 2908411U,
+24957661U, 184327311U, 598462280U
+};
+RAM_ALIGN const UWord32 hp_memN32K7[9] = {
+0U, 1U, 63U, 1985U, 41727U, 658689U, 8332863U,
+88043969U, 399769087U
+};
+
+RAM_ALIGN const UWord32 hp_memN42K6[8] = {
+0U, 1U, 83U, 3445U, 95367U, 1981449U, 32968347U,
+228856670U
+};
+RAM_ALIGN const UWord32 hp_memN43K6[8] = {
+0U, 1U, 85U, 3613U, 102425U, 2179241U, 37129037U,
+263905362U
+};
+RAM_ALIGN const UWord32 hp_memN64K5[7] = {
+0U, 1U, 127U, 8065U, 341503U, 10848769U, 137915967U
+};
+RAM_ALIGN const UWord32 hp_memN128K4[6] = {
+0U, 1U, 255U, 32513U, 2763775U, 88107520U
+};
+
+
+RAM_ALIGN const UWord32 hp_memN17K11[13] = {
+0U, 1U, 33U, 545U, 6017U, 50049U, 335137U,
+1884961U, 9173505U, 39490049U, 152951073U, 540279585U, 879942592U
+};
+RAM_ALIGN const UWord32 hp_memN20K10[12] = {
+0U, 1U, 39U, 761U, 9919U, 97281U, 766727U,
+5064793U, 28875327U, 145198913U, 654862247U, 1342320892U
+};
+RAM_ALIGN const UWord32 hp_memN23K9[11] = {
+0U, 1U, 45U, 1013U, 15225U, 172041U, 1560549U,
+11847485U, 77500017U, 446304145U, 1150204814U
+};
+RAM_ALIGN const UWord32 hp_memN24K9[11] = {
+0U, 1U, 47U, 1105U, 17343U, 204609U, 1937199U,
+15345233U, 104692735U, 628496897U, 1687605335U
+};
+
+RAM_ALIGN const UWord32 hp_memN28K8[10] = {
+0U, 1U, 55U, 1513U, 27775U, 383041U, 4235671U,
+39146185U, 311207743U, 1086903072U
+};
+RAM_ALIGN const UWord32 hp_memN29K8[10] = {
+0U, 1U, 57U, 1625U, 30913U, 441729U, 5060441U,
+48442297U, 398796225U, 1441905056U
+};
+RAM_ALIGN const UWord32 hp_memN30K7[9] = {
+0U, 1U, 59U, 1741U, 34279U, 506921U, 6009091U,
+59511829U, 253375175U
+};
+RAM_ALIGN const UWord32 hp_memN31K7[9] = {
+0U, 1U, 61U, 1861U, 37881U, 579081U, 7095093U,
+72616013U, 319439096U
+};
+RAM_ALIGN const UWord32 hp_memN33K7[9] = {
+0U, 1U, 65U, 2113U, 45825U, 746241U, 9737793U,
+106114625U, 496848384U
+};
+RAM_ALIGN const UWord32 hp_memN34K7[9] = {
+0U, 1U, 67U, 2245U, 50183U, 842249U, 11326283U,
+127178701U, 613495047U
+};
+RAM_ALIGN const UWord32 hp_memN35K7[9] = {
+0U, 1U, 69U, 2381U, 54809U, 947241U, 13115773U,
+151620757U, 752894776U
+};
+RAM_ALIGN const UWord32 hp_memN38K7[9] = {
+0U, 1U, 75U, 2813U, 70375U, 1321641U, 19880915U,
+249612805U, 1345731847U
+};
+RAM_ALIGN const UWord32 hp_memN49K6[8] = {
+0U, 1U, 97U, 4705U, 152193U, 3694209U, 71789409U,
+581836976U
+};
+RAM_ALIGN const UWord32 hp_memN52K6[8] = {
+0U, 1U, 103U, 5305U, 182207U, 4695809U, 96879431U,
+833505036U
+};
+RAM_ALIGN const UWord32 hp_memN56K6[8] = {
+0U, 1U, 111U, 6161U, 228031U, 6332481U, 140763503U,
+1304700936U
+};
+
+const UWord32* const HPVC_MPVQ_offs_ptr[1 + LL_HPVC_NP_MAX / 2 + 1] = { NULL /*0*/
+, NULL/*1*/ , NULL/*2*/ ,  hp_memN3K36, hp_memN4K36, hp_memN5K36, hp_memN6K36, hp_memN7K36, hp_memN8K36
+, hp_memN9K27, hp_memN10K22, hp_memN11K18, hp_memN12K16, hp_memN13K15, hp_memN14K13, hp_memN15K12, hp_memN16K12
+, hp_memN17K11/*17*/ , hp_memN18K11, hp_memN19K10, hp_memN20K10/*20*/ , hp_memN21K9, hp_memN22K9, hp_memN23K9/*23*/ , hp_memN24K9/*24*/
+, hp_memN25K8, hp_memN26K8, NULL/*27*/ , hp_memN28K8/*28*/ , hp_memN29K8/*29*/ , hp_memN30K7/*30*/ ,  hp_memN31K7/*31*/ , hp_memN32K7
+, hp_memN33K7/*33*/ , hp_memN34K7/*34*/ , hp_memN35K7/*35*/ , NULL/*36*/ , NULL/*37*/ , hp_memN38K7/*38*/ , NULL/*39*/ , NULL/*40*/
+, NULL/*41*/ , hp_memN42K6, hp_memN43K6, NULL/*44*/ , NULL/*45*/ , NULL/*46*/ , NULL/*47*/ , NULL/*48*/
+,  hp_memN49K6/*49*/ , NULL/*50*/ , NULL/*51*/ , hp_memN52K6/*52*/ , NULL/*53*/ , NULL/*54*/ , NULL/*55*/ , hp_memN56K6/*56*/
+, NULL/*57*/ , NULL/*58*/ , NULL/*59*/ , NULL/*60*/ , NULL/*61*/ , NULL/*62*/ , NULL/*63*/ , hp_memN64K5,
+hp_memN128K4
+};
+/* NB  pointer to hp_mem N128K4 at position 65  */
+
+#endif /* ETSI ENC+DEC gate */
 
 #endif

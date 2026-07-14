@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -24,9 +24,12 @@ void processPLCapply_fx(
                         Word16 *ola_mem_exp, Word16 q_old_d_fx[], Word16 *q_old_fx_exp, Word32 q_d_fx[],
                         Word16 *q_fx_exp, Word16 yLen, Word16 fs_idx, Word16 *damping, Word16 old_pitch_int,
                         Word16 old_pitch_fr, Word16 *ns_cum_alpha, Word16 *ns_seed, LC3PLUS_FrameDuration frame_dms, AplcSetup *plcAd,
-                        Word8 *scratchBuffer
+                        lc3_scratch_t scratch
 #ifdef ENABLE_HR_MODE
                         , Word16 hrmode
+#endif
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                        , Word16 lossless
 #endif
                         , Word32 rel_pitch_change
                         , Word16 *alpha_type_2_table
@@ -41,8 +44,6 @@ void processPLCapply_fx(
         Word16  d2_fx_exp;
         Word16  r_fx_exp;
         Word16  Q_syn;
-        Word8 * buffer_perBandEnergy, *buffer_preEmphasis, *buffer_InverseODFT, *buffer_Levinson,
-            *buffer_tdac, *buffer_phecu;
         Word16        y_e;             /*exponent of L_ecu_rec */
         Word16        tmp_is_trans[2]; /* may be  changed to a single variable */
         Word16        env_stab;
@@ -63,25 +64,12 @@ void processPLCapply_fx(
     Word16 thresh_tdc_ns_cnt = 0;
 
     band_offsets = NULL;
-
-    d2_fx        = (Word32 *)scratchAlign(scratchBuffer, 0); /* Size = 4 * MAX_BANDS_NUMBER_PLC */
-    q_old_d_fx32 = (Word32 *)scratchAlign(d2_fx, sizeof(*d2_fx) * MAX_BANDS_NUMBER_PLC); /* Size = 4 * MAX_BW */
-    r_fx         = (Word32 *)scratchAlign(d2_fx, sizeof(*d2_fx) * MAX_BANDS_NUMBER_PLC); /* Size = 4 * (M + 1) */
-    tdc_A_32     = (Word32 *)scratchAlign(r_fx, sizeof(*r_fx) * (M + 1));                /* Size = 4 * (M + 1) */
-
-    L_ecu_rec = (Word32 *)scratchAlign(tdc_A_32, sizeof(*tdc_A_32) * (M + 1)); /* Size = 4 * MAX_LPROT bytes */
-
-    buffer_perBandEnergy =
-        (Word8 *)scratchAlign(q_old_d_fx32, sizeof(*q_old_d_fx32) * (MAX_LEN)); /* Size = 2 * MAX_BANDS_NUMBER_PLC */
-    buffer_preEmphasis =
-        (Word8 *)scratchAlign(tdc_A_32, sizeof(*tdc_A_32) * (M + 1)); /* Size = 2 * MAX_BANDS_NUMBER_PLC */
-    buffer_InverseODFT = buffer_preEmphasis;                          /* Size = 640 bytes */
-    buffer_Levinson    = buffer_preEmphasis;                          /* Size = 4 * (M + 1) */
-
-    buffer_tdac  = scratchBuffer; /* Size = 2 * MAX_LEN bytes */
-    buffer_phecu = scratchBuffer; /* Size = 2 * MAX_LGW + 8 * MAX_LPROT + 12 * MAX_L_FRAME */
-    /* Buffers overlap since they are not used at once */
-
+    
+    d2_fx = (Word32*) lc3_scratch_push( scratch, sizeof( *d2_fx ) * MAX_BANDS_NUMBER_PLC );
+    q_old_d_fx32 = (Word32*) lc3_scratch_push( scratch, sizeof( *q_old_d_fx32 ) * MAX_LEN );
+    r_fx = (Word32*) lc3_scratch_push( scratch, sizeof( *r_fx ) * ( plcAd->tdc_lpc_order + 1 ) );
+    tdc_A_32 = (Word32*) lc3_scratch_push( scratch, sizeof( *tdc_A_32 ) * ( plcAd->tdc_lpc_order + 1 ) );
+    L_ecu_rec = (Word32*) lc3_scratch_push( scratch, sizeof( *L_ecu_rec ) * frame_length );
     
     UNUSED(ns_cum_alpha);
     UNUSED(ns_seed);
@@ -145,7 +133,12 @@ void processPLCapply_fx(
                 }
 
 #ifdef ENABLE_HR_MODE
-            IF (L_sub(rel_pitch_change,REL_PITCH_THRESH) > 0 && sub(hrmode,1) == 0 && (sub(frame_dms, LC3PLUS_FRAME_DURATION_5MS) == 0 || sub(frame_dms, LC3PLUS_FRAME_DURATION_2p5MS) == 0)){
+#ifdef CR14_A_ADD_1p25MS_HR
+            IF (L_sub(rel_pitch_change,REL_PITCH_THRESH) > 0 && sub(hrmode,1) == 0 && (sub(frame_dms, LC3PLUS_FRAME_DURATION_5MS) == 0 || sub(frame_dms, LC3PLUS_FRAME_DURATION_2p5MS) == 0 || sub(frame_dms, LC3PLUS_FRAME_DURATION_1p25MS) == 0))
+#else
+            IF (L_sub(rel_pitch_change,REL_PITCH_THRESH) > 0 && sub(hrmode,1) == 0 && (sub(frame_dms, LC3PLUS_FRAME_DURATION_5MS) == 0 || sub(frame_dms, LC3PLUS_FRAME_DURATION_2p5MS) == 0))
+#endif
+            {
                 plcAd->plc_fadeout_type = 2;move16();
             } ELSE 
 #endif
@@ -238,7 +231,7 @@ void processPLCapply_fx(
                 plcAd->PhECU_margin_xfp,
                 plcAd->plc_fadeout_type  ,                          /* i  : fadeout scheme  */
 				&(plcAd->PhECU_nonpure_tone_flag),  /* i/o : non-pure single tone indicator state */
-                buffer_phecu);
+                scratch);
  
             y_e = 18;  move16();  /*  the  fixed exponent (exp)  from Lecu_rec  from PhaseECU is 18    */
 
@@ -268,6 +261,16 @@ void processPLCapply_fx(
 #ifdef FIX_PLC_CONFORM_ISSUES
                     band_offsets = bands_offset_lin_1_25ms[fs_idx];  move16();
 #endif
+
+#ifdef CR14_A_ADD_1p25MS_HR
+#ifdef ENABLE_HR_MODE
+                    IF (hrmode)
+                    {
+                        n_bands = MIN( frame_length, 40 );
+                        move16();
+                    }
+#endif
+#endif
                     IF (sub(fs_idx, 4) == 0)
                     {
                         n_bands = 60;  move16();
@@ -291,7 +294,11 @@ void processPLCapply_fx(
                 case LC3PLUS_FRAME_DURATION_7p5MS:
                     band_offsets = bands_offset_lin_7_5ms[fs_idx];  move16();
 #        ifdef ENABLE_HR_MODE
-                    IF (sub(fs_idx, 5) != 0)
+                    #ifdef CR14_A_ADD_LOSSLESS_MODE
+                    IF( sub( fs_idx, 5 ) < 0 )
+                    #else
+                    IF( sub( fs_idx, 5 ) != 0 )
+                    #endif 
                     {
 #        endif
                         IF (sub(fs_idx, 3) != 0)
@@ -316,23 +323,23 @@ void processPLCapply_fx(
                 /* LPC Analysis */
                 /* calculate per band energy*/
                 processPerBandEnergy_fx(d2_fx, &d2_fx_exp, q_old_d_fx32, *q_old_fx_exp, band_offsets, fs_idx, n_bands,
-                                        1, frame_dms, buffer_perBandEnergy
+                                        1, frame_dms, scratch
 #ifdef ENABLE_HR_MODE
                                         , hrmode
 #endif
                 );
 
                 /* calculate pre-emphasis */
-                processPreEmphasis_fx(d2_fx, &d2_fx_exp, fs_idx, n_bands, frame_dms, buffer_preEmphasis);
+                processPreEmphasis_fx(d2_fx, &d2_fx_exp, fs_idx, n_bands, frame_dms, scratch);
 
                 /* inverse ODFT */
-                processInverseODFT_fx(r_fx, &r_fx_exp, d2_fx, d2_fx_exp, n_bands, plcAd->tdc_lpc_order, buffer_InverseODFT);
+                processInverseODFT_fx(r_fx, &r_fx_exp, d2_fx, d2_fx_exp, n_bands, plcAd->tdc_lpc_order, scratch);
 
                 /* lag windowing */
                 processLagwin_fx(r_fx, lag_win[fs_idx], plcAd->tdc_lpc_order);
 
                 /* Levinson Durbin */
-                processLevinson_fx(tdc_A_32, r_fx, plcAd->tdc_lpc_order, NULL, NULL, buffer_Levinson);
+                processLevinson_fx(tdc_A_32, r_fx, plcAd->tdc_lpc_order, NULL, NULL, scratch);
 
                 /* 32Q27 -> 16Qx */
                 processPLCLpcScaling_fx(tdc_A_32, plcAd->tdc_A, add(plcAd->tdc_lpc_order, 1));
@@ -348,17 +355,29 @@ void processPLCapply_fx(
                 &plcAd->tdc_seed, 
                 &plcAd->tdc_gain_c, x_fx, &Q_syn, damping,
                 plcAd->max_len_pcm_plc,
-                plcAd->harmonicBuf_fx, plcAd->synthHist_fx, &plcAd->harmonicBuf_Q, scratchBuffer
+                plcAd->harmonicBuf_fx, plcAd->synthHist_fx, &plcAd->harmonicBuf_Q, scratch
                 , plcAd->plc_fadeout_type
                 , alpha_type_2_table
-);
+            );
                 
             /* exponent of TD-PLC output */
             Q_syn     = add(Q_syn, sub(15, plcAd->q_fx_old_exp));
             *q_fx_exp = sub(15, Q_syn); move16();
 
             /* TDAC */
-            processTdac_fx(ola_mem, ola_mem_exp, x_fx, *q_fx_exp, w, la_zeroes, frame_length, buffer_tdac);
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+#  ifdef CR15_A_LOSSLESS_1p25MS
+            if (lossless) {
+#  else
+            if (lossless && frame_dms != LC3PLUS_FRAME_DURATION_1p25MS) {
+#  endif
+                processLiftingTdac2_fx(ola_mem, ola_mem_exp, x_fx, *q_fx_exp, frame_length, fs_idx, la_zeroes, frame_dms, scratch);
+            } else {
+                processTdac_fx( ola_mem, ola_mem_exp, x_fx, *q_fx_exp, w, la_zeroes, frame_length, scratch );
+            }
+#else
+            processTdac_fx(ola_mem, ola_mem_exp, x_fx, *q_fx_exp, w, la_zeroes, frame_length, scratch);
+#endif
             BREAK;
 
         case LC3_CON_TEC_NS_ADV:
@@ -371,8 +390,12 @@ void processPLCapply_fx(
         default: ASSERT(!"Unsupported PLC method!");
         }
     }
+    
+    L_ecu_rec = (Word32*) lc3_scratch_pop( scratch, L_ecu_rec );
+    tdc_A_32 = (Word32*) lc3_scratch_pop( scratch, tdc_A_32 );
+    r_fx = (Word32*) lc3_scratch_pop( scratch, r_fx );
+    q_old_d_fx32 = (Word32*) lc3_scratch_pop( scratch, q_old_d_fx32 );
+    d2_fx = (Word32*) lc3_scratch_pop( scratch, d2_fx );
 
     Dyn_Mem_Deluxe_Out();
 }
-
-

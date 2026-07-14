@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -102,7 +102,12 @@ void processPlcMain_fl(LC3_FLOAT *q_d_fl_c, LC3_FLOAT *syntM_fl_c, LC3PLUS_Dec* 
                 {
                     PlcAdvSetup->plc_fadeout_type = 0;
                 }
-            if (h_DecSetup->rel_pitch_change > REL_PITCH_THRESH && hrmode == 1 && (decoder->frame_dms == LC3PLUS_FRAME_DURATION_5MS || decoder->frame_dms == LC3PLUS_FRAME_DURATION_2p5MS) ){
+#ifdef CR14_A_ADD_1p25MS_HR
+            if (h_DecSetup->rel_pitch_change > REL_PITCH_THRESH && hrmode == 1 && (decoder->frame_dms == LC3PLUS_FRAME_DURATION_5MS || decoder->frame_dms == LC3PLUS_FRAME_DURATION_2p5MS || decoder->frame_dms == LC3PLUS_FRAME_DURATION_1p25MS) )
+#else
+            if (h_DecSetup->rel_pitch_change > REL_PITCH_THRESH && hrmode == 1 && (decoder->frame_dms == LC3PLUS_FRAME_DURATION_5MS || decoder->frame_dms == LC3PLUS_FRAME_DURATION_2p5MS) )
+#endif
+            {
                 PlcAdvSetup->plc_fadeout_type = 2;
             } else 
                 if ( h_DecSetup->concealMethod != 2 ) {

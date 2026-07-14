@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -8,6 +8,8 @@
 ******************************************************************************/
 
 #include "functions.h"
+
+#ifndef CR14_A_ADD_LOSSLESS_MODE
 
 void scale_signal24_fx(Word32 x[], /* i:   time input signal */
 #ifdef ENABLE_HR_MODE
@@ -119,3 +121,4 @@ void scale_signal24_fx(Word32 x[], /* i:   time input signal */
 #endif
 }
 
+#endif

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -34,7 +34,7 @@ void processTdac_fx(Word16 *ola_mem, Word16 *ola_mem_exp, const Word16 *synth_in
 #else
                     const Word16 *win,
 #endif
-                    const Word16 la_zeroes, const Word16 frame_len, Word8 *scratchBuffer)
+                    const Word16 la_zeroes, const Word16 frame_len, lc3_scratch_t scratch)
 {
     Counter       i;
     Word16        s;
@@ -85,13 +85,13 @@ void processTdac_fx(Word16 *ola_mem, Word16 *ola_mem_exp, const Word16 *synth_in
                }));
 #endif
 
-    synth = (Word16 *)scratchAlign(scratchBuffer, 0); /* Size = 2 * MAX_LEN */
-
-    ASSERT(la_zeroes <= frame_len / 2);
-
     L   = frame_len; move16();
     LD2 = shr_pos(L, 1);
     NZ  = sub(LD2, la_zeroes);
+    synth_len = sub(shl_pos(L, 1), la_zeroes);
+    synth = (Word16*) lc3_scratch_push( scratch, sizeof( *synth ) * synth_len );
+
+    ASSERT(la_zeroes <= frame_len / 2);
 
     /* inverse normalization of sqrt(2/N) inside window */
 #ifdef ENABLE_HR_MODE
@@ -127,7 +127,6 @@ void processTdac_fx(Word16 *ola_mem, Word16 *ola_mem_exp, const Word16 *synth_in
     }
 
     /* Scale input */
-    synth_len = sub(shl_pos(L, 1), la_zeroes);
     s         = getScaleFactor16(synth_inp, synth_len);
 
     FOR (i = 0; i < synth_len; i++)
@@ -214,6 +213,8 @@ void processTdac_fx(Word16 *ola_mem, Word16 *ola_mem_exp, const Word16 *synth_in
     }
 
     *ola_mem_exp = sub(add(synth_exp, INV_NORM_E), smax); move16();
+  
+    synth = (Word16*) lc3_scratch_pop( scratch, synth );
 
 #ifdef DYNMEM_COUNT
     Dyn_Mem_Out();

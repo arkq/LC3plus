@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -19,7 +19,7 @@
         Word16 *      y,                         /* projected integer output vector   */
         Word16 *pulse_tot_ptr, Word32 *L_xy_ptr, /* accumulated correlation  Q(in+0+1) = Qin+1 */
         Word32 *L_yy_ptr,                         /* accumulated energy  Q0  */
-        Word8 * scratch
+        lc3_scratch_t scratch
     )
     {
         Dyn_Mem_Deluxe_In(
@@ -34,9 +34,8 @@
         Word16    skip_rnd_flag = 0;
 #endif 
 
-        y_r      = (Word16 *)scratchAlign(scratch, 0);                  
-        y_r_soft = (Word16 *)scratchAlign(y_r, M * sizeof(*y_r));   /*  y_r      = M   */
-                                                                     /* y_r_soft = M  */
+        y_r = (Word16*) lc3_scratch_push( scratch, sizeof( *y_r ) * M );
+        y_r_soft = (Word16*) lc3_scratch_push( scratch, sizeof( *y_r_soft ) * M );
  
         *pulse_tot_ptr = 0; move16();
         pulse_tot_r = 0; move16();
@@ -112,6 +111,9 @@
             *L_xy_ptr = L_mac(*L_xy_ptr, xabs[i], y[i]); /* Corr, Q11*Q0  +1  --> Q12   */
         }
         ASSERT(*pulse_tot_ptr <= num_max);
+        
+        y_r_soft = (Word16*) lc3_scratch_pop( scratch, y_r_soft );
+        y_r = (Word16*) lc3_scratch_pop( scratch, y_r );
 
         Dyn_Mem_Deluxe_Out();
     }
@@ -161,7 +163,7 @@ static void pvq_pyr_project(const Word16  dim_proj,                  /* end vect
 }
 
 
-static __forceinline Word16 one_pulse_search(const Word16  dim_start, /* start vector dimension       */
+static Word16 one_pulse_search(const Word16  dim_start, /* start vector dimension       */
                                              const Word16  dim_end,   /* end vector dimension+1       */
                                              const Word16 *x_abs,     /* absolute vector values */
                                              Word16 *      y,         /* output vector    */
@@ -224,7 +226,7 @@ static __forceinline Word16 one_pulse_search(const Word16  dim_start, /* start v
 
 /* evaluate corr/sqrt(en) = corr*inv_sqrt_tab[en],    as  CorrSq/en ratio  cross-multiplication may cost more  */
 
-static __forceinline Word16 one_pulse_search_tab_isqrt(
+static Word16 one_pulse_search_tab_isqrt(
     const Word16  dim_start, /* start vector dimension       */
     const Word16  dim_end,   /* end vector dimension+1       */
     const Word16 *x_abs,     /* absolute vector values */
@@ -554,73 +556,66 @@ void pvq_fess_enc_search_fx(
     Word16 *      fixShapeNbPtr, /* o:  idx for the selected fix shape y_fix  0...3, only relevant in the case  s_idx==2  */
     Word16 *      fixShiftIdxPtr, /* o:  idx for the selected fix shift  0...3,   only relevant in the case  s_idx==2  */
     Word32 *      L_MSEQ22Ptr,   /* o:  1   Q11+Q0+1 -->  Q22  */
-    Word8 * scratch    
+    lc3_scratch_t scratch   
 )
 {
  
     Dyn_Mem_Deluxe_In(
-        Counter       i, k, n;
-    Word16        pulse_tot;
-    Word16        max_xabs, max_xabsA, max_xabsB, max_xabsAB, max_xabsC;
-    Word32        L_xsum, L_xsumA, L_xsumB, L_xsumAB;
-    Word32        L_yy, L_xy;
+        Counter i, k, n;
+        Word16 pulse_tot;
+        Word16 max_xabs, max_xabsA, max_xabsB, max_xabsAB, max_xabsC;
+        Word32 L_xsum, L_xsumA, L_xsumB, L_xsumAB;
+        Word32 L_yy, L_xy;
+        Word32 * L_search_corr;
+        Word32 * L_search_en;
+        Word16 imax;
+        Word16 * y_split, *y_full, *y_fix;
+        Word16 * y_splitAB;
+        Word16 * xabs;
+        Word16 * y_splitA0;
+        Word16 best_env_ind;
+        Word16 best_shift_ind;
+        Word32 L_targetEnNeg;
 
-    Word16        imax;
-    Word16        *y_split, *y_full, *y_fix;
-    Word16        *y_splitAB;
+        Word16 shift_ind, fix_ind;
+        Word16 * xabs1;
+        const Word16* envPtr;
+        Word32 L_corr;
+        Word32 * L_corr_fixenv;
+        Word32 * L_normcorr_fixenv;
 
-    Word16        *y_splitA0;
-    Word16        best_env_ind;
-    Word16        best_shift_ind;
-    Word32        L_targetEnNeg;
+        Word16 * y, *y_norm, tmp;
+        Word32 * L_y_norm;
+        Word32 L_tmp;
+        Word32 L_min_mse_opt;
+        Word16 * gain_idx_opt_save;
+        Word32 * L_min_mse_opt_save;
+        Word16 gain_idx_opt, shape_idx_opt;
+        Word16 best_ind;
+        Word16 gidx;
+        Word32 L_g_q_tmp;
+        const Word16* gTabPtr;
+        Word32 L_mse;
+        Word32 L_xy_a6_mem;
+        Word32 L_MSEQ22_recalc;
+        Word32 L_normcorrQy; );
+    UNUSED( imax ); /* avoid gcc compiler warning */
+    UNUSED( tmp );
 
-    Word16 shift_ind, fix_ind;
-    Word16* xabs1;
-    const Word16* envPtr;
-    Word32 L_corr;
- 
-
-    Word16 *y, *y_norm, tmp;
-    Word32 *L_y_norm;
-    Word32 L_tmp;
-    Word32 L_min_mse_opt;
- 
-    Word16 gain_idx_opt, shape_idx_opt;
-    Word16 best_ind;
-    Word16 gidx;
-    Word32 L_g_q_tmp;
-    const Word16 *gTabPtr;
-    Word32 L_mse;
-    Word32 L_xy_a6_mem;
-    Word32  L_MSEQ22_recalc;  
-    Word32  L_normcorrQy;     
     Word16 norm_factors[N_SCF_SEARCH_SHAPES_ST2_LR];
     Word32 L_norm_factors[N_SCF_SEARCH_SHAPES_ST2_LR];
 
-    Word32        *L_search_corr;
-    Word32        *L_search_en;
-    Word16        *xabs;
-    Word8* scratch_top_proj;
-    Word32 *L_corr_fixenv;
-    Word32 *L_normcorr_fixenv;
-    Word16 *gain_idx_opt_save;
-    Word32 *L_min_mse_opt_save;
-    );
-    UNUSED(imax);  /* avoid gcc compiler warning */
-    UNUSED(tmp);
+    L_search_corr = (Word32*) lc3_scratch_push( scratch, N_SCF_SEARCH_SHAPES_ST2_LR * sizeof( *L_search_corr ) );
+    L_search_en = (Word32*) lc3_scratch_push( scratch, N_SCF_SEARCH_SHAPES_ST2_LR * sizeof( *L_search_en ) );
+    xabs = (Word16*) lc3_scratch_push( scratch, PVQ_MAX_VEC_SIZE * sizeof( *xabs ) );
 
-    L_search_corr      = (Word32 *)scratchAlign(scratch, 0);
-    L_search_en        = (Word32 *)scratchAlign(L_search_corr    , N_SCF_SEARCH_SHAPES_ST2_LR * sizeof(*L_search_corr));
-    xabs               = (Word16 *)scratchAlign(L_search_en      , N_SCF_SEARCH_SHAPES_ST2_LR * sizeof(*L_search_en));
-    scratch_top_proj   = (Word8 *)scratchAlign(xabs, PVQ_MAX_VEC_SIZE * sizeof(*xabs) );
+    L_corr_fixenv = (Word32*) lc3_scratch_push( scratch, SNSLR_N_FIXENV * SNSLR_N_FIXENV_SHIFTS * sizeof( *L_corr_fixenv ) );
+    L_normcorr_fixenv = (Word32*) lc3_scratch_push( scratch, SNSLR_N_FIXENV * SNSLR_N_FIXENV_SHIFTS * sizeof( *L_normcorr_fixenv ) );
 
-    L_corr_fixenv      = (Word32 *)scratch_top_proj ;
-    L_normcorr_fixenv  = (Word32 *)scratchAlign(L_corr_fixenv    , SNSLR_N_FIXENV*SNSLR_N_FIXENV_SHIFTS * sizeof(*L_corr_fixenv));
-    gain_idx_opt_save  = (Word16 *)scratchAlign(L_normcorr_fixenv, SNSLR_N_FIXENV*SNSLR_N_FIXENV_SHIFTS * sizeof(*L_normcorr_fixenv));
-    L_min_mse_opt_save = (Word32 *)scratchAlign(gain_idx_opt_save, N_SCF_SEARCH_SHAPES_ST2_LR * sizeof(*gain_idx_opt_save));
-    /* scratch_top     = (Word8 *)scratchAlign(L_min_mse_opt_save, N_SCF_SEARCH_SHAPES_ST2_LR *sizeof(L_min_mse_opt_save)); */
-   
-    BASOP_sub_sub_start("pvq_fess_enc_search_fx");
+    gain_idx_opt_save = (Word16*) lc3_scratch_push( scratch, N_SCF_SEARCH_SHAPES_ST2_LR * sizeof( *gain_idx_opt_save ) );
+    L_min_mse_opt_save = (Word32*) lc3_scratch_push( scratch, N_SCF_SEARCH_SHAPES_ST2_LR * sizeof( *L_min_mse_opt_save ) );
+
+    BASOP_sub_sub_start( "pvq_fess_enc_search_fx" );
 
     best_env_ind = -1;
     best_shift_ind = -1;
@@ -629,7 +624,6 @@ void pvq_fess_enc_search_fx(
     y_split = &(y_Q0[0]); move32();
     y_full = &(y_Q0[1 * M]); move32();
     y_fix = &(y_Q0[2 * M]); move32();
-
 
     /* init */
     basop_memset(L_search_corr, 0, N_SCF_SEARCH_SHAPES_ST2_LR * sizeof(Word32));
@@ -709,9 +703,9 @@ void pvq_fess_enc_search_fx(
        /* use  the most optimistic projection  */
 #ifdef FIX_BASOP_ENC_LRSNS_ST2FULL_PROJ 
        /* always use at least one loop of single pulse optimization */
-      pvq_pyr_project_lrsns_adv(SC + NFULL_LR, xabs, L_xsum, (PULSES_FULL_LR - 1), 0, y_full, &pulse_tot, &L_xy, &L_yy, scratch_top_proj);   /* 0 --> old floor( 1/( K-1) ) */
+      pvq_pyr_project_lrsns_adv(SC + NFULL_LR, xabs, L_xsum, (PULSES_FULL_LR - 1), 0, y_full, &pulse_tot, &L_xy, &L_yy, scratch);   /* 0 --> old floor( 1/( K-1) ) */
 #else 
-       pvq_pyr_project_lrsns_adv(SC + NFULL_LR, xabs, L_xsum, (PULSES_FULL_LR), PULSES_FULL_LR, y_full, &pulse_tot, &L_xy, &L_yy, scratch_top_proj);
+       pvq_pyr_project_lrsns_adv(SC + NFULL_LR, xabs, L_xsum, (PULSES_FULL_LR), PULSES_FULL_LR, y_full, &pulse_tot, &L_xy, &L_yy, scratch);
 #endif
 
         FOR(k = pulse_tot; k < PULSES_FULL_LR; k++)
@@ -855,8 +849,11 @@ void pvq_fess_enc_search_fx(
                 xabs1 = &(xabs[SC + shift_ind]);                      /* ptr init */
                 FOR(n = 0; n < lrsns_signs_fix_fx[fix_ind]; n++)
                 {
-                    ASSERT(envPtr[n] >= 0 && xabs1[n] >= 0);
-                    L_corr = L_mac0(L_corr, xabs1[n], envPtr[n]);   /* runtime first octant correlation calc  */
+                    if ( !scratch->max_scratch_calculation_only )
+                    {
+                        ASSERT( envPtr[n] >= 0 && xabs1[n] >= 0 );
+                    }
+                    L_corr = L_mac0( L_corr, xabs1[n], envPtr[n] ); /* runtime first octant correlation calc  */
                 }
 
                 tmp = add(shl_pos(fix_ind, 2), shift_ind);  /*  fix_ind * 4 + shift_ind */
@@ -992,9 +989,13 @@ void pvq_fess_enc_search_fx(
                 /* g_q*(g_q - 2*g_opt)/ */
                  /* (-2*g_opt)*g_q + g_q*g_q    =  g_q*(g_q-2*g_opt)  ,   Q11*Q11->Q22  */
 
-                L_g_q_tmp = L_shr_pos(L_deposit_h(gTabPtr[gidx]), 2); /* from Q12 to  12+16-2-> Q26  */
-                L_tmp = L_shl_pos(L_normcorrX2_opt_fx, 15);  /*11+15 -> 26 */
-                ASSERT(L_normcorrX2_opt_fx <= 32767 && "L_normcorrX2_opt_fx <= 32767 "); /* should   fit in Word16  */
+                L_g_q_tmp = L_shr_pos( L_deposit_h( gTabPtr[gidx] ), 2 ); /* from Q12 to  12+16-2-> Q26  */
+                L_tmp = L_shl_pos( L_normcorrX2_opt_fx, 15 );             /*11+15 -> 26 */
+
+                if ( !scratch->max_scratch_calculation_only )
+                {
+                    ASSERT( L_normcorrX2_opt_fx <= 32767 && "L_normcorrX2_opt_fx <= 32767 " ); /* should   fit in Word16  */
+                }
 
                 L_tmp = L_sub(L_g_q_tmp, L_tmp); /* Q26-Q26  --> Q26 */
 
@@ -1066,6 +1067,16 @@ void pvq_fess_enc_search_fx(
 
 
     } /*  shape norm and gain calc ,  and  shape decision */
+
+    L_min_mse_opt_save = (Word32*) lc3_scratch_pop( scratch, L_min_mse_opt_save );
+    gain_idx_opt_save = (Word16*) lc3_scratch_pop( scratch, gain_idx_opt_save );
+
+    L_normcorr_fixenv = (Word32*) lc3_scratch_pop( scratch, L_normcorr_fixenv );
+    L_corr_fixenv = (Word32*) lc3_scratch_pop( scratch, L_corr_fixenv );
+
+    xabs = (Word16*) lc3_scratch_pop( scratch, xabs );
+    L_search_en = (Word32*) lc3_scratch_pop( scratch, L_search_en );
+    L_search_corr = (Word32*) lc3_scratch_pop( scratch, L_search_corr );
 
     BASOP_sub_sub_end();
 

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -21,6 +21,9 @@ void processAdjustGlobalGain_fx(Word16 *gg_idx, Word16 gg_idx_min, Word16 gg_idx
                                 Word16 target, Word16 nBits, Word16 *gainChange, Word16 fs_idx
 #ifdef ENABLE_HR_MODE
                                 , Word16 hrmode, LC3PLUS_FrameDuration frame_dms
+#endif
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                , Word16 lossless
 #endif
                                 )
 {
@@ -53,7 +56,16 @@ void processAdjustGlobalGain_fx(Word16 *gg_idx, Word16 gg_idx_min, Word16 gg_idx
 #endif /* DYNMEM_COUNT */
 
 #ifdef ENABLE_HR_MODE
+#ifdef CR14_A_ADD_1p25MS_HR
+    IF (sub(frame_dms, LC3PLUS_FRAME_DURATION_1p25MS) == 0)
+    {
+        factor = 4; move16();
+        gg_idx_inc_max = 40; move16();
+    }
+    ELSE IF (sub(frame_dms, LC3PLUS_FRAME_DURATION_2p5MS) == 0)
+#else
     IF (sub(frame_dms, LC3PLUS_FRAME_DURATION_2p5MS) == 0)
+#endif
     {
         IF (sub(target, 520) < 0)
         {
@@ -158,7 +170,16 @@ void processAdjustGlobalGain_fx(Word16 *gg_idx, Word16 gg_idx_min, Word16 gg_idx
         *gg_idx = s_max(*gg_idx, sub(gg_idx_min, gg_idx_off)); move16();
 
 #ifdef ENABLE_HR_MODE
+#  ifdef CR14_A_ADD_LOSSLESS_MODE
+        if (lossless && sub(frame_dms, LC3PLUS_FRAME_DURATION_1p25MS) != 0)
+        {
+            L_tmp = Mpy_32_16( 0x797CD707, L_shl_pos( add( *gg_idx, gg_idx_off ), 6 ) );
+        } else {
+            L_tmp = Mpy_32_16(0x3CBE6B83, L_shl_pos(add(*gg_idx, gg_idx_off), 7));
+        }
+#  else
         L_tmp = Mpy_32_16(0x3CBE6B83, L_shl_pos(add(*gg_idx, gg_idx_off), 7));
+#  endif
 #else
         L_tmp       = L_shl_pos(L_mult0(add(*gg_idx, gg_idx_off), 0x797D), 7); /* 6Q25; 0x797D -> log2(10)/28 (Q18) */
 #endif

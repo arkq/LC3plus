@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -19,7 +19,7 @@
 void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Word16 *mem_in_exp, Word16 mem_in[],
                            Word16 mem_in_len, Word16 param[], Word16 *xin, Word16 len, Word16 *mem_normcorr,
                            Word16 *mem_mem_normcorr, Word16 ol_normcorr, Word16 *mem_ltpf_on, Word16 *mem_ltpf_pitch,
-                           Word16 xin_exp, LC3PLUS_FrameDuration frame_dms, Word8 *scratchBuffer
+                           Word16 xin_exp, LC3PLUS_FrameDuration frame_dms, lc3_scratch_t scratch
                           , Word16 hrmode
 #ifdef CR9_C_ADD_1p25MS
 #ifdef NEW_SIGNALLING_SCHEME_1p25
@@ -56,12 +56,6 @@ void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Wo
 #endif
 
     UNUSED(mem_mem_normcorr);
-
-    ac32      = (Word32 *)scratchAlign(scratchBuffer, 0);                         /* Size = 4 * 17 = 68 bytes;   */
-    ac        = (Word16 *)scratchAlign(ac32, sizeof(*ac32) * 17);                 /* Size = 2 * 17 = 34 bytes    */
-    currFrame = (Word16 *)scratchAlign(scratchBuffer, 0);                         /* Size = 2 * 128 = 256 bytes  */
-    predFrame = (Word16 *)scratchAlign(currFrame, sizeof(*currFrame) * LEN_12K8); /* Size = 2 * 128 = 256 bytes  */
-    /* Buffers 'overlap' since they are not used at the same time */              /* Total size used = 512 bytes */
 
     ltpf_active = 0; move16();
     norm_corr   = 0; move16();
@@ -101,6 +95,9 @@ void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Wo
 
     IF (sub(ol_normcorr, normCorrTh) > 0)
     {
+        ac32 = (Word32*) lc3_scratch_push( scratch, sizeof( *ac32 ) * 17 );
+        ac = (Word16*) lc3_scratch_push( scratch, sizeof( *ac ) * 17 );
+        
         /* Autocorrelation Bounds */
         min_pitch    = sub(ol_pitch, 4);
         max_pitch    = add(ol_pitch, 4);
@@ -259,6 +256,12 @@ void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Wo
         ltpf_pitch = add(shl_pos(pitch_int, 2), pitch_fr);
 
         /* Filter current and predicted frame */
+        
+        ac = (Word16*) lc3_scratch_pop( scratch, ac );
+        ac32 = (Word32*) lc3_scratch_pop( scratch, ac32 );
+
+        currFrame = (Word16*) lc3_scratch_push( scratch, sizeof( *currFrame ) * LEN_12K8 );
+        predFrame = (Word16*) lc3_scratch_push( scratch, sizeof( *predFrame ) * LEN_12K8 );
 
         FOR (n = 0; n < acflen; n++)
         {
@@ -282,6 +285,9 @@ void process_ltpf_coder_fx(Word16 *bits, Word16 ol_pitch, Word16 ltpf_enable, Wo
             sum1 = L_mac0(sum1, predFrame[m], predFrame[m]);
             sum2 = L_mac0(sum2, currFrame[m], currFrame[m]);
         }
+        
+        predFrame = (Word16*) lc3_scratch_pop( scratch, predFrame );
+        currFrame = (Word16*) lc3_scratch_pop( scratch, currFrame );
 
         scale1   = norm_l(sum1);
         scale2   = norm_l(sum2);

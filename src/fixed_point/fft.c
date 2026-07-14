@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -63,6 +63,11 @@
 #else
 #define SCALEFACTOR480 11
 #endif
+#endif
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+#  define SCALEFACTOR720  12   /* 60×12: SCALEFACTOR60 + fft12 stage + twiddle */
+#  define SCALEFACTOR960  12   /* 60×16: SCALEFACTOR60 + fft16 stage + twiddle */
 #endif
 
 #ifdef ENABLE_HR_MODE
@@ -3389,9 +3394,7 @@ static void fft32(Word32 *re, Word32 *im, Word16 s)
  * \return void
  */
 
-
-
-static void fft40(Word32 *re, Word32 *im, Word16 sx, Word32 *x)
+static void fft40(Word32 *re, Word32 *im, Word16 sx, lc3_scratch_t scratch)
 {
     Dyn_Mem_Deluxe_In(const Word32 *W; Word16 dim1, dim2; Counter i, j;
                       Word32 x00, x01, x02, x03, x04, x05, x06, x07, x08, x09, x10, x11, x12, x13, x14, x15;
@@ -3402,6 +3405,8 @@ static void fft40(Word32 *re, Word32 *im, Word16 sx, Word32 *x)
     move16();
     dim2 = 8;
     move16();
+  
+    Word32* x = (Word32*) lc3_scratch_push( scratch, sizeof( *x ) * 2 * 40 );
 
     W = RotVector_40_32;
 
@@ -3526,6 +3531,8 @@ static void fft40(Word32 *re, Word32 *im, Word16 sx, Word32 *x)
         im[sx * i + sx * 7 * dim1] = L_sub(s09, s15);
         move32();
     }
+  
+    x = (Word32*) lc3_scratch_pop( scratch, x );
 
     Dyn_Mem_Deluxe_Out();
 }
@@ -3555,7 +3562,7 @@ static void fftN2(Word32 *re, Word32 *im,
 #endif
                   Word16 dim1, Word16 dim2, Word16 sx, Word16 sc,
                   Word16 Woff
-                  , Word8 *scratchBuffer
+                  , lc3_scratch_t scratch
 #ifdef ENABLE_FFT_RESCALE
                   , Word16 *scale
 #endif
@@ -3563,7 +3570,7 @@ static void fftN2(Word32 *re, Word32 *im,
 {
     Dyn_Mem_Deluxe_In(Counter i, j;);
 
-    Word32 *x = scratchAlign(scratchBuffer, 0);
+    Word32* x = (Word32*) lc3_scratch_push( scratch, sizeof( *x ) * 2 * dim1 * dim2 );
 
     FOR (i = 0; i < dim2; i++)
     {
@@ -3630,7 +3637,6 @@ static void fftN2(Word32 *re, Word32 *im,
         }
         BREAK;
 #ifdef ENABLE_HR_MODE
-#if (defined LC3_FFT15)
     case 60:
         FOR (i = 0; i < dim2; i++)
         {
@@ -3641,7 +3647,6 @@ static void fftN2(Word32 *re, Word32 *im,
 #endif
         }
         BREAK;
-#endif
 #endif
     default: ASSERT(0);
     }
@@ -3969,6 +3974,7 @@ static void fftN2(Word32 *re, Word32 *im,
     default: ASSERT(0);
     }
 
+    x = (Word32*) lc3_scratch_pop( scratch, x );
     Dyn_Mem_Deluxe_Out();
 }
 
@@ -3984,19 +3990,11 @@ static void fftN2(Word32 *re, Word32 *im,
  * \return void
  */
 
-
-
 /* x is the scratch buffer */
-void BASOP_cfft(Word32 *re, Word32 *im, Word16 length, Word16 s, Word16 *scale, Word32 *x)
+void BASOP_cfft(Word32 *re, Word32 *im, Word16 length, Word16 s, Word16 *scale, lc3_scratch_t scratch)
 {
 #if (defined ENABLE_FFT_RESCALE) && ((defined LC3_FFT30) || (defined ENABLE_HR_MODE))
     Word16 fftN2scale = 0;
-#endif
-
-#ifdef ENABLE_HR_MODE
-    Word8 scratch[6128] = {0};
-#else
-    Word8 scratch[4068] = {0};
 #endif
 
     SWITCH (length)
@@ -4035,7 +4033,7 @@ void BASOP_cfft(Word32 *re, Word32 *im, Word16 length, Word16 s, Word16 *scale, 
         move16();
         BREAK;
     case 40:
-        fft40(re, im, s, x);
+        fft40(re, im, s, scratch);
         *scale = add(*scale, SCALEFACTOR40);
         move16();
         BREAK;
@@ -4187,6 +4185,18 @@ void BASOP_cfft(Word32 *re, Word32 *im, Word16 length, Word16 s, Word16 *scale, 
 #endif
         BREAK;
 #endif
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    case 720:
+        fftN2(re, im, RotVector_1440, 60, 12, s, 2, 120, scratch, &fftN2scale);
+        *scale = add(*scale, SCALEFACTOR720); move16();
+        *scale = sub(*scale, fftN2scale); move16();
+        BREAK;
+    case 960:
+        fftN2(re, im, RotVector_1920, 60, 16, s, 2, 120, scratch, &fftN2scale);
+        *scale = add(*scale, SCALEFACTOR960); move16();
+        *scale = sub(*scale, fftN2scale); move16();
+        BREAK; 
+#endif
     default: ASSERT(0);
     }
 }
@@ -4245,19 +4255,18 @@ static const Word32 *rfft_twid(int size)
 }
 
 
-void BASOP_rfftN(Word32 *x, Word16 sizeOfFft, Word16 *scale, Word8 *scratchBuffer)
+void BASOP_rfftN(Word32 *x, Word16 sizeOfFft, Word16 *scale, lc3_scratch_t scratch)
 {
     Dyn_Mem_Deluxe_In(Counter i; Word16 sizeOfFft2, sizeOfFft4, sizeOfFft8; Word32 t1, t2, t3, t4, xb0, xb1, xt0, xt1;
-                      Word32 * workBuffer; const Word32 *w32;);
+    const Word32 *w32;);
 
-    workBuffer = (Word32 *)scratchAlign(scratchBuffer, 0); /* Size = 4 * sizeOfFft */
     w32        = rfft_twid(sizeOfFft);
 
     sizeOfFft2 = shr_pos(sizeOfFft, 1);
     sizeOfFft4 = shr_pos(sizeOfFft, 2);
     sizeOfFft8 = shr_pos(sizeOfFft, 3);
 
-    BASOP_cfft(&x[0], &x[1], sizeOfFft2, 2, scale, workBuffer);
+    BASOP_cfft(&x[0], &x[1], sizeOfFft2, 2, scale, scratch);
 
     xb0  = L_shr_pos(x[0], 1);
     xb1  = L_shr_pos(x[1], 1);
@@ -4306,12 +4315,10 @@ void BASOP_rfftN(Word32 *x, Word16 sizeOfFft, Word16 *scale, Word8 *scratchBuffe
 
 
 
-void BASOP_irfftN(Word32 *x, Word16 sizeOfFft, Word16 *scale, Word8 *scratchBuffer)
+void BASOP_irfftN(Word32 *x, Word16 sizeOfFft, Word16 *scale, lc3_scratch_t scratch)
 {
     Dyn_Mem_Deluxe_In(Word16 sizeOfFft2, sizeOfFft4, sizeOfFft8; Word32 t1, t2, t3, t4, xb0, xb1, xt0, xt1;
-                      Word32 * workBuffer; const Word32 *w32; Counter i;);
-
-    workBuffer = (Word32 *)scratchAlign(scratchBuffer, 0); /* Size = 2 * BASOP_CFFT_MAX_LENGTH */
+    const Word32 *w32; Counter i;);
 
     w32 = rfft_twid(sizeOfFft);
 
@@ -4358,7 +4365,7 @@ void BASOP_irfftN(Word32 *x, Word16 sizeOfFft, Word16 *scale, Word8 *scratchBuff
     x[sizeOfFft - 2 * i + 1] = L_shr_pos(x[2 * i + 1], 1);
     move32();
 
-    BASOP_cfft(&x[0], &x[1], sizeOfFft2, 2, scale, workBuffer);
+    BASOP_cfft(&x[0], &x[1], sizeOfFft2, 2, scale, scratch);
 
     /* If you want BASOP_irfft to be inverse to BASOP_rfft then the result needs
      * to be normalised by sizeOfFft */

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -37,7 +37,10 @@ LC3PLUS_Error FillEncSetup(LC3PLUS_Enc *encoder, int samplerate, int channels
 #ifdef ENABLE_HR_MODE
                            , int hrmode
 #endif
-                        , int32_t lfe_channel_array[]   
+                           , int32_t lfe_channel_array[]
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                           , int wavFormat, int32_t padding
+#endif
                           )
 {
     int ch = 0;
@@ -45,16 +48,106 @@ LC3PLUS_Error FillEncSetup(LC3PLUS_Enc *encoder, int samplerate, int channels
     memset(encoder, 0, lc3plus_enc_get_size(samplerate, channels));
     alloc_encoder(encoder, samplerate, channels);
 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    /* lossless mode */
+
+    encoder->wavFormat = wavFormat;
+if(hrmode == 2)
+{
+    encoder->lossless = 1;
+    encoder->hrmode = hrmode;
+    encoder->ll_tns_remove = 0;
+    encoder->ll_totalBytes = 0;
+    encoder->totalBytes = 0;
+    encoder->b_relative = 0;
+    encoder->ll_shift = 0;  
+
+    if ( wavFormat == 16 )
+    {
+        encoder->ll_tns_lsb_num_remove_limit = 4;
+    }
+    if ( wavFormat == 24 )
+    {
+        encoder->ll_tns_lsb_num_remove_limit = 8;
+    }
+
+    encoder->ll_offQuant = 0;
+
+    /* todo: set ari bits*/
+    if(samplerate == 48000 || samplerate == 44100)
+    {
+        if(wavFormat == 16)
+        {
+             encoder->ll_ari_bits = 1800;
+        }
+        else 
+        {
+            encoder->ll_ari_bits = 1750;
+        }
+    }
+    else if(samplerate == 96000) 
+    {
+        if(wavFormat == 16)
+        {
+             encoder->ll_ari_bits = 4100;
+        }
+        else
+        {
+            encoder->ll_ari_bits = 3500;
+            encoder->ll_offQuant = 1;
+        }
+    }
+    else{   /* In case of samplerate == 192000 */
+        if(wavFormat == 16)
+        {
+             encoder->ll_ari_bits = 4100; 
+        }
+        else
+        {
+            encoder->ll_ari_bits = 6100;
+            encoder->ll_ari_bits_lb = 3500;
+            encoder->ll_offQuant = 1;
+        }
+    }
+}
+
+encoder->padding = padding;
+
+#endif
+
     encoder->fs     = CODEC_FS(samplerate);
     encoder->fs_in  = samplerate;
     encoder->fs_idx = FS2FS_IDX(encoder->fs);
     
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+{
+    Word32 fact[7] = {214748365, 107374183, 71582789, 53687092, 42949673, 35791395, 30678338}; // ceil(2^31 / [10 20 30 40 50 60 70])
+    encoder->quantizedGainOff_ll = -( s_min( 115, Mpy_32_32(encoder->ll_ari_bits, fact[encoder->fs_idx])) + 105 + 5 * ( encoder->fs_idx + 1 ) );
+}
+    if ( wavFormat == 24 )
+    {
+        encoder->quantizedGainOff_ll = encoder->quantizedGainOff_ll + 48;
+    }
+#endif
+    
 #  ifdef ENABLE_HR_MODE
     if (encoder->fs_idx > 4)
     {
-        encoder->fs_idx = 5; 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        encoder->fs_idx = encoder->fs == 192000 ? 6 : 5;
+#else
+        encoder->fs_idx = 5;
+#endif
     }
+    
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    if (!encoder->lossless)
+    {
+        encoder->hrmode = hrmode != 0;
+    }
+#else
     encoder->hrmode = hrmode != 0;
+#endif
 #  endif
     
     encoder->channels         = channels;
@@ -103,6 +196,37 @@ void set_enc_frame_params(LC3PLUS_Enc *encoder)
 #endif
     
     encoder->frame_length = extract_l(L_shr_pos(Mpy_32_16(encoder->fs, 20972), 6)); /* fs * 0.01*2^6 */
+  
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+if(encoder->hrmode == 2)
+{
+    if ( encoder->fs == 48000 && encoder->channels == 1 && encoder->frame_dms == LC3PLUS_FRAME_DURATION_10MS )
+    {
+        encoder->ll_tns = 1;
+    }
+    else
+    {
+        encoder->ll_tns = 1;
+    }
+
+    if ( encoder->ll_tns )
+    {
+        encoder->ll_tns_remove = 1;
+    }
+
+    encoder->ll_ari_bits = (encoder->ll_ari_bits * encoder->frame_dms) >> 3;
+
+    Word32 fact[7] = {214748365, 107374183, 71582789, 53687092, 42949673, 35791395, 30678338}; // ceil(2^31 / [10 20 30 40 50 60 70])
+    encoder->quantizedGainOff_ll = -( s_min( 115, Mpy_32_32(encoder->ll_ari_bits, fact[encoder->fs_idx])) + 105 + 5 * ( encoder->fs_idx + 1 ) );
+    encoder->quantizedGainOff_ll_lb = -( s_min( 115, Mpy_32_32(2000, fact[5])) + 105 + 5 * ( 5 + 1 ) );
+
+    if ( encoder->wavFormat == 24 )
+    {
+        encoder->quantizedGainOff_ll = encoder->quantizedGainOff_ll + 48;
+        encoder->quantizedGainOff_ll_lb = encoder->quantizedGainOff_ll + 48;
+    }
+}
+#endif
     
 #  ifdef ENABLE_HR_MODE
     if (encoder->hrmode)
@@ -136,7 +260,18 @@ void set_enc_frame_params(LC3PLUS_Enc *encoder)
 #    ifdef ENABLE_HR_MODE
         if (encoder->hrmode)
         {
+#ifdef CR14_A_ADD_1p25MS_HR
+            encoder->yLen = encoder->frame_length;
+            encoder->W_fx = LowDelayShapes_n960_1_25ms_HR[encoder->fs_idx];
+            encoder->W_size = LowDelayShapes_n960_len_1_25ms[encoder->fs_idx];
+            encoder->bands_number = bands_number_1_25ms_HR[encoder->fs_idx];
+            encoder->bands_offset = bands_offset_1_25ms_HR[encoder->fs_idx];
+#ifdef CR15_A_LOSSLESS_1p25MS
+            encoder->low_band_limit = 40;
+#endif
+#else
             assert(0);
+#endif
         }
         else
 #    endif
@@ -170,6 +305,9 @@ void set_enc_frame_params(LC3PLUS_Enc *encoder)
             encoder->W_fx         = LowDelayShapes_n960_HRA_2_5ms[encoder->fs_idx - 4];		
             encoder->W_size       = LowDelayShapes_n960_len_2_5ms[encoder->fs_idx];
             encoder->yLen         = encoder->frame_length;
+            #ifdef CR14_A_ADD_LOSSLESS_MODE
+            encoder->low_band_limit = 40;
+            #endif 
         }
         else
 #    endif
@@ -203,6 +341,9 @@ void set_enc_frame_params(LC3PLUS_Enc *encoder)
             encoder->W_size       = LowDelayShapes_n960_len_5ms[encoder->fs_idx];
             encoder->yLen         = encoder->frame_length;
             encoder->bands_number = bands_number_5ms[encoder->fs_idx];
+            #ifdef CR14_A_ADD_LOSSLESS_MODE
+            encoder->low_band_limit = 47;
+            #endif 
         }
         else
 #    endif
@@ -239,6 +380,9 @@ void set_enc_frame_params(LC3PLUS_Enc *encoder)
             encoder->W_size             = LowDelayShapes_n960_len_7_5ms[encoder->fs_idx];
             encoder->bands_number       = bands_number_7_5ms[encoder->fs_idx];
             encoder->bands_offset       = bands_offset_7_5ms_HR[encoder->fs_idx - 4];
+            #ifdef CR14_A_ADD_LOSSLESS_MODE
+            encoder->low_band_limit = 52;
+            #endif 
         }
         else
 #    endif
@@ -270,6 +414,9 @@ void set_enc_frame_params(LC3PLUS_Enc *encoder)
             encoder->W_fx         = LowDelayShapes_n960_HRA[encoder->fs_idx - 4];		
             encoder->W_size       = LowDelayShapes_n960_len[encoder->fs_idx];
             encoder->yLen         = encoder->frame_length;
+            #ifdef CR14_A_ADD_LOSSLESS_MODE
+            encoder->low_band_limit = 52;
+            #endif
         }
         else
 #    endif
@@ -289,8 +436,11 @@ void set_enc_frame_params(LC3PLUS_Enc *encoder)
 LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc *encoder, int bitrate)
 {
     int ch = 0;
-    int totalBytes = 0, maxBR = 0, minBR = 0, max_bytes = 0;
-    int channel_bytes = 0;
+    int maxBR = 0, minBR = 0;
+  
+#ifndef CR14_A_ADD_LOSSLESS_MODE
+    int totalBytes = 0;
+#endif
 
 #   ifdef CR12_D_FIX_BITRATE_LIMITS
     int fec_slot_bytes_min = 0, check_bytes = 0;
@@ -302,16 +452,30 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc *encoder, int bitrate)
         {
 #ifdef CR9_C_ADD_1p25MS
         case LC3PLUS_FRAME_DURATION_1p25MS:
+#ifndef CR14_A_ADD_1p25MS_HR
             assert(0);
-            maxBR = 672000;
+#endif
+            maxBR = 780800;
             if (encoder->fs == 48000)
             {
-                minBR = MIN_BR_25MS_48KHZ_HR;
+                minBR = MIN_BR_125MS_48KHZ_HR;
             }
             else if (encoder->fs == 96000)
             {
-                minBR = MIN_BR_25MS_96KHZ_HR;
+                minBR = MIN_BR_125MS_96KHZ_HR;
             }
+#ifdef CR15_A_LOSSLESS_1p25MS
+            else if (encoder->fs == 192000)
+            {
+                minBR = MIN_BR_125DMS_192KHZ_HR;
+            }
+#endif
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            else if (encoder->fs == 44100)
+            {
+                minBR = MIN_BR_125MS_48KHZ_HR;
+            }
+#endif
             else
             {
                 return LC3PLUS_HRMODE_ERROR;
@@ -328,6 +492,18 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc *encoder, int bitrate)
             {
                 minBR = MIN_BR_25MS_96KHZ_HR;
             }
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            else if ( encoder->fs == 192000 )
+            {
+                minBR = MIN_BR_025DMS_192KHZ_HR;
+            }
+#endif 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            else if (encoder->fs == 44100)
+            {
+                minBR = MIN_BR_25MS_48KHZ_HR;
+            }
+#endif
             else
             {
                 return LC3PLUS_HRMODE_ERROR;
@@ -343,6 +519,18 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc *encoder, int bitrate)
             {
                 minBR = MIN_BR_50MS_96KHZ_HR;
             }
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            else if ( encoder->fs == 192000 )
+            {
+                minBR = MIN_BR_050DMS_192KHZ_HR;
+            }
+#endif 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            else if (encoder->fs == 44100)
+            {
+                minBR = MIN_BR_50MS_48KHZ_HR;
+            }
+#endif
             else
             {
                 return LC3PLUS_HRMODE_ERROR;
@@ -352,6 +540,18 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc *encoder, int bitrate)
             maxBR = 500000;
             if      (encoder->fs == 48000) {minBR = MIN_BR_075DMS_48KHZ_HR;}
             else if (encoder->fs == 96000) {minBR = MIN_BR_075DMS_96KHZ_HR;}
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            else if ( encoder->fs == 192000 )
+            {
+                minBR = MIN_BR_075DMS_192KHZ_HR;
+            }
+#endif 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            else if (encoder->fs == 44100)
+            {
+                minBR = MIN_BR_075DMS_48KHZ_HR;
+            }
+#endif
             else                           {return LC3PLUS_HRMODE_ERROR;}
             BREAK;
         case LC3PLUS_FRAME_DURATION_10MS:
@@ -364,6 +564,18 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc *encoder, int bitrate)
             {
                 minBR = MIN_BR_100MS_96KHZ_HR;
             }
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            else if ( encoder->fs == 192000 )
+            {
+                minBR = MIN_BR_100DMS_192KHZ_HR;
+            }
+#endif 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            else if (encoder->fs == 44100)
+            {
+                minBR = MIN_BR_100MS_48KHZ_HR;
+            }
+#endif
             else
             {
                 return LC3PLUS_HRMODE_ERROR;
@@ -392,7 +604,7 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc *encoder, int bitrate)
         case  LC3PLUS_FRAME_DURATION_5MS:
             minBR = MIN_BR_050DMS;
             maxBR = MAX_BR;
-            /* have additional limitations for 5.0ms */
+            /* have additional limitations for 5.0 ms */
             SWITCH (encoder->fs_in)
             {
 #        ifdef SUBSET_NB
@@ -521,9 +733,83 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc *encoder, int bitrate)
             maxBR = Mpy_32_32(maxBR, 1973000602);
         }
 #endif /* ENABLE_HR_MODE */
+  
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    if ( encoder->lossless )
+    {
+        Word16 bitsPerSample = (encoder->wavFormat == 24) ? 24 : 16;
+        Word32 maxBytes = 0;
+        lc3_enc_get_max_frame_bytes( encoder->fs_in, 1, bitsPerSample, encoder->frame_dms, &maxBytes );
+        SWITCH( encoder->frame_dms )
+        {
+        case LC3PLUS_FRAME_DURATION_1p25MS:
+            maxBR = maxBytes * 8 * 800 / LC3PLUS_FRAME_DURATION_1p25MS + 1; // 8*800/1
+            BREAK;
+        case LC3PLUS_FRAME_DURATION_2p5MS:
+            maxBR = maxBytes * 8 * 800 / LC3PLUS_FRAME_DURATION_2p5MS + 1; // 8*800/2
+            BREAK;
+        case LC3PLUS_FRAME_DURATION_5MS:
+            maxBR = maxBytes * 8 * 800 / LC3PLUS_FRAME_DURATION_5MS + 1; // 8*800/4
+            BREAK;
+        case LC3PLUS_FRAME_DURATION_7p5MS:
+            maxBR = maxBytes * 8 * 800 / LC3PLUS_FRAME_DURATION_7p5MS + 1; // 8*800/6
+            BREAK;
+        case LC3PLUS_FRAME_DURATION_10MS:
+            maxBR = maxBytes * 8 * 800 / LC3PLUS_FRAME_DURATION_10MS + 1; // 8*800/8
+            BREAK;
+        case LC3PLUS_FRAME_DURATION_UNDEFINED:
+            assert( 0 );
+        default:
+            assert( 0 );
+        }
+        if ( encoder->fs_in == 44100 )
+        {
+            /* scale back to real bitrate for 44.1 kHz */
+            maxBR = (maxBR * 441) / 480 + 1;
+        }
+    }
+#endif
 
     minBR *= encoder->channels;
     maxBR *= encoder->channels;
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    if ( encoder->lossless )
+    {
+        if ( bitrate == 0 )
+        {
+            bitrate = maxBR;
+            encoder->ll_carryOver = 0;
+        }
+        else
+        {
+            encoder->ll_cbr = 1;
+            encoder->ll_carryOver = 1;
+        }
+    }
+
+    if ( encoder->ll_cbr )
+    {
+        Word16 N;
+        N = (Word16)(Mpy_32_32(encoder->fs_in * encoder->frame_dms, 2684355) );
+
+        encoder->ll_est_bit_usage = 1;
+        /* bit balance parameter to adjust switch to lossless coding path */
+        encoder->ll_bit_balance = N; /* allow 1 LSB loss for 16 bps */
+        if ( encoder->wavFormat == 24 )
+        {
+            encoder->ll_bit_balance = 3 * N; /* allow 3 LSBs loss for 24 bit */
+        }
+        if ( encoder->frame_dms == LC3PLUS_FRAME_DURATION_1p25MS )
+        {
+            encoder->ll_bit_balance = 0; /* tighter switch threshold for 1.25ms (LRSNS) */
+        }
+    }
+    else
+    {
+        encoder->ll_est_bit_usage = 0;
+    }
+#endif
 
     if (bitrate < minBR || bitrate > maxBR)
     {
@@ -551,6 +837,13 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc *encoder, int bitrate)
         if (encoder->hrmode){
             SWITCH( encoder->frame_dms )
             {
+            case LC3PLUS_FRAME_DURATION_1p25MS:
+                IF( encoder->fs_in == 48000){
+                    fec_slot_bytes_min = FEC_SLOT_BYTES_MIN_125DMS_48KHZ_HR;
+                } ELSE {
+                    fec_slot_bytes_min = FEC_SLOT_BYTES_MIN_125DMS_96KHZ_HR;
+                }
+                BREAK;
             case LC3PLUS_FRAME_DURATION_2p5MS:
                 IF( encoder->fs_in == 48000){
                     fec_slot_bytes_min = FEC_SLOT_BYTES_MIN_025DMS_48KHZ_HR;
@@ -600,11 +893,52 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc *encoder, int bitrate)
             return LC3PLUS_BITRATE_ERROR;
         }
     }
+  
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    Word32 fs_in_inv;
+    switch(encoder->fs_in)
+    {
+        case 8000:
+        fs_in_inv = 137438954; // 1/8000*2^40
+        break;
+        case 16000:
+        fs_in_inv = 68719477; // 1/16000*2^40
+        break;
+        case 24000:
+        fs_in_inv = 45812985; // 1/24000*2^40
+        break;
+        case 32000:
+        fs_in_inv = 34359739; // 1/32000*2^40
+        break;
+        case 44100:
+        fs_in_inv = 24932237; // 1/44100*2^40
+        break;
+        case 48000:
+        fs_in_inv = 22906493; // 1/48000*2^40
+        break;
+        case 96000:
+        fs_in_inv = 11453247; // 1/96000*2^40
+        break;
+        #ifdef LOSSLESS_192kHz
+        case 192000:
+        fs_in_inv = 5726624; // 1/96000*2^40
+        break;
+        #endif 
+        default:
+        assert(0);
+        break;
+    }
+#endif
 
     if (encoder->combined_channel_coding)
     {
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        Word32 totalBytesTmp = Mpy_32_32((Word32)(((UWord32) bitrate * (UWord32) encoder->frame_length)>>1), fs_in_inv)>>11;
+        encoder->totalBytes = fec_get_data_size( encoder->epmode, encoder->combined_channel_coding, totalBytesTmp );
+#else
         totalBytes = fec_get_data_size(encoder->epmode, encoder->combined_channel_coding,
                                        bitrate * (Word32)encoder->frame_length / (8 * encoder->fs_in));
+#endif
 
         encoder->channel_setup[0]->n_pccw =
             fec_get_n_pccw(bitrate * (Word32)encoder->frame_length / (8 * encoder->fs_in), encoder->epmode,
@@ -615,13 +949,55 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc *encoder, int bitrate)
     }
     else
     {
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        if( 480 == encoder->frame_length || 960 == encoder->frame_length || 1920 == encoder->frame_length || 1440 == encoder->frame_length)
+        {   
+             encoder->totalBytes = Mpy_32_32((bitrate * (encoder->frame_length>>4)), fs_in_inv)>>8;
+        }
+        else
+        {
+            encoder->totalBytes = Mpy_32_32((Word32)(((UWord32) bitrate * (UWord32) encoder->frame_length)>>1), fs_in_inv)>>11;
+        }
+#else
         totalBytes = bitrate * (Word32)encoder->frame_length / (8 * encoder->fs_in);
+#endif
     }
 
     for (ch = 0; ch < encoder->channels; ch++)
     {
+        LC3PLUS_Error ret;
+        ret = update_enc_payload_sizes( encoder, ch, 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                       encoder->totalBytes,
+#else
+                                       totalBytes,
+#endif
+                                       0);
+        if( ret != LC3PLUS_OK)
+            return ret;
+    }
+    encoder->bitrate = bitrate;
+  
+    encoder->lc3_br_set = 1;
+
+    return LC3PLUS_OK;
+}
+
+LC3PLUS_Error update_enc_payload_sizes( LC3PLUS_Enc* encoder, Word32 ch, Word32 totalBytes, Word32 carryOverBytes)
+{
+        int max_bytes = 0;
+        int channel_bytes = 0;
+  
         EncSetup *setup = encoder->channel_setup[ch];
-        channel_bytes = totalBytes / encoder->channels + (ch < (totalBytes % encoder->channels));
+        channel_bytes = totalBytes / encoder->channels + (ch < (totalBytes % encoder->channels))
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        + carryOverBytes
+#endif
+          ;
+  
+#ifndef CR14_A_ADD_LOSSLESS_MODE
+        UNUSED(carryOverBytes);
+#endif
 
         if (encoder->combined_channel_coding)
         {
@@ -683,24 +1059,57 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc *encoder, int bitrate)
             max_bytes = MAX_NBYTES_RED_HR;
         }
 #endif
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        if ( encoder->lossless )
+        {
+            max_bytes = MAX_NBYTES_LOSSLESS;
+        }
+#endif
+  
         if (setup->targetBytes < MIN_NBYTES || setup->targetBytes > max_bytes)
         {
             return LC3PLUS_BITRATE_ERROR;
         }
 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        setup->total_bits = L_shl( setup->targetBytes, 3 );
+#else
         setup->total_bits = shl(setup->targetBytes, 3);
+#endif
+      
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        setup->targetBitsInit =
+            L_sub( setup->total_bits,
+                 (Word32)add( encoder->envelope_bits,
+                      add( encoder->global_gain_bits, add( encoder->noise_fac_bits, encoder->BW_cutoff_bits ) ) ) );
+
+#else
         setup->targetBitsInit =
             sub(setup->total_bits,
                 add(encoder->envelope_bits,
                     add(encoder->global_gain_bits, add(encoder->noise_fac_bits, encoder->BW_cutoff_bits))));
+#endif
+      
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        setup->targetBitsInit = L_sub( setup->targetBitsInit, (Word32)getLastNzBits_fx( encoder->frame_length ) + 3 );
+#else
         setup->targetBitsInit = sub(setup->targetBitsInit, getLastNzBits_fx (encoder->frame_length) + 3);
+#endif
         if (setup->total_bits > 1280)
         {
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            setup->targetBitsInit = L_sub( setup->targetBitsInit, 1 );
+#else
             setup->targetBitsInit = sub(setup->targetBitsInit, 1);
+#endif
         }
         if (setup->total_bits > 2560)
         {
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            setup->targetBitsInit = L_sub( setup->targetBitsInit, 1 );
+#else
             setup->targetBitsInit = sub(setup->targetBitsInit, 1);
+#endif
         }
         
 #  ifdef ENABLE_HR_MODE
@@ -711,6 +1120,62 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc *encoder, int bitrate)
 #  endif
 
         setup->targetBitsAri = setup->total_bits;
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE // setup->total_bits is Word32 then and has values > 32767 => cannot use L_mult0
+
+    Word32 ltpfThreshold = L_deposit_l( add( 560, i_mult( 80, encoder->fs_idx ) ) );
+    Word32 total_bits;
+    SWITCH( encoder->frame_dms )
+    {
+        UWord16 low;
+
+    #  ifdef CR9_C_ADD_1p25MS
+        case LC3PLUS_FRAME_DURATION_1p25MS:
+        /* 13763 = 3.36 * 2^12 */
+        /* 8*0.42 => 3.36 */
+        //setup->ltpf_enable =  sub( extract_l( L_shr( L_mult0( 13763, setup->total_bits ), 12 ) ), ltpfThreshold) < 0;
+        Mpy_32_16_ss(L_shl(setup->total_bits,2), 27525, &total_bits, &low);
+    // #    ifdef FIX_BOTH_1p25_WB_GLOBGAINOFFSET_NONBE // FIX_BOTH_1p25_WB_GLOBGAINOFFSET_NO_LTPF_NONBE
+    //     if ( encoder->fs_idx == 1 ) /* and 1p25ms */
+    //     {
+    //         //setup->ltpf_enable = 0;
+    //         total_bits = ltpfThreshold; // to force setup->ltpf_enable (see below) FALSE
+    //     }
+    // #    endif
+        setup->enable_lpc_weighting = 0;
+        BREAK;
+    #  endif
+    case LC3PLUS_FRAME_DURATION_2p5MS:
+        /* 9830 = 2.4 * 2^12 */
+        //setup->ltpf_enable = sub( extract_l( L_shr( L_mult0( 9830, setup->total_bits ), 12 ) ), ltpfThreshold ) < 0;
+        Mpy_32_16_ss(L_shl(setup->total_bits,2), 19661, &total_bits, &low);
+        setup->enable_lpc_weighting = 0;
+        BREAK;
+    case LC3PLUS_FRAME_DURATION_5MS:
+        //setup->ltpf_enable = sub( sub( i_mult( setup->total_bits, 2 ), 160 ), add( 560, i_mult( 80, encoder->fs_idx ) ) ) < 0;
+        total_bits = L_sub( L_shl( setup->total_bits, 1 ), 160 );
+        setup->enable_lpc_weighting = setup->total_bits < 240;
+        BREAK;
+    case LC3PLUS_FRAME_DURATION_7p5MS:
+        // total_bits * 1.333
+        //setup->ltpf_enable = sub( L_shr( L_mult0( 10923, setup->total_bits ), 13 ), ltpfThreshold ) < 0;
+        Mpy_32_16_ss(L_shl(setup->total_bits,2), 10923, &total_bits, &low);
+        setup->enable_lpc_weighting = setup->total_bits < 360;
+        BREAK;
+    case LC3PLUS_FRAME_DURATION_10MS:
+        total_bits = setup->total_bits;
+        setup->enable_lpc_weighting = setup->total_bits < 480;
+        BREAK;
+    case LC3PLUS_FRAME_DURATION_UNDEFINED:
+        total_bits = 0;
+        assert( 0 );
+    default:
+        total_bits = 0;
+        assert( 0 );
+    }
+    setup->ltpf_enable = L_sub( total_bits, ltpfThreshold ) < 0;
+
+#else
 
         SWITCH (encoder->frame_dms)
         {
@@ -738,30 +1203,46 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc *encoder, int bitrate)
                 BREAK;
             case LC3PLUS_FRAME_DURATION_10MS:
                 setup->enable_lpc_weighting = setup->total_bits < 480;
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            setup->ltpf_enable = L_sub( setup->total_bits, (Word32)add( 560, i_mult( 80, encoder->fs_idx ) ) ) < 0;
+#else
                 setup->ltpf_enable          = sub(setup->total_bits, add(560, i_mult(80, encoder->fs_idx))) < 0;
+#endif
                 BREAK;
             case LC3PLUS_FRAME_DURATION_UNDEFINED:
                 assert(0);
         }
+#endif 
 
-#ifdef FIX_BOTH_1p25_WB_GLOBGAINOFFSET_NONBE  
+#ifdef FIX_BOTH_1p25_WB_GLOBGAINOFFSET_NONBE
         IF(encoder->frame_dms == LC3PLUS_FRAME_DURATION_1p25MS)
         {
             setup->quantizedGainOff = calc_GGainOffset_1p25_fx(setup->total_bits, encoder->fs_idx); /* enc/dec common function */
         }
         ELSE
         {
-            setup->quantizedGainOff =
-                -(s_min(115, setup->total_bits / (10 * (encoder->fs_idx + 1))) + 105 + 5 * (encoder->fs_idx + 1));
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            Word32 fact[7] = {214748365, 107374183, 71582789, 53687092, 42949673, 35791395, 30678338}; /* ceil(2^31 / [10 20 30 40 50 60 70]) */
+#else
+            Word32 fact[6] = {214748365, 107374183, 71582789, 53687092, 42949673, 35791395}; /* ceil(2^31 / [10 20 30 40 50 60]) */
+#endif
+            setup->quantizedGainOff = -(s_min(115, Mpy_32_32(setup->total_bits, fact[encoder->fs_idx])) + 105 + 5 * (encoder->fs_idx + 1));
         }
-#else 
-
-        setup->quantizedGainOff =
-            -(s_min(115, setup->total_bits / (10 * (encoder->fs_idx + 1))) + 105 + 5 * (encoder->fs_idx + 1));
+#else
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        Word32 fact[7] = {214748365, 107374183, 71582789, 53687092, 42949673, 35791395, 30678338};
+#else
+        Word32 fact[6] = {214748365, 107374183, 71582789, 53687092, 42949673, 35791395};
+#endif
+        setup->quantizedGainOff = -(s_min(115, Mpy_32_32(setup->total_bits, fact[encoder->fs_idx])) + 105 + 5 * (encoder->fs_idx + 1));
 #endif
 
 #    ifdef ENABLE_HR_MODE
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    if ( (encoder->hrmode && encoder->fs_idx == 5) || encoder->lossless )
+#else
     if (encoder->hrmode && encoder->fs_idx == 5)
+#endif
     {
         setup->quantizedGainOff = MAX(setup->quantizedGainOff, -181);
     }
@@ -803,11 +1284,114 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc *encoder, int bitrate)
             setup->attdec_acc_energy    = 0;
             setup->attdec_scaling       = 0;
         }
+      
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        if (encoder->lossless)
+        {
+            setup->attack_handling = 0;
+            setup->enable_lpc_weighting = 0;
+#ifdef LL_INCL_HPVC
+            setup->hpvcEncCfg.mode = -1;
+            setup->hpvcEncCfg.active_flag = 0;
+            if ((encoder->fs >= LL_HPVC_LOWEST_FS) &&
+                (encoder->frame_dms == LC3PLUS_FRAME_DURATION_10MS || encoder->frame_dms == LC3PLUS_FRAME_DURATION_7p5MS))
+            {
+                setup->hpvcEncCfg.active_flag = 1;
+
+                setup->hpvcEncCfg.startCoefListNom[0] = LL_HPVC_BW_STARTA_FB10MS;       /* lim0 FB 10ms */
+                setup->hpvcEncCfg.startCoefListNom[1] = LL_HPVC_BW_STARTB_FB10MS;       /* lim1 FB 10ms */
+
+#ifdef HPVC_CORRECT7p5_START
+                if (encoder->frame_dms == LC3PLUS_FRAME_DURATION_7p5MS)
+                {
+                    Word16 tot_blocks_fb = (480 - LL_HPVC_BW_STARTA_FB10MS) >> N_SIGNAL_LOG;
+                    Word16 top_blocks_fb = (480 - LL_HPVC_BW_STARTB_FB10MS) >> N_SIGNAL_LOG;
+                    Word16 tot_blocks = (3 * tot_blocks_fb * (encoder->fs / 48000)) >> 2;  /* reduce by 75% for 7.5 */
+                    Word16 top_blocks = (3 * top_blocks_fb * (encoder->fs / 48000)) >> 2;
+
+#ifdef HPVC_CORRECT7p5_START_PLUS
+                    if (encoder->fs >= 96000)
+                    {
+                        tot_blocks += 0; /* allow slighly more  than 75% of 10ms at  7p5ms */
+                        tot_blocks = MIN(tot_blocks, tot_blocks_fb * (encoder->fs / 48000));  /* never more blocks than 10ms */
+                    }
+#endif
+                    ASSERT(tot_blocks > top_blocks);
+                    ASSERT(top_blocks >= 1);
+
+                    /* adjust so the HPVC Nsignal Phase is maintained in Nominal 7.5ms Coeffs by adding nb_ blocks from the top */
+                    setup->hpvcEncCfg.startCoefListNom[0] = encoder->frame_length - (tot_blocks * LL_HPVC_N_SIGNAL);
+                    setup->hpvcEncCfg.startCoefListNom[1] = encoder->frame_length - (top_blocks * LL_HPVC_N_SIGNAL);
+
+                    ASSERT(setup->hpvcEncCfg.startCoefListNom[1] >= (LL_HPVC_N_SIGNAL + setup->hpvcEncCfg.startCoefListNom[0]));
+                }
+                else
+                { /* 10ms */
+                    setup->hpvcEncCfg.startCoefListNom[0] *= (encoder->fs / 48000);
+                    setup->hpvcEncCfg.startCoefListNom[1] *= (encoder->fs / 48000);
+                }
+                setup->hpvcEncCfg.startCoef = setup->hpvcEncCfg.startCoefListNom[0];  /* lim0 */
+#else
+                if (encoder->frame_dms == LC3PLUS_FRAME_DURATION_7p5MS)
+                {
+                    Word16 tot_blocks_fb = (480 - LL_HPVC_BW_STARTA_FB10MS) >> N_SIGNAL_LOG;
+                    Word16 top_blocks_fb = (480 - LL_HPVC_BW_STARTB_FB10MS) >> N_SIGNAL_LOG;
+
+                    setup->hpvcEncCfg.startCoefListNom[0] = 320 - (tot_blocks_fb * LL_HPVC_N_SIGNAL);
+                    setup->hpvcEncCfg.startCoefListNom[1] = 320 - (top_blocks_fb * LL_HPVC_N_SIGNAL);
+                }
+
+                if (encoder->fs == 96000)
+                {
+                    setup->hpvcEncCfg.startCoefListNom[0] *= 2;
+                    setup->hpvcEncCfg.startCoefListNom[1] *= 2;
+                }
+                if (encoder->fs == 192000)
+                {
+                    setup->hpvcEncCfg.startCoefListNom[0] *= 4;
+                    setup->hpvcEncCfg.startCoefListNom[1] *= 4;
+                }
+
+                setup->hpvcEncCfg.startCoef = setup->hpvcEncCfg.startCoefListNom[0];  /* lim0 */
+#endif
+
+                setup->hpvcEncCfg.nomTreeLim = HPVC_NOMTREE_COUNT_FB;   /* WMOPS ctrl */
+                setup->hpvcEncCfg.maxTreeLim = HPVC_MAXTREE_LIMIT_FB;   /* hard limit */
+                if (encoder->fs == 96000)
+                {
+                    setup->hpvcEncCfg.nomTreeLim = MAX(1, HPVC_NOMTREE_COUNT_FB - 1);
+                    setup->hpvcEncCfg.maxTreeLim = HPVC_MAXTREE_LIMIT_FB - 1;
+                }
+                if (encoder->fs == 192000)
+                {
+                    setup->hpvcEncCfg.nomTreeLim = MAX(1, HPVC_NOMTREE_COUNT_FB - 4); /*3 trees*/
+                    setup->hpvcEncCfg.maxTreeLim = HPVC_MAXTREE_LIMIT_FB - 4;
+                }
+                if (encoder->frame_dms == LC3PLUS_FRAME_DURATION_10MS)
+                {
+                    setup->hpvcEncCfg.nomTreeLim += 1;
+                    setup->hpvcEncCfg.maxTreeLim += 1;
+                }
+            }
+#endif
+        }
+#endif
         
 #  ifdef ENABLE_HR_MODE
         if (encoder->hrmode)
         {
-            setup->ltpf_enable = 0;
+#ifdef CR14_A_ADD_1p25MS_HR
+#ifdef CR15_A_LOSSLESS_1p25MS
+        	if (encoder->frame_dms != LC3PLUS_FRAME_DURATION_1p25MS || encoder->lossless)
+#else
+        	if (encoder->frame_dms != LC3PLUS_FRAME_DURATION_1p25MS)
+#endif
+			{
+#endif
+            	setup->ltpf_enable = 0;
+#ifdef CR14_A_ADD_1p25MS_HR
+        	}
+#endif
         }
 #  endif
         encoder->sns_damping = SNS_DAMPING;
@@ -834,12 +1418,22 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc *encoder, int bitrate)
                 {
                     encoder->sns_damping = SNS_DAMPING_HRMODE_UB_2_5MS;
                 }
+#ifdef CR14_A_ADD_1p25MS_HR
+                IF( ( encoder->frame_dms == LC3PLUS_FRAME_DURATION_1p25MS ) & ( setup->total_bits > 575 ) )
+                {
+                    encoder->sns_damping = SNS_DAMPING_HRMODE_UB_1_25MS;
+                }
+#endif
             }
         }
 
         if (encoder->hrmode && encoder->fs_idx >= 4)
         {
-            int real_rate  = setup->targetBytes * 8 * 10000 / (encoder->frame_dms * 1.25 * 10);
+#ifdef CR14_A_ADD_1p25MS_HR
+            int real_rate  = setup->targetBytes * 8 * 100000 / (encoder->frame_dms * 125);
+#else
+            int real_rate  = setup->targetBytes * 8 * 1000 / (encoder->frame_dms * 1.25);
+#endif
             setup->regBits = real_rate / 12500;
 
             if (encoder->fs_idx == 5)
@@ -891,11 +1485,7 @@ LC3PLUS_Error update_enc_bitrate(LC3PLUS_Enc *encoder, int bitrate)
         {
             setup->regBits = -1;
         }
-#  endif
-    }
-
-    encoder->bitrate = bitrate;
-
-    return LC3PLUS_OK;
+#  endif /* ENABLE_HR_MODE */
+  
+return LC3PLUS_OK;
 }
-

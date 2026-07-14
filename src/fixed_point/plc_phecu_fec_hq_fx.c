@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -38,7 +38,7 @@ void my_wtda_fx(const Word16 *new_audio, /* i  : input audio to be windowed  Q0 
    const Word16 *const win2ms_init,    /* i:  2 ms initial part of pre_tda window */
    const Word16 *const win16ms_center, /* i:  16 ms combined part  of pre_tda IWHR+MDCT-ana  */
    Word32 *     L_wtda_audio, /* o  : tda audio  Q16       20 ms */
-   const Word16 L, Word8 *scratchBuffer);
+   const Word16 L, lc3_scratch_t scratch);
 
 static void windowing_L(const Word16 *, Word32 *, const Word16 *, const Word16, const Word16);
 static void windowing_ola(const Word16 *, Word16 *, const Word16 *, const Word16);
@@ -152,7 +152,7 @@ void trans_burst_ana_fx(
    Word32 L_old_xfp_w_E_fx, Word16 old_xfp_w_E_exp_fx, Word16 old_Ltot_exp_fx, Word16 *old_grp_shape_fx,
    Word16 fadeout,
    Word32 * L_Xavg,  /*  full scale band amplitudes */
-   Word8 *scratchBuffer /* Size = 4*4 * MAX_LTRANA + (2*4 + 1*2) * MAX_LGW  + 8 */
+   lc3_scratch_t scratch /* Size = 4*4 * MAX_LTRANA + (2*4 + 1*2) * MAX_LGW  + 8 */
 )
 {
    Word16        att_val, attDegreeFrames;
@@ -242,11 +242,9 @@ void trans_burst_ana_fx(
    fs_idx = mult(output_frame, (Word16)(32768.0 / 99.0)); /* truncation needed , i.e no rounding can be applied here */
    ASSERT(fs_idx == (output_frame / 100));
 
-   L_gr_pow_left = (Word32 *)scratchAlign(scratchBuffer, 0); /* Size = 4 * MAX_LGW */ /* Size = 4 * MAX_LGW */
-
-   L_gr_pow_right = (Word32 *)scratchAlign(L_gr_pow_left, sizeof(*L_gr_pow_left) * MAX_LGW); /* Size = 4 * MAX_LGW */
-
-   tr_dec = (Word16 *)scratchAlign(L_gr_pow_right, sizeof(*L_gr_pow_right) * MAX_LGW); /* Size = 2bytes * MAX_LGW */
+    L_gr_pow_left = (Word32*) lc3_scratch_push( scratch, sizeof( *L_gr_pow_left ) * MAX_LGW );
+    L_gr_pow_right = (Word32*) lc3_scratch_push( scratch, sizeof( *L_gr_pow_right ) * MAX_LGW );
+    tr_dec = (Word16*) lc3_scratch_push( scratch, sizeof( *tr_dec ) * MAX_LGW );
 
    oneOverFrame = oneOverFrameQ15Tab[fs_idx];
    Lgw          = s_min(add(fs_idx, LGW8K), LGW48K);  /* 4,5,6,7, (7/8) */
@@ -624,8 +622,6 @@ void trans_burst_ana_fx(
 
    } /* BURST */
 
- 
-
    IF(sub(output_frame, L_FRAME48K) == 0)
    { /* for 48kHz set/handle scalings of last group/band the same way as previous lower freq band(s)  */
 
@@ -639,6 +635,10 @@ void trans_burst_ana_fx(
          beta[k]        = beta[k - 1];        move16();
       }
    }
+  
+    tr_dec = (Word16*) lc3_scratch_pop( scratch, tr_dec );
+    L_gr_pow_right = (Word32*) lc3_scratch_pop( scratch, L_gr_pow_right );
+    L_gr_pow_left = (Word32*) lc3_scratch_pop( scratch, L_gr_pow_left );
 
 #ifdef DYNMEM_COUNT
    Dyn_Mem_Out();
@@ -777,7 +777,7 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          const Word16  f0hzLtpBinQ7,    /* i : LTP bin frequency in normalized Hz                Q7 */
          const Word16  norm_corrQ15_fx, /* i : correlation for lag at f0hzLtpBinQ7                  */
          Word16 maxLprot, Word16 maxPlocs,
-         Word8 *scratchBuffer /* Size = 4 * (MAX_LPROT + MAX_LPROT_RED + 1) + 2 * MAX_PLOCS */
+         lc3_scratch_t scratch /* Size = 4 * (MAX_LPROT + MAX_LPROT_RED + 1) + 2 * MAX_PLOCS */
       )
       {
          Counter n, k;
@@ -831,8 +831,8 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          */
 
 
-         L_xfp = (Word32 *)scratchAlign(scratchBuffer, 0);       /* Size = 4 * MAX_LPROT bytes */
-         buffer_fft = scratchAlign(L_xfp, sizeof(*L_xfp) * maxLprot); /* Size = 4 * (MAX_LPROT_RED + 1) + 2 * MAX_PLOCS */
+         L_xfp = (Word32*) lc3_scratch_push( scratch, sizeof( *L_xfp ) * maxLprot );
+         buffer_fft = (Word8*) lc3_scratch_push( scratch, sizeof( *buffer_fft ) * MAX_LEN );
 
          ASSERT(bwidth_fx >= 0 && bwidth_fx <= 4); /* avoid  bwidth_fx  variable warning */
 
@@ -850,7 +850,7 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
 
       /* Apply hamming-rect window */
             windowing_L(xfp, L_xfp, sp_ana_win, rectLength, hamm_len2);
-            BASOP_rfftN(L_xfp, Lprot, &fft_scale, buffer_fft);
+            BASOP_rfftN(L_xfp, Lprot, &fft_scale, scratch);
          }
          BASOP_sub_sub_end(); /* anawin+fft */
 
@@ -882,9 +882,7 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          plc_phEcu_minval_fx(xfp, peak_range_1, &Xmin);
          sens = mult_r(sub(Xmax, Xmin), CMPLMNT_PLOC_SENS_FX);
           
-   
-         plc_phEcu_peak_locator_fx(xfp, peak_range_1, plocs, num_plocs, sens, Xmax, Xmin, MAX_LPROT_RED, buffer_fft);
-
+         plc_phEcu_peak_locator_fx(xfp, peak_range_1, plocs, num_plocs, sens, Xmax, Xmin, MAX_LPROT_RED, scratch);
 
          BASOP_sub_sub_start("PhECU::Peaks_refine");
 
@@ -1017,7 +1015,7 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
             /* NB LF peak analysis may add adjacent peaks in { plocs, L_plocsi},  (output from peakfinder did not have
              * adjacent peaks ) */
             plc_phEcu_LF_peak_analysis_fx(plocs /* i/o */, num_plocs /* i/o */, L_plocsi /* i/o */, xfp, f0hzLtpBinQ7,
-               norm_corrQ15_fx, 2, maxPlocs, buffer_fft);
+               norm_corrQ15_fx, 2, maxPlocs, scratch);
             n_plocs_out = *num_plocs;   move16();
 
             IF(sub(n_plocs_in, n_plocs_out) == 0)
@@ -1043,6 +1041,9 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
                }
             }
          }
+        
+          buffer_fft = (Word8*) lc3_scratch_pop( scratch, buffer_fft );
+          L_xfp = (Word32*) lc3_scratch_pop( scratch, L_xfp );
 
 #ifdef DYNMEM_COUNT
          Dyn_Mem_Out();
@@ -1485,7 +1486,7 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          const Word16 *const win2ms_init,      /* i:  2 ms initial part of pre_tda window */
          const Word16 *const win16ms_center,   /* i:  16 ms combined part  of pre_tda IWHR+MDCT-ana  */
          Word32 *L_wtda_audio,                 /* o  : tda audio  Q16       20 ms */
-         const Word16 L, Word8 *scratchBuffer) /* Size = 8 * MAX_L_FRAME */
+         const Word16 L, lc3_scratch_t scratch) /* Size = 8 * MAX_L_FRAME */
       {
          Word16 i, L2; /*,L4;*/
          const Word16 *pX;
@@ -1509,7 +1510,7 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
 
          BASOP_sub_sub_start("PhECU::my_wtda_fx");
 
-         L_w_audio = (Word32 *)scratchAlign(scratchBuffer, 0); /* Size = 4 * 2 * MAX_L_FRAME */
+         L_w_audio = (Word32*) lc3_scratch_push( scratch, sizeof( Word32 ) * ( 2 * L * 13 ) / 16 );
 
          /*   |111111|222222|333333|444444 */
          /*   |p1        p2|    p3||p4    */
@@ -1561,6 +1562,8 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
             /* second part of tda signal p1 -p2_rev */
             *pa2_L++ = L_sub_sat(*p1_L++, *p2_L--);   move32();
          }
+         
+         L_w_audio = (Word32*) lc3_scratch_pop( scratch, L_w_audio );
 
 #ifdef DYNMEM_COUNT
          Dyn_Mem_Out();
@@ -1587,7 +1590,7 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
             const Word16 maxLen,
             const Word16 *prevsynth,
             const Word16 Q_psMinus1, /*i:  Q prev_synth minus 1  , (-1 to match Q of Xsav in first bfi frame ) */
-            Word8 *scratchBuffer) /* Size = 12 * MAX_L_FRAME */
+            lc3_scratch_t scratch) /* Size = 12 * MAX_L_FRAME */
       {
          Word16 l, Lprot2;
          Word16 *rec_buf;
@@ -1597,9 +1600,9 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          Word16 work_len;
          Word16 copy_len;
          Word16 ola_len;
- 
-
          Word8 *buffer_wtda;
+        
+         UNUSED(maxLen);
 
 #ifdef DYNMEM_COUNT
          Dyn_Mem_In("rec_wtda_fx", sizeof(struct {
@@ -1611,9 +1614,9 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
 #endif
 
          BASOP_sub_sub_start("PhECU::rec_wtda_fx");
-
-         rec_buf = scratchAlign(scratchBuffer, 0);                                      /* Size = 2 * 2 * MAX_L_FRAME */
-         buffer_wtda = (Word8 *)scratchAlign(rec_buf, sizeof(*rec_buf) * (2 * maxLen)); /* Size = 4 * 2 * MAX_L_FRAME */
+        
+          rec_buf = (Word16*) lc3_scratch_push( scratch, ( sizeof( Word16 ) ) * 2*MAX_LEN );
+          buffer_wtda = (Word8*) lc3_scratch_push( scratch, sizeof( *buffer_wtda ) * MAX_LEN );
 
          xsubst_ = rec_buf;
          Lprot2 = shr_pos_pos(Lprot, 1);
@@ -1644,8 +1647,10 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          my_wtda_fx(rec_buf,
             win2ms_init,    /* i:  2 ms initial part of pre_tda window */
             win16ms_center, /* i:  16 ms combined part  of pre_tda IWHR+MDCT-ana  */
-            L_ecu_rec, output_frame, buffer_wtda); /* */
-
+            L_ecu_rec, output_frame, scratch); /* */
+        
+          buffer_wtda = (Word8*) lc3_scratch_pop( scratch, buffer_wtda );
+          rec_buf = (Word16*) lc3_scratch_pop( scratch, rec_buf );
 
 #ifdef DYNMEM_COUNT
          Dyn_Mem_Out();
@@ -1669,7 +1674,7 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          Word16 maxLprot,
          const Word16 *prevsynth,
          const Word16 Q_prevsynthMinus1, /* i  :   prevsynthQ-1  or  xfp Q   */
-         Word8 *scratchBuffer /* Size = 4 * MAX_LPROT + 12 * MAX_L_FRAME */
+         lc3_scratch_t scratch /* Size = 4 * MAX_LPROT + 12 * MAX_L_FRAME */
       )
       {
          Counter i;
@@ -1694,14 +1699,13 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
 
          BASOP_sub_sub_start("PhECU::rec_frame_fx");
 
-         L_x = (Word32 *)scratchAlign(scratchBuffer, 0);            /* Size = 4 * MAX_LPROT */
-         buffer_fft = (Word8 *)scratchAlign(L_x, sizeof(*L_x) * maxLprot); /* Size = 4* (2+1) * MAX_L_FRAME */
+         L_x = (Word32*) lc3_scratch_push( scratch, sizeof( *L_x ) * maxLprot );
+         buffer_fft = (Word8*) lc3_scratch_push( scratch, sizeof( *buffer_fft ) * 3*MAX_LEN );
 
          /* Initialize to FB constants */
          Lprot = mult(output_frame, (Word16)(32768.0 / 99.0)); /* truncation needed , i.e no rounding can be applied here */
          ASSERT(Lprot == (output_frame / 100));
          Lprot = LprotSzPtr[Lprot];   move16();
-
 
          /* Convert   stored 16 bit into 32bit for fft */
          flippedW16_2_intlvW32(x, sub(shr_pos_pos(Lprot, 1), 1), Lprot, L_x); 
@@ -1710,7 +1714,7 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          fft_scale = -1;    move16();
 
          BASOP_sub_sub_start("PhECU::IFFT_fx");
-         BASOP_irfftN(L_x, Lprot, &fft_scale, buffer_fft);
+         BASOP_irfftN(L_x, Lprot, &fft_scale, scratch);
          BASOP_sub_sub_end();
 
          pX_L = &L_x[0];
@@ -1742,8 +1746,10 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
             prevsynth,
             Q_prevsynthMinus1, /* NB:  prevsynth Q may change  from prev_bfi=0 to prev_bfi==1, due to phase
                              of signal or PLC2-muting  */
-            buffer_fft);
-
+            scratch);
+        
+        buffer_fft = (Word8*) lc3_scratch_pop( scratch, buffer_fft );
+        L_x = (Word32*) lc3_scratch_pop( scratch, L_x );
 
 #ifdef DYNMEM_COUNT
          Dyn_Mem_Out();
@@ -1795,7 +1801,7 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
          Word16  margin_prevsynth,
          const Word16 fadeout,
 		 Word16 *nonpure_tone_flag_ptr, /* i/o : non-pure single tone indicator state */        
-         Word8 *scratchBuffer /* Size = 2 * MAX_LGW + 8 * MAX_LPROT + 12 * MAX_L_FRAME */
+         lc3_scratch_t scratch /* Size = 2 * MAX_LGW + 8 * MAX_LPROT + 12 * MAX_L_FRAME */
       )
       {
          Word16  lprot;
@@ -1829,10 +1835,10 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
             BASOP_sub_sub_start("PhECU::hq_phase_ecu_fx(N)");
          }
 
-         mag_chg = (Word16 *)scratchAlign(scratchBuffer, 0);                    /* Size = 2 * MAX_LGW */
-         X       = (Word16 *)scratchAlign(mag_chg, sizeof(*mag_chg) * MAX_LGW); /* Size = 2 * MAX_LPROT == 1 Word16*MAX_LPROT */
-         xfp     = (Word16 *)scratchAlign(X, sizeof(*X) * maxLprot);            /* Size = 2 * MAX_LPROT == 1 Word16*MAX_LPROT */
-         buffer  = (Word8 *)scratchAlign(xfp, sizeof(*xfp) * maxLprot); /* Size = 4 * MAX_LPROT + 12 * MAX_L_FRAME */
+         mag_chg = (Word16*) lc3_scratch_push( scratch, sizeof( *mag_chg ) * MAX_LGW );
+         X = (Word16*) lc3_scratch_push( scratch, sizeof( *X ) * 2 * MAX_LPROT );
+         xfp = (Word16*) lc3_scratch_push( scratch, sizeof( *xfp ) * 2 * MAX_LPROT );
+         buffer = (Word8*) lc3_scratch_push( scratch, sizeof( *buffer ) * (MAX_LPROT + 3 * MAX_LEN));
          
           /* buffer size = Word32 * MAX_LPROT (FFT, IFFT) DRAM
                          + 3*Word32  * MAX_L_FRAME   */
@@ -1910,10 +1916,10 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
                L_old_xfp_w_E_fx, old_xfp_w_E_exp_fx, old_Ltot_exp_fx, old_grp_shape_fx,
                fadeout,
 				L_Xavg,  /*  full scale band amplitudes in first bfi frame */
-               buffer);
+               scratch);
 
             spec_ana_fx(&(xfp[0]), plocs, L_plocsi, num_p, X_sav, output_frame, bwidth_fx,
-               sp_ana_win, f0hzLtpBinQ7, norm_corrQ15_fx, maxLprot, maxPlocs, buffer);
+               sp_ana_win, f0hzLtpBinQ7, norm_corrQ15_fx, maxLprot, maxPlocs, scratch);
          }
          ELSE
          {
@@ -1952,7 +1958,7 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
                      old_xfp_w_E_exp_fx, old_Ltot_exp_fx, old_grp_shape_fx,
                      fadeout,
 					 NULL,  /*  full scale band amplitudes , only used in first bfi frame */
-                     buffer);
+                     scratch);
          }
          /* cpy LPROT Word16 from Static RAM Xsav to working DRAM/scratch buffer X ;*/
          basop_memmove(X, X_sav, (lprot) * sizeof(Word16));
@@ -2012,8 +2018,12 @@ static Word16 imax_fx(                      /* o: The location, relative to the 
             prevsynth, /*only last 3.75 ms used in both prevbfi=0 and  prevBfi=1  i.e   frames */
 #endif
             Q_prevsynthMinus1,
-            buffer);
-
+            scratch);
+        
+        buffer = (Word8*) lc3_scratch_pop( scratch, buffer );
+        xfp = (Word16*) lc3_scratch_pop( scratch, xfp );
+        X = (Word16*) lc3_scratch_pop( scratch, X );
+        mag_chg = (Word16*) lc3_scratch_pop( scratch, mag_chg );
 
 #ifdef DYNMEM_COUNT
          Dyn_Mem_Out();

@@ -1,5 +1,5 @@
 #******************************************************************************
-#                        ETSI TS 103 634 V1.6.1                               *
+#                        ETSI TS 103 634 V1.7.1                               *
 #              Low Complexity Communication Codec Plus (LC3plus)              *
 #                                                                             *
 # Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -17,6 +17,7 @@ WMOPS                    = 1
 HR                       = 1
 CLANG                    = 0
 SHORT_PLC_FADEOUT        = 0
+WINDOWS                  = 0
 
 # Paths
 VPATH  = . basic_op
@@ -28,6 +29,12 @@ LINK   = $(CC)
 NAME_LC3   = LC3plus
 # Shared Library Name
 LIB_LC3    = libLC3plus.so
+
+ifeq "$(WINDOWS)" "1"
+    CC     = i686-w64-mingw32-gcc
+    LINK   = i686-w64-mingw32-gcc
+    NAME_LC3    = LC3plus.exe
+endif
 
 # Default tool settings
 RM        = rm -f
@@ -45,11 +52,18 @@ CFLAGS   += -std=c99 -fPIC                                            \
              -pedantic -Wcast-qual -Wall -W -Wextra -Wno-long-long     \
              -Wpointer-arith -Wstrict-prototypes -Wmissing-prototypes  \
              -Werror-implicit-function-declaration
+             
+ifeq "$(WINDOWS)" "1"
+    CFLAGS   += -std=gnu11 -D__USE_MINGW_ANSI_STDIO=1 -U__STDC_WANT_LIB_EXT1__
+    LDFLAGS  += -Wl,--allow-multiple-definition
+endif
 
 ifneq "$(DEBUG)" "0"
 CFLAGS   += -g3
 LDFLAGS  += -g3
 endif
+
+CFLAGS   += -g
 
 ifeq "$(HR)" "0"
 CFLAGS   += -DDISABLE_HR_MODE
@@ -62,7 +76,7 @@ endif
 # memory sanitizer, find use of uninitialized memory
 ifeq "$(CLANG)" "1"
     CC        = clang
-    CFLAGS   += -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
+    CFLAGS   += -g -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
     LDFLAGS  += -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
     OPTIM     = 2
 endif
@@ -70,7 +84,7 @@ endif
 # address sanitizer, find buffer overflows
 ifeq "$(CLANG)" "2"
     CC        = clang
-    CFLAGS   += -fsanitize=address -fno-omit-frame-pointer
+    CFLAGS   += -g -fsanitize=address -fno-omit-frame-pointer
     LDFLAGS  += -fsanitize=address -fno-omit-frame-pointer
     OPTIM     = 2
 endif
@@ -78,7 +92,7 @@ endif
 # undefined behavior sanitizer, find bugs like integer overflows
 ifeq "$(CLANG)" "3"
     CC       = clang
-    CFLAGS  += -fsanitize=undefined
+    CFLAGS  += -g -fsanitize=undefined
     LDFLAGS += -fsanitize=undefined
     OPTIM    = 2
 endif

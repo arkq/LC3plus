@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -70,7 +70,11 @@ void processNearNyquistdetector_fx(Word16 *near_nyquist_flag, const Word16 fs_id
         {
 #ifdef CR9_C_ADD_1p25MS
         case LC3PLUS_FRAME_DURATION_1p25MS:
+#ifdef CR14_A_ADD_1p25MS_HR
+            return;
+#else
             assert(0);
+#endif
             BREAK;
 #endif
         case LC3PLUS_FRAME_DURATION_2p5MS:

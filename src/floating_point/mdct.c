@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -96,6 +96,10 @@ static const LC3_FLOAT* mdct_window(LC3_INT length, LC3PLUS_FrameDuration frame_
             return MDCT_WINS_1_25ms[hrmode][3];
         case 60:
             return MDCT_WINS_1_25ms[hrmode][4];
+#ifdef CR14_A_ADD_1p25MS_HR
+        case 120:
+            return MDCT_WINS_1_25ms[hrmode][5];
+#endif
         default:
             return NULL;
         }

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -27,6 +27,3 @@ void processPLCNoiseSubstitution_fx(Word32 spec[], Word16 spec_prev[], Word16 L_
 
     Dyn_Mem_Deluxe_Out();
 }
-
-
-

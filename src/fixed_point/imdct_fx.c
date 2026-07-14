@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -34,7 +34,7 @@ void ProcessingIMDCT(
     Word16     prev_bfi,          /* i:   previous bad frame indicator */
     Word16     nbLostFramesInRow, /* i: number of consecutive lost frames */
     AplcSetup *plcAd,             /* i: advanced plc struct */
-    Word8 *scratchBuffer
+    lc3_scratch_t scratch
 #ifdef ENABLE_HR_MODE
     , Word16 hrmode
 #endif
@@ -44,7 +44,6 @@ void ProcessingIMDCT(
     Word16  o, z, m, s;
     Word16  y_s, mem_s, max_bw;
     Word32  L_tmp;
-    Word32 *workBuffer;
 
 #ifdef DYNMEM_COUNT
     struct _dynmem
@@ -53,7 +52,6 @@ void ProcessingIMDCT(
         Word16  y_s, mem_s, max_bw;
         Word32  L_tmp;
         Counter i;
-        Word32 *workBuffer;
         Word16 mem_i_win;
         Word16 w_taper_win;
     };
@@ -64,8 +62,6 @@ void ProcessingIMDCT(
     test(); test(); test();
     IF (sub(bfi, 1) != 0 || sub(concealMethod, LC3_CON_TEC_NS_STD) == 0 || sub(concealMethod, LC3_CON_TEC_NS_ADV) == 0 || sub(concealMethod, LC3_CON_TEC_FREQ_MUTING) == 0)
     {
-        workBuffer = (Word32 *)scratchAlign(scratchBuffer, 0); /* Size = 4 * MAX_LEN bytes */
-
         /* Init (constant per sample rate) */
         z      = 2 * N - wLen; /* number of leading zeros in window */
         m      = N >> 1;       /* half block size */
@@ -118,10 +114,11 @@ void ProcessingIMDCT(
 #ifdef ENABLE_HR_MODE
             dct_IV(y, y_e, N, 
             hrmode, 
-            workBuffer);
+            scratch);
 #else
-            dct_IV(y, y_e, N, workBuffer);
+            dct_IV(y, y_e, N, scratch);
 #endif
+
             y_s  = getScaleFactor32(y, N);
             y_s  = sub(y_s, 1);
             *y_e = sub(*y_e, y_s + 3); /* mdct window is scaled by pow(2,x) */

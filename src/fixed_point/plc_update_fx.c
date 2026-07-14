@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -36,7 +36,12 @@ void processPLCupdate_fx(AplcSetup *plcAd, Word16 x_fx[], Word16 q_fx_exp, Word1
     }
 }
 
-void processPLCupdateSpec_fx(Word16 q_old_d_fx[], Word16 *q_old_fx_exp, Word32 q_d_fx[], Word16 *q_fx_exp, Word16 yLen)
+void processPLCupdateSpec_fx(Word16 q_old_d_fx[], Word16 *q_old_fx_exp, Word32 q_d_fx[], Word16 *q_fx_exp, Word16 yLen
+    #ifdef CR14_A_ADD_LOSSLESS_MODE
+    , Word16 ll_adap_flag
+    , int wavformat
+    #endif 
+)
 {
     Dyn_Mem_Deluxe_In(
         Counter i;
@@ -46,8 +51,26 @@ void processPLCupdateSpec_fx(Word16 q_old_d_fx[], Word16 *q_old_fx_exp, Word32 q
     /* save spectrum and the corresponding exponent */
     s             = getScaleFactor32(q_d_fx, yLen);
 
-    *q_old_fx_exp = sub(*q_fx_exp, s);
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    if(ll_adap_flag)
+    {
+        IF(wavformat == 24 )
+        {
+            *q_old_fx_exp = sub( 23, s );
 
+        }
+        ELSE 
+        {
+            *q_old_fx_exp = sub(31, s );
+        }
+    }
+    else 
+    {
+        *q_old_fx_exp = sub( *q_fx_exp, s );
+    }
+#else
+    *q_old_fx_exp = sub(*q_fx_exp, s);
+#endif
 
     FOR (i = 0; i < yLen; i++)
     {

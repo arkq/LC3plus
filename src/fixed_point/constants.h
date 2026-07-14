@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -12,6 +12,24 @@
 
 #include "defines.h"
 #include "basop_util.h"
+
+extern RAM_ALIGN const Word16* const bands_offset_1_25ms[6];
+
+#ifdef CR14_A_ADD_1p25MS_HR
+#ifdef CR15_A_LOSSLESS_1p25MS
+extern RAM_ALIGN const Word32* const LowDelayShapes_n960_1_25ms_HR[7];
+#else
+extern RAM_ALIGN const Word32* const LowDelayShapes_n960_1_25ms_HR[6];
+#endif
+extern RAM_ALIGN const Word32 TD_HR_thresh_1_25ms;
+#ifdef CR15_A_LOSSLESS_1p25MS
+extern RAM_ALIGN const Word16* const bands_offset_1_25ms_HR[7];
+#else
+extern RAM_ALIGN const Word16* const bands_offset_1_25ms_HR[6];
+#endif
+extern RAM_ALIGN const Word16 bands_offset_with_one_max_1_25ms_HR[NUM_OFFSETS];
+extern RAM_ALIGN const Word16 bands_offset_with_two_max_1_25ms_HR[NUM_OFFSETS];
+#endif
 
 #  ifdef LTPF_ADAPTIVE_GAIN
 extern RAM_ALIGN const Word16 tilt_filter_1p25ms[5][4][11];
@@ -37,11 +55,9 @@ extern RAM_ALIGN const Word16 *const LowDelayShapes_n960_1_25ms[6];
 #    endif
 
 extern RAM_ALIGN const Word16 bands_number_1_25ms[];
-extern RAM_ALIGN const Word16 *const bands_offset_1_25ms[6];
 
 #  ifdef ENABLE_HR_MODE
 extern RAM_ALIGN const Word16 bands_number_1_25ms_HR[];
-extern RAM_ALIGN const Word16 *const bands_offset_1_25ms_HR[2];
 #  endif
 
 extern RAM_ALIGN const Word16 bands_offset_with_one_max_1_25ms[NUM_OFFSETS];
@@ -56,14 +72,25 @@ extern RAM_ALIGN const Word16 bands_offset_with_two_max_lin_1_25ms[NUM_SAMP_FREQ
 #ifdef ENABLE_HR_MODE
 extern RAM_ALIGN const Word16 BW_cutoff_bin_all_HR[];
 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+extern RAM_ALIGN const Word32* const LowDelayShapes_n960_HRA_2_5ms[3];
+extern RAM_ALIGN const Word32* const LowDelayShapes_n960_HRA_5ms[3];
+extern RAM_ALIGN const Word32* const LowDelayShapes_n960_HRA_7_5ms[3];
+extern RAM_ALIGN const Word32* const LowDelayShapes_n960_HRA[3];
+#else
 extern RAM_ALIGN const Word32 *const LowDelayShapes_n960_HRA_2_5ms[2];
 extern RAM_ALIGN const Word32 *const LowDelayShapes_n960_HRA_5ms[2];
 extern RAM_ALIGN const Word32 *const LowDelayShapes_n960_HRA_7_5ms[2];
 extern RAM_ALIGN const Word32 *const LowDelayShapes_n960_HRA[2];
 #endif
+#endif
 
 #  ifdef ENABLE_HR_MODE
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+extern RAM_ALIGN const Word16 LowDelayShapes_n960_len[7];
+#else
 extern RAM_ALIGN const Word16 LowDelayShapes_n960_len[6];
+#endif
 #  else
 extern RAM_ALIGN const Word16 LowDelayShapes_n960_len[5];
 #  endif
@@ -75,7 +102,11 @@ extern RAM_ALIGN const Word16 *const LowDelayShapes_n960[6];
 #    endif
 
 #  ifdef ENABLE_HR_MODE
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+extern RAM_ALIGN const Word16 LowDelayShapes_n960_len_5ms[7];
+#else
 extern RAM_ALIGN const Word16 LowDelayShapes_n960_len_5ms[6];
+#endif
 #  else
 extern RAM_ALIGN const Word16 LowDelayShapes_n960_len_5ms[5];
 #  endif
@@ -86,7 +117,11 @@ extern RAM_ALIGN const Word32 *const LowDelayShapes_n960_5ms[6];
 extern RAM_ALIGN const Word16 *const LowDelayShapes_n960_5ms[6];
 #    endif
 #ifdef ENABLE_HR_MODE
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+extern RAM_ALIGN const Word16 LowDelayShapes_n960_len_2_5ms[7];
+#else
 extern RAM_ALIGN const Word16 LowDelayShapes_n960_len_2_5ms[6];
+#endif
 #else
 extern RAM_ALIGN const Word16 LowDelayShapes_n960_len_2_5ms[5];
 #endif
@@ -104,7 +139,11 @@ extern RAM_ALIGN const Word16 *const LowDelayShapes_n960_7_5ms[5];
 #    endif
 
 #  ifdef ENABLE_HR_MODE
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+extern RAM_ALIGN const Word16 LowDelayShapes_n960_len_7_5ms[7];
+#else
 extern RAM_ALIGN const Word16 LowDelayShapes_n960_len_7_5ms[6];
+#endif
 #  else
 extern RAM_ALIGN const Word16 LowDelayShapes_n960_len_7_5ms[5];
 #  endif
@@ -148,14 +187,30 @@ extern RAM_ALIGN const Word16 *const tns_subdiv_startfreq[MAX_BW_BANDS_NUMBER];
 extern RAM_ALIGN const Word16 *const tns_subdiv_stopfreq[MAX_BW_BANDS_NUMBER];
 
 #    ifdef ENABLE_HR_MODE
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+extern RAM_ALIGN const Word16 *const tns_subdiv_startfreq_HR[3];
+extern RAM_ALIGN const Word16 *const tns_subdiv_stopfreq_HR[3];
+#else
 extern RAM_ALIGN const Word16 *const tns_subdiv_startfreq_HR[2];
 extern RAM_ALIGN const Word16 *const tns_subdiv_stopfreq_HR[2];
+#endif
 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+extern RAM_ALIGN const Word16 *const tns_subdiv_startfreq_5ms_HR[3];
+extern RAM_ALIGN const Word16 *const tns_subdiv_stopfreq_5ms_HR[3];
+#else
 extern RAM_ALIGN const Word16 *const tns_subdiv_startfreq_5ms_HR[2];
 extern RAM_ALIGN const Word16 *const tns_subdiv_stopfreq_5ms_HR[2];
+#endif
 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+extern RAM_ALIGN const Word16 *const tns_subdiv_startfreq_2_5ms_HR[3];
+extern RAM_ALIGN const Word16 *const tns_subdiv_stopfreq_2_5ms_HR[3];
+#else
 extern RAM_ALIGN const Word16 *const tns_subdiv_startfreq_2_5ms_HR[2];
 extern RAM_ALIGN const Word16 *const tns_subdiv_stopfreq_2_5ms_HR[2];
+#endif
 #    endif
 
 extern RAM_ALIGN const Word16 *const tns_subdiv_startfreq_5ms[MAX_BW_BANDS_NUMBER];
@@ -208,9 +263,15 @@ extern RAM_ALIGN const Word16* const lpc_lin_pre_emphasis_e_1_25ms[NUM_SAMP_FREQ
 extern RAM_ALIGN const Word16 bands_nrg_scale[32];
 
 #  ifdef ENABLE_HR_MODE
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+extern RAM_ALIGN const Word16 *const bands_offset_2_5ms_HR[3];
+extern RAM_ALIGN const Word16 *const bands_offset_5ms_HR[3];
+extern RAM_ALIGN const Word16 *const bands_offset_HR[3];
+#else
 extern RAM_ALIGN const Word16 *const bands_offset_2_5ms_HR[2];
 extern RAM_ALIGN const Word16 *const bands_offset_5ms_HR[2];
 extern RAM_ALIGN const Word16 *const bands_offset_HR[2];
+#endif
 #  endif
 
 extern RAM_ALIGN const Word16 *const bands_offset[6];
@@ -233,7 +294,11 @@ extern RAM_ALIGN const Word16 *const bands_offset_7_5ms[5];
 #  ifdef ENABLE_HR_MODE
 extern RAM_ALIGN const Word16 bands_number_7_5ms_HR[];
 #    ifndef GENERATE_BAND_TABLES
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+extern RAM_ALIGN const Word16 *const bands_offset_7_5ms_HR[3];
+#else
 extern RAM_ALIGN const Word16 *const bands_offset_7_5ms_HR[2];
+#endif
 #    endif
 #  endif
 
@@ -451,5 +516,72 @@ extern RAM_ALIGN const Word16 OLA_LEN[];
 extern const Word16 plc_fadeout_param_maxlen[4];
 extern const Word16 plc_fadeout_param_maxbytes[4];
 extern RAM_ALIGN const Word16 PLC_FADEOUT_TYPE_2_SELECTOR;
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+
+/* LOSSLESS FL QUANTIZER START*/
+extern RAM_ALIGN const Word8 fft_factors[9];
+extern RAM_ALIGN const Word16 table1_fft384[384];
+extern RAM_ALIGN const Word16 table2_fft384[384];
+extern RAM_ALIGN const UWord8 table1_240[240];
+extern RAM_ALIGN const UWord8 table2_240[240];
+extern RAM_ALIGN const Word16 table1_480[480];
+extern RAM_ALIGN const Word16 table2_480[480];
+extern RAM_ALIGN const UWord8 table1_60[60];
+extern RAM_ALIGN const UWord8 table2_60[60];
+extern RAM_ALIGN const float w_64[48];
+extern RAM_ALIGN const float w_128[96];
+/* LOSSLESS FL QUANTIZER END*/
+
+#endif
+
+#ifdef LL_INCL_HPVC
+
+extern const Word16 KmaxHPVC[];
+
+#ifdef  LL_HPVC_KP_FRAC
+extern RAM_ALIGN const UWord16 hpvc_KpTab_cumfreq[];
+extern RAM_ALIGN const UWord16 hpvc_KpTab_freq[];
+extern RAM_ALIGN const Word16 hpvc_KpTabBitsQ9[];
+#endif
+#ifdef  LL_HPVC_GLOBAL_FRAC
+extern RAM_ALIGN const UWord16 hpvc_GlobalTab_freq[];
+extern RAM_ALIGN const UWord16 hpvc_GlobalTab_cumfreq[];
+extern RAM_ALIGN const Word16 hpvc_GlobalTabBitsQ9[];
+#endif
+extern RAM_ALIGN const Word16 splitRuleMaxPerNp[];
+extern RAM_ALIGN const Word16 splitRuleNsMinPerNp[];
+
+extern RAM_ALIGN const UWord16 NpTabPDF[];
+extern RAM_ALIGN const UWord16 NpTabCDF[];
+extern RAM_ALIGN const Word16 NpTabBitsQ9[];
+
+extern RAM_ALIGN const UWord32* const HPVC_MPVQ_offs_ptr[];
+extern RAM_ALIGN const Word16 HPVC_tabledKMAX[]; /* NB we use length 64+1, even though actual NpMax is 128 */
+
+extern RAM_ALIGN const Word16* hpvc_kMax[];
+extern RAM_ALIGN const Word16 hpvc_noHdrSplitK[];
+
+
+/* log size options for splitting leaves */
+extern RAM_ALIGN const Word16* logSzNp8[];
+extern RAM_ALIGN const Word16* logSzNp16[];
+extern RAM_ALIGN const Word16* logSzNp32[];
+extern RAM_ALIGN const Word16* logSzNp64[];
+extern RAM_ALIGN const Word16* logSzNp128[];
+
+# ifdef  AC_ENCODE_UNI_FX_TAB256
+extern RAM_ALIGN const  UWord16 hpvc_invNtotNegQx[];
+#endif
+
+# ifdef  AC_ENCODE_UNI_FX_TAB128
+extern RAM_ALIGN const Word16 hpvc_odd_invNtotNegQx[];
+#endif
+
+#ifdef  AC_DECODE_UNI_FX_TAB128
+extern RAM_ALIGN const Word16 hpvc_invDenNegQx[];
+#endif
+
+#endif  /* LL_INCL_HPVC */
 
 #endif /* CONSTANTS_H */

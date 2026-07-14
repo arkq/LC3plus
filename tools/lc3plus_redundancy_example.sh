@@ -2,7 +2,7 @@
 # set -x
 
 #******************************************************************************
-#                        ETSI TS 103 634 V1.6.1                               *
+#                        ETSI TS 103 634 V1.7.1                               *
 #              Low Complexity Communication Codec Plus (LC3plus)              *
 #                                                                             *
 # Copyright licence is solely granted through ETSI Intellectual Property      *

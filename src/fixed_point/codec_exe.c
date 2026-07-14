@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -48,20 +48,53 @@ typedef struct
     int32_t   stopFrame;
     int32_t   lfe[LC3PLUS_MAX_CHANNELS];
     int32_t   lfeChanCnt;
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    int padding;
+    int   rel_prio;
+    char *ll_shift;
+#endif
+    int   bipsOut_set;
 } Arguments;
 
 /* local helper functions */
 static void  parseCmdl(int ac, char **av, Arguments *arg);
 static FILE *open_bitstream_reader(const char *file, uint32_t *samplerate, int *bitrate, short *channels,
                                    uint32_t *signal_len, float *frame_ms, int *epmode, int *hrmode, int g192,
-                                   const char *file_cfg);
+                                   const char *file_cfg
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                    , int *bitsPerSample
+#endif
+                                   );
 static FILE *open_bitstream_writer(const char *file, uint32_t samplerate, int bitrate, short channels,
                                    uint32_t signal_len, float frame_ms, int epmode, int32_t hrmode, int g192, const char *file_cfg
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                    , int bitsPerSample
+#endif
 );
-static void    write_bitstream_frame(FILE *bitstream_file, uint8_t *bytes, int size, int g192);
-static int     read_bitstream_frame(FILE *bitstream_file, uint8_t *bytes, int size, int g192, int *bfi_ext);
+static void    write_bitstream_frame(FILE *bitstream_file, uint8_t *bytes,
+                                     int size,
+                                     int g192
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+, int *nBytes, int nChannels, int lossless
+#endif
+);
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+static void
+#else
+static int
+#endif
+read_bitstream_frame(FILE *bitstream_file, uint8_t *bytes,
+                                    int size,
+                                    int g192, int *bfi_ext
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+, int *nBytes, int nChannels, int lossless
+#endif
+);
+
 static FILE *  fopen_with_ext(const char *file, const char *ext, const char *mode);
 static void    cleanup(void);
+static void    safe_fclose(FILE *f);
 static int16_t loopy_read16(FILE *f);
 static int64_t loopy_read64(FILE *f);
 static void    exit_if(int condition, const char *message);
@@ -77,6 +110,10 @@ static WAVEFILEIN * input_wav;
 static WAVEFILEOUT *output_wav;
 static FILE *       output_bitstream;
 static FILE *       input_bitstream;
+#ifdef G192_BITSTREAM_SPLIT
+static FILE *       output_bitstream_second_channel;
+static FILE *       input_bitstream_secondchannel;
+#endif
 static FILE *       error_pattern_file;
 static FILE *       error_detection_file;
 static FILE *       bitrate_switching_file;
@@ -95,6 +132,10 @@ static const char *const USAGE_MESSAGE =
     "  INPUT and OUTPUT are wav files, unless another mode is selected in OPTIONS.\n"
     "  BITRATE is specified in bits per second. Alternatively a switching file can\n"
     "  be provided.\n"
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    " If no bitrate is given in lossless mode, the codec will determine the bitrate\n"
+    " required to code the frame lossless.\n"
+#endif
     "\nGeneral options:\n"
     "  -E                      Encode mode. INPUT is a wav file, OUTPUT is a binary file.\n"
     "  -D                      Decode mode. INPUT is a binary file, OUTPUT is a wav file.\n"
@@ -138,6 +179,22 @@ static const char *const USAGE_MESSAGE =
 #ifdef ENABLE_HR_MODE
     "\nHigh resolution mode options:\n"
     "  -hrmode                 Enable high resolution mode.\n"
+    "\nLossless mode options:\n"
+    "  -lossless               Lossless Mode.\n"
+    "  -padding                Enable padding in lossless mode when bitrate is specified.\n"
+    "                          Lossless frames are padded to maintain a constant frame size\n"
+    "                          according to the specified bitrate.\n"
+    "  -rel_prio <0|1>         Use relative priority for residual LSBs. Encoder option,\n"
+    "                          requires -lossless. Default: 0.\n"
+#endif
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    "  -ll_shift NUM           Signal shift option in lossless mode: shift every input sample right by N bits before\n"
+    "                          and shift the decoder output left by N bits. NUM = value from 0 to 8. \n"
+    "                          The signal shift works only for 24 bit input signals and is limited to 8 bits.\n"
+#endif
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    " If no bitrate is given in lossless mode, the codec will determine the bitrate\n"
+    " required to code the frame lossless.\n"
 #endif
     ;
 
@@ -162,18 +219,51 @@ static const char* ERROR_MESSAGE[] = {
     "Invalid PLC method!",                                                  /* LC3PLUS_PLCMODE_ERROR       */
     "Invalid EPMR value!",                                                  /* LC3PLUS_EPMR_ERROR          */
     "Incorrect padding!",                                                   /* LC3PLUS_PADDING_ERROR       */
+    "Incorrect signal shift configuration!",                                /* LC3PLUS_SHIFT_ERROR       */
     "Incorrect frame size during decoding!",                                /* FRAMESIZE_ERROR             */
     "LFE support not available!",                                           /* LC3PLUS_LFE_MODE_NOT_SUPPORTED             */
+    "Scratch not allocated!",                                           /* LC3PLUS_SCRATCH_INVALID_ERROR             */
     "Generic Warning",                                                      /* LC3PLUS_WARNING             */
     "Invalid bandwidth frequency!"                                          /* LC3PLUS_BW_WARNING          */
 };
+
+#ifdef G192_BITSTREAM_SPLIT
+static char *insert_before_ext(const char *filename, const char *suffix)
+{
+    unsigned int n        = (unsigned int)strlen(filename);
+    char *       new_name = (char *)malloc(n + strlen(suffix) + 2);
+    const char * dot      = strrchr(filename, '.');
+    if (dot && dot != filename)
+    {
+        int len = (int)(dot - filename);
+        snprintf(new_name, n + strlen(suffix) + 2, "%.*s_%s%s", len, filename, suffix, dot);
+    }
+    else
+    {
+        snprintf(new_name, n + strlen(suffix) + 2, "%s_%s", filename, suffix);
+    }
+    return new_name;
+}
+
+static char *file_with_ext_split(const char *file, const char *ext)
+{
+    char *tmp = (char *)malloc(strlen(file) + strlen(ext) + 1);
+    sprintf(tmp, "%s%s", file, ext);
+    return tmp;
+}
+#endif
 
 int main(int ac, char **av)
 {
     Arguments arg;
     uint32_t  nSamples = 0, nSamplesRead = 0, nSamplesFile = 0xffffffff, sampleRate = 0;
     short     nChannels = 0, bipsIn = 0;
-    int       nBytes = 0, real_bitrate = 0, frame = 1, delay = 0;
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    int nBytes[LC3PLUS_MAX_CHANNELS] = {0};
+#else
+    int       nBytes = 0;
+#endif
+    int       real_bitrate = 0, frame = 1, delay = 0;
     int       encoder_size = 0, decoder_size = 0, scratch_size = 0;
     int       bfi_ext = 0;
     LC3PLUS_Enc * encoder = NULL;
@@ -185,6 +275,12 @@ int main(int ac, char **av)
     int16_t   buf_16[LC3PLUS_MAX_CHANNELS * LC3PLUS_MAX_SAMPLES];
     uint8_t   bytes[LC3PLUS_MAX_BYTES];
     int       dc2_extra_frame = 0;
+    int32_t scratch_size_enc = 0;
+    int32_t scratch_size_dec = 0;
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    int16_t lossless_status_enc = 0;
+    int16_t lossless_status_dec = 0;
+#endif
     
     int32_t sample_buf_int[LC3PLUS_MAX_CHANNELS * LC3PLUS_MAX_SAMPLES] = {0};
     int16_t* sample_buf_short = (int16_t*)(void*)sample_buf_int;
@@ -231,6 +327,14 @@ int main(int ac, char **av)
         exit_if(!input_wav, "Error opening wav file!");
         exit_if(bipsIn != 16 && bipsIn != 24, "Only 16 or 24bits per sample are supported!");
 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        exit_if(arg.hrmode == 2 && arg.bipsOut_set, "-bps option is not supported for lossless mode!");
+        if (arg.hrmode == 2)
+        {
+            arg.bipsOut = bipsIn;
+        }
+#endif
+
         /* Check if LFE flag was set for each channel */
         if (arg.lfeChanCnt != 0 && arg.lfeChanCnt != nChannels)
         {
@@ -245,10 +349,13 @@ int main(int ac, char **av)
 #ifdef ENABLE_HR_MODE
                                         , arg.hrmode
 #endif
-                                        , arg.lfe
+                                        , arg.lfe, &scratch_size_enc
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                        , bipsIn, arg.padding
+#endif
             );
         exit_if(err, ERROR_MESSAGE[err]);
-        
+
         err = lc3plus_enc_set_frame_dms(encoder, frameDuration);
         exit_if(err, ERROR_MESSAGE[err]);
 
@@ -259,6 +366,41 @@ int main(int ac, char **av)
             err = lc3plus_enc_set_bitrate(encoder, arg.bitrate);
             exit_if(err, ERROR_MESSAGE[err]);
         }
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        /* get to know the max bitrate using lc3_enc_get_max_frame_bytes()
+           when fully lossless mode and arg.bitrate is set to 0 */
+        /* Code duplication from update_enc_bitrate() @ setup_enc_lc3plus.c */
+        if (arg.hrmode == 2 && arg.bitrate==0) {
+            int bitsPerSample = (bipsIn == 24) ? 24 : 16;
+            int maxBytes = 0;
+            /*arg.bitrate = nChannels * (bitsPerSample+3) * sampleRate;*/
+            err = lc3_enc_get_max_frame_bytes( sampleRate, nChannels, bitsPerSample, frameDuration, &maxBytes );
+            exit_if( err, ERROR_MESSAGE[err] );
+            arg.bitrate = maxBytes * 8 * 800 / frameDuration + 1; /* add 1 to avoid rounding problems for some configs */
+            if ( sampleRate == 44100 )
+            {
+                /* scale back to real bitrate for 44.1 kHz */
+                arg.bitrate = (arg.bitrate * 441) / 480 + 1;
+            }
+        }
+#endif
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        if (arg.rel_prio)
+        {
+            lc3plus_enc_set_relative_priority(encoder, 1);
+        }
+#endif
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        if ( arg.ll_shift )
+        {
+            int initial_shift = atoi( arg.ll_shift );
+            err = lc3plus_enc_set_ll_shift( encoder, initial_shift );
+            exit_if( err, ERROR_MESSAGE[err] );
+        }
+#endif
 
         delay        = arg.dc ? lc3plus_enc_get_delay(encoder) / arg.dc : 0;
         nSamples     = lc3plus_enc_get_input_samples(encoder);
@@ -274,13 +416,64 @@ int main(int ac, char **av)
     else /* !arg->decoder_only */
     {
         /* Open Input Bitstream File */
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        int bipsOutBitstream = 0;
+#endif
+                                    
         input_bitstream =
             open_bitstream_reader(arg.inputFilename, &sampleRate, &arg.bitrate, &nChannels, &nSamplesFile,
-                                  &arg.frame_ms, &arg.epmode, &arg.hrmode, arg.formatG192, arg.configFilenameG192);
-        exit_if(!input_bitstream, "Error opening bitstream file!");
+                                  &arg.frame_ms, &arg.epmode, &arg.hrmode, arg.formatG192, arg.configFilenameG192
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                  , &bipsOutBitstream
+#endif
+                                 );
 #ifndef ENABLE_HR_MODE
         exit_if(arg.hrmode, "HR bitstreams not supported!");
 #endif
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        exit_if(arg.hrmode == 2 && arg.bipsOut_set, "-bps option is not supported for lossless mode!");
+        if (arg.hrmode == 2 && bipsOutBitstream)
+        {
+            arg.bipsOut = bipsOutBitstream;
+        }
+#endif
+#ifdef G192_BITSTREAM_SPLIT
+        if (arg.formatG192 && arg.hrmode == 2 && nChannels > 1)
+        {
+            if (!arg.configFilenameG192)
+            {
+                arg.configFilenameG192 = file_with_ext_split(arg.inputFilename, ".cfg");
+            }
+            if (input_bitstream)
+            {
+                fclose(input_bitstream);
+                input_bitstream = NULL;
+            }
+            const char *inputFilename_L = insert_before_ext(arg.inputFilename, "L");
+            const char *inputFilename_R = insert_before_ext(arg.inputFilename, "R");
+            input_bitstream = open_bitstream_reader(inputFilename_L, &sampleRate, &arg.bitrate, &nChannels,
+                                                    &nSamplesFile, &arg.frame_ms, &arg.epmode, &arg.hrmode,
+                                                    arg.formatG192, arg.configFilenameG192
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                                    , &bipsOutBitstream
+#endif
+                                                   );
+            exit_if(!input_bitstream, "Error opening L channel bitstream file!");
+            input_bitstream_secondchannel = open_bitstream_reader(inputFilename_R, &sampleRate, &arg.bitrate,
+                                                                  &nChannels, &nSamplesFile, &arg.frame_ms,
+                                                                  &arg.epmode, &arg.hrmode, arg.formatG192,
+                                                                  arg.configFilenameG192
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                                                  , &bipsOutBitstream
+#endif
+                                                                 );
+            exit_if(!input_bitstream_secondchannel, "Error opening R channel bitstream file!");
+        }
+        else
+#endif
+        {
+            exit_if(!input_bitstream, "Error opening bitstream file!");
+        }
     }
 
     if (!arg.encoder_only)
@@ -292,6 +485,10 @@ int main(int ac, char **av)
 #ifdef ENABLE_HR_MODE
                                         , arg.hrmode
 #endif
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                        , arg.bipsOut
+#endif
+                                        , &scratch_size_dec
             );
         exit_if(err, ERROR_MESSAGE[err]);
       
@@ -329,12 +526,46 @@ int main(int ac, char **av)
     else /* !arg->encoder_only */
     {
         /* Open Output Bitstream File */
-        output_bitstream = open_bitstream_writer(arg.outputFilename, sampleRate,
-                                                                     arg.bitrate
-                                                 , nChannels, nSamplesFile,
-                                                 arg.frame_ms, arg.epmode, arg.hrmode, arg.formatG192, arg.configFilenameG192
-        );
-        exit_if(!output_bitstream, "Error creating bitstream file!");
+#ifdef G192_BITSTREAM_SPLIT
+        if (arg.formatG192 && arg.hrmode == 2 && nChannels > 1)
+        {
+            if (!arg.configFilenameG192)
+            {
+                arg.configFilenameG192 = file_with_ext_split(arg.outputFilename, ".cfg");
+            }
+            const char *outputFilename_L = insert_before_ext(arg.outputFilename, "L");
+            const char *outputFilename_R = insert_before_ext(arg.outputFilename, "R");
+            output_bitstream = open_bitstream_writer(outputFilename_L, sampleRate, arg.bitrate,
+                                                     nChannels, nSamplesFile, arg.frame_ms, arg.epmode,
+                                                     arg.hrmode, arg.formatG192, arg.configFilenameG192
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                                     , bipsIn
+#endif
+                                                    );
+            exit_if(!output_bitstream, "Error creating L channel bitstream file!");
+            output_bitstream_second_channel = open_bitstream_writer(outputFilename_R, sampleRate, arg.bitrate,
+                                                                    nChannels, nSamplesFile, arg.frame_ms,
+                                                                    arg.epmode, arg.hrmode, arg.formatG192,
+                                                                    arg.configFilenameG192
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                                                    , bipsIn
+#endif
+                                                                   );
+            exit_if(!output_bitstream_second_channel, "Error creating R channel bitstream file!");
+        }
+        else
+#endif
+        {
+            output_bitstream = open_bitstream_writer(arg.outputFilename, sampleRate,
+                                                                         arg.bitrate
+                                                     , nChannels, nSamplesFile,
+                                                     arg.frame_ms, arg.epmode, arg.hrmode, arg.formatG192, arg.configFilenameG192
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                                    , bipsIn
+#endif
+            );
+            exit_if(!output_bitstream, "Error creating bitstream file!");
+        }
     }
 
     /* open auxillary files */
@@ -368,10 +599,10 @@ int main(int ac, char **av)
                 "Error creating channel decoder debug files!");
     }
     
-    scratch_size = (MAX(lc3plus_dec_get_scratch_size(decoder), lc3plus_enc_get_scratch_size(encoder))+0x3) & ~3; // round up to 32-bit
+    scratch_size = MAX( scratch_size_dec, scratch_size_enc );
 
-    scratch      = malloc(scratch_size);
-    exit_if(!scratch, "Failed to allocate scratch memory!");
+    scratch = malloc( scratch_size );
+    exit_if( !scratch, "Failed to allocate scratch memory!" );
 
 #ifndef NO_SCRATCH_STATS
     UWord32 *sc32 = (UWord32*)scratch;
@@ -412,14 +643,14 @@ int main(int ac, char **av)
 #endif
     printf("\n");
 
-    setFrameRate(sampleRate, nSamples);
-    Init_WMOPS_counter();
-
     /* delay compensation */
     if (arg.dc == 2 && !arg.decoder_only)
     {
         ReadWavInt(input_wav, sample_buf, nChannels * delay, &nSamplesRead);
     }
+
+    setFrameRate(sampleRate, nSamples);
+    Init_WMOPS_counter();
 
     /* Encoder + Decoder loop */
     while (1)
@@ -482,7 +713,7 @@ int main(int ac, char **av)
             if (frame < arg.startFrame)
                 goto while_end;
 
-            if (arg.dc != 2)
+            if ( (arg.hrmode == 0 && arg.dc != 2) || arg.dc == 0)
             {
                 if (nSamplesRead == 0)
                 {
@@ -491,25 +722,46 @@ int main(int ac, char **av)
             }
             else
             {
-                if (nSamplesRead != (nSamples * nChannels))
+                if ( arg.hrmode > 1 )
                 {
-                    Word16 padded_samples = ((nSamples * nChannels) - nSamplesRead) / nChannels;
-                    Word16 delay_samples  = lc3plus_enc_get_delay(encoder) / 2;
-
-                    if (padded_samples >= delay_samples)
+                    if ( nSamplesRead == 0 )
                     {
-                        if (dc2_extra_frame == 1)
+                        if ( dc2_extra_frame == 1 )
                         {
                             break;
                         }
                         dc2_extra_frame = 1;
                     }
                 }
+                else
+                {
+                    if (nSamplesRead != (nSamples * nChannels))
+                    {
+                        Word16 padded_samples = ((nSamples * nChannels) - nSamplesRead) / nChannels;
+                        Word16 delay_samples  = lc3plus_enc_get_delay(encoder) / 2;
+
+                        if (padded_samples >= delay_samples)
+                        {
+                            if (dc2_extra_frame == 1)
+                            {
+                                break;
+                            }
+                            dc2_extra_frame = 1;
+                        }
+                    }
+                }
             }
 
             if (arg.ept && loopy_read16(error_pattern_file))
             {
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                for ( i = 0; i < nChannels; i++ )
+                {
+                    nBytes[i] = -1;
+                }
+#else
                 nBytes = -1; /* tell encoder packet is lost and trigger PLC */
+#endif
             }
 
             /* deinterleave channels */
@@ -518,25 +770,76 @@ int main(int ac, char **av)
             /* encode */
             if (bipsIn == 24)
             {
-                err = lc3plus_enc24(encoder, input24, bytes, &nBytes, scratch);
+                err = lc3plus_enc24(encoder, input24, bytes, 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                    nBytes, 
+#else
+                                    &nBytes, 
+#endif
+                                    scratch);
             }
             else
             {
                 int16_t *input16[] = {buf_16, buf_16 + nSamples};
                 scale_24_to_16(buf_24, buf_16, nSamples * nChannels);
-                err = lc3plus_enc16(encoder, input16, bytes, &nBytes, scratch);
+                err = lc3plus_enc16(encoder, input16, bytes, 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                    nBytes, 
+#else
+                                    &nBytes, 
+#endif
+                                    scratch);
             }
 
             exit_if(err, ERROR_MESSAGE[err]);
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            lc3plus_enc_get_lossless_status( encoder, &lossless_status_enc );
+            UNUSED(lossless_status_enc);
+#endif
         }
         else /* !arg.decoder_only */
         {
             /* Read bitstream */
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+#  ifdef G192_BITSTREAM_SPLIT
+            if (arg.formatG192 && arg.hrmode == 2 && nChannels > 1)
+            {
+                read_bitstream_frame(input_bitstream, bytes, sizeof(bytes), arg.formatG192, &bfi_ext, &nBytes[0], 1, 1);
+                if (nBytes[0] >= 0)
+                {
+                    read_bitstream_frame(input_bitstream_secondchannel, bytes + nBytes[0],
+                                         (int)sizeof(bytes) - nBytes[0], arg.formatG192, &bfi_ext, &nBytes[1], 1, 1);
+                }
+                else
+                {
+                    nBytes[1] = -1;
+                }
+            }
+            else
+#  endif
+            read_bitstream_frame(input_bitstream, bytes, sizeof(bytes), arg.formatG192, &bfi_ext, nBytes, nChannels, arg.hrmode == 2);
+
+            int exit_loop = 0;
+            for ( i = 0; i < nChannels; i++ )
+            {
+                if ( nBytes[i] < 0 )
+                {
+                    exit_loop = 1;
+                }
+            }
+            
+            if (exit_loop)
+            {
+                break;
+            }
+#else
             nBytes = read_bitstream_frame(input_bitstream, bytes, sizeof(bytes), arg.formatG192, &bfi_ext);
             if (nBytes < 0)
             {
                 break;
             }
+#endif
+
         }
 
         if (!arg.encoder_only)
@@ -545,7 +848,14 @@ int main(int ac, char **av)
             /* read error pattern */
             if (error_pattern_file && loopy_read16(error_pattern_file))
             {
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                for ( i = 0; i < nChannels; i++ )
+                {
+                    nBytes[i] = 0;
+                }
+#else
                 nBytes = 0; /* tell decoder packet is lost and needs to be concealed */
+#endif
             }
             
             int16_t* output16[LC3PLUS_MAX_CHANNELS];
@@ -596,6 +906,11 @@ int main(int ac, char **av)
                 fwrite(&tmp, 2, 1, channel_decoder_debug_file_error_report);
             }
 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            lc3plus_dec_get_lossless_status( decoder, &lossless_status_dec );
+            UNUSED(lossless_status_dec);
+#endif
+
                 uint32_t out_samples = MIN((uint32_t)nSamples - delay, nSamplesFile);
             
                 switch (arg.bipsOut)
@@ -616,7 +931,25 @@ int main(int ac, char **av)
         }
         else /* !arg.encoder_only */
         {
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+#  ifdef G192_BITSTREAM_SPLIT
+            if (arg.formatG192 && arg.hrmode == 2 && nChannels > 1)
+            {
+                write_bitstream_frame(output_bitstream, bytes, nBytes[0],
+                                      arg.formatG192, &nBytes[0], 1, 1);
+                write_bitstream_frame(output_bitstream_second_channel, bytes + nBytes[0], nBytes[1],
+                                      arg.formatG192, &nBytes[1], 1, 1);
+            }
+            else
+#  endif
+            {
+                int numBytesTotal = nChannels == 2 ? nBytes[0] + nBytes[1] : nBytes[0];
+                write_bitstream_frame(output_bitstream, bytes, numBytesTotal,
+                                      arg.formatG192, nBytes, nChannels, arg.hrmode == 2);
+            }
+#else
             write_bitstream_frame(output_bitstream, bytes, nBytes, arg.formatG192);
+#endif
         }
 
  while_end:
@@ -652,7 +985,7 @@ int main(int ac, char **av)
     Word32 maxUsedScratchIndex = 0;
 
     // initial continuous block:
-    while(0xDEADCAFE != sc32[usedScratch])
+    while(usedScratch < (scratch_size >> 2) && 0xDEADCAFE != sc32[usedScratch])
     {
         usedScratch++;
     }
@@ -720,6 +1053,10 @@ void cleanup(void)
     CloseWav(output_wav);
     safe_fclose(output_bitstream);
     safe_fclose(input_bitstream);
+#ifdef G192_BITSTREAM_SPLIT
+    safe_fclose(output_bitstream_second_channel);
+    safe_fclose(input_bitstream_secondchannel);
+#endif
     safe_fclose(error_pattern_file);
     safe_fclose(error_detection_file);
     safe_fclose(bitrate_switching_file);
@@ -806,6 +1143,7 @@ static void parseCmdl(int ac, char **av, Arguments *arg)
             arg->bipsOut = atoi(av[++pos]);
             exit_if(arg->bipsOut != 16 && arg->bipsOut != 24,
                     "Only 16, or 24 bits per sample are supported!");
+            arg->bipsOut_set = 1;
         }
 
         /* delay compensation */
@@ -819,6 +1157,13 @@ static void parseCmdl(int ac, char **av, Arguments *arg)
         {
             arg->bandwidth = av[++pos];
         }
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+
+        if (!strcmp(av[pos], "-ll_shift") && pos + 1 < ac)
+        {
+            arg->ll_shift = av[++pos];
+        }
+#endif
         /* frame length in ms */
         if (!strcmp(av[pos], "-frame_ms") && pos + 1 < ac)
         {
@@ -830,6 +1175,27 @@ static void parseCmdl(int ac, char **av, Arguments *arg)
         {
             arg->hrmode = 1;
             printf("Enabling hrmode!\n");
+        }
+#endif
+      
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        if ( !strcmp( av[pos], "-lossless" ) )
+        {
+            arg->hrmode = 2;
+            printf( "Enabling lossless mode; also enables hrmode!\n" );
+        }
+      
+        /* padding */
+        if ( !strcmp( av[pos], "-padding" ) )
+        {
+            arg->padding = 1;
+            printf( "Enable padding for lossless mode!\n" );
+        }
+
+        if ( !strcmp( av[pos], "-rel_prio" ) )
+        {
+            arg->rel_prio = atoi( av[++pos] );
+            printf( "Relative priority for residual LSBs: %s\n", arg->rel_prio ? "on" : "off" );
         }
 #endif
 
@@ -885,7 +1251,31 @@ static void parseCmdl(int ac, char **av, Arguments *arg)
         if (!strcmp(av[pos], "-swf") && pos + 1 < ac)
         {
 #ifdef ENABLE_HR_MODE
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        if(arg->hrmode == 2)
+        {
+            if(pos >= ac)
+            {
+                puts("Lossless mode: Using maximum bitrate for lossless coding of all frames");
+                arg->bitrate = 0; /* dummy value for encoder init */
+            }
+            else
+            {
+                puts( "Lossless mode with fixed bitrate." );
+                arg->bitrate = atoi( av[pos] );
+                if ( arg->bitrate == 0 )
+                {
+                    arg->bitrate = 64000 * (1 + 3 * arg->hrmode); /* dummy value for encoder init */
+                    arg->bitrate_file = av[pos];
+                    printf( "Using bitrate switching file!\n" );
+                }
+            }
+        }
+        else
+#endif
+        {
             arg->bitrate = 64000 * (1 + 3 * arg->hrmode); /* dummy value for encoder init */
+        }
 #else
             arg->bitrate = 64000; /* dummy value for encoder init */
 #endif
@@ -925,6 +1315,9 @@ static void parseCmdl(int ac, char **av, Arguments *arg)
 
     exit_if(arg->encoder_only && arg->decoder_only, "Encoder and decoder modes are exclusive!");
     exit_if(arg->ept && (!arg->epf || !arg->encoder_only), "Use -ept only with -E -epf FILE!");
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    exit_if(arg->rel_prio && (arg->decoder_only || arg->hrmode != 2), "-rel_prio requires encoder mode with -lossless!");
+#endif
     exit_if(pos + 1 >= ac, MISSING_ARGUMENT_MESSAGE);
 
     arg->inputFilename  = av[pos++];
@@ -933,17 +1326,41 @@ static void parseCmdl(int ac, char **av, Arguments *arg)
     /* Bitrate */
     if (!arg->decoder_only)
     {
-        exit_if(pos >= ac, MISSING_ARGUMENT_MESSAGE);
-        arg->bitrate = atoi(av[pos]);
-        if (arg->bitrate == 0)
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        if(arg->hrmode == 2)
         {
-#ifdef ENABLE_HR_MODE
-            arg->bitrate = 64000 * (1 + 3 * arg->hrmode); /* dummy value for encoder init */  
-#else
-            arg->bitrate      = 64000; /* dummy value */
+            if(pos >= ac)
+            {
+                puts("Lossless mode: Using maximum bitrate for lossless coding of all frames");
+                arg->bitrate = 0; /* dummy value for encoder init */
+            }
+            else
+            {
+                puts( "Lossless mode with fixed bitrate." );
+                arg->bitrate = atoi( av[pos] );
+                if ( arg->bitrate == 0 )
+                {
+                    arg->bitrate = 64000 * (1 + 3 * arg->hrmode); /* dummy value for encoder init */
+                    arg->bitrate_file = av[pos];
+                    printf( "Using bitrate switching file!\n" );
+                }
+            }
+        }
+        else
 #endif
-            arg->bitrate_file = av[pos];
-            puts("Using bitrate switching file!");
+        {
+            exit_if(pos >= ac, MISSING_ARGUMENT_MESSAGE);
+            arg->bitrate = atoi(av[pos]);
+            if (arg->bitrate == 0)
+            {
+#ifdef ENABLE_HR_MODE
+                arg->bitrate = 64000 * (1 + 3 * arg->hrmode); /* dummy value for encoder init */  
+#else
+                arg->bitrate      = 64000; /* dummy value */
+#endif
+                arg->bitrate_file = av[pos];
+                puts("Using bitrate switching file!");
+            }
         }
     }
     putchar('\n');
@@ -970,6 +1387,9 @@ static FILE *fopen_cfg(const char *file, const char *file_cfg, const char *mode)
 
 static FILE *open_bitstream_writer(const char *file, uint32_t samplerate, int bitrate, short channels,
                                    uint32_t signal_len, float frame_ms, int epmode, int32_t hrmode, int g192, const char *file_cfg
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                    , int bitsPerSample
+#endif
 )
 {
     FILE *f     = fopen(file, "wb");
@@ -985,10 +1405,28 @@ static FILE *open_bitstream_writer(const char *file, uint32_t samplerate, int bi
 
     if (f_use)
     {
-        uint16_t header[10] = {0xcc1c,        sizeof(header), samplerate / 100,
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        uint16_t bps = 0;
+        if (bitsPerSample == 16)
+        {
+            bps = 1;
+        } else if (bitsPerSample == 24)
+        {
+            bps = 2;
+        }
+        
+        uint16_t header[11] = 
+#else
+        uint16_t header[10] = 
+#endif
+        {0xcc1c,        sizeof(header), samplerate / 100,
                               bitrate / 100, channels,       
                               (uint16_t)(frame_ms * 100),
-                              epmode > 0 ? 1 : 0,   signal_len,     signal_len >> 16, hrmode};
+                              epmode > 0 ? 1 : 0,   signal_len,     signal_len >> 16, hrmode
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                              , bps
+#endif
+                              };
         fwrite(&header, sizeof(header), 1, f_use);
     }
 
@@ -998,7 +1436,11 @@ static FILE *open_bitstream_writer(const char *file, uint32_t samplerate, int bi
 
 static FILE *open_bitstream_reader(const char *file, unsigned int *samplerate, int *bitrate, short *channels,
                                    uint32_t *signal_len, float *frame_ms, int *epmode, int *hrmode, int g192,
-                                   const char *file_cfg)
+                                   const char *file_cfg
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                    , int *bitsPerSample
+#endif
+                                   )
 {
     FILE *f     = fopen(file, "rb");
     FILE *f_use = f;
@@ -1014,7 +1456,11 @@ static FILE *open_bitstream_reader(const char *file, unsigned int *samplerate, i
 
     if (f_use)
     {
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        uint16_t header[11] = {0};
+#else
         uint16_t header[10] = {0};
+#endif
         tmp_return_val = fread(header, sizeof(header), 1, f_use);
         
         if (header[0] != 0xcc1c)
@@ -1026,8 +1472,15 @@ static FILE *open_bitstream_reader(const char *file, unsigned int *samplerate, i
             fseek(f_use, 6, SEEK_SET);
         }
         else
-        {
+        {         
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            if (header[1] > 18 && header[9] > 1) 
+            {
+                assert(header[1] >= 20);
+            }
+#else
             assert(header[1] >= 18);
+#endif
             *samplerate = header[2] * 100;
             *bitrate    = header[3] * 100;
             *channels   = header[4];
@@ -1035,9 +1488,23 @@ static FILE *open_bitstream_reader(const char *file, unsigned int *samplerate, i
             *epmode     = header[6];
             *signal_len = (uint32_t)header[7] | ((uint32_t)header[8] << 16);
             *hrmode     = header[1] > 18 ? header[9] : 0;
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            *bitsPerSample = header[1] > 20 ? header[10] : 0;
+#endif
             fseek(f_use, header[1], SEEK_SET);
         }
     }
+    
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            if (*bitsPerSample == 1)
+            {
+                *bitsPerSample = 16;
+            } else if (*bitsPerSample == 2) {
+                *bitsPerSample = 24;
+            } else {
+                *bitsPerSample = 0;
+            }
+#endif
 
     (void) tmp_return_val;
     safe_fclose(f_cfg);
@@ -1072,25 +1539,67 @@ static void write_bitstream_frame_G192(FILE *bitstream_file, uint8_t *bytes, int
     }
 }
 
-static void write_bitstream_frame(FILE *bitstream_file, uint8_t *bytes, int size, int g192)
+static void write_bitstream_frame(FILE *bitstream_file, uint8_t *bytes,
+                                  int size,
+                                  int g192
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                  , int *nBytes, int nChannels, int lossless
+#endif
+                                  )
 {
     if (g192)
     {
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        if (lossless && nChannels > 1)
+        {
+            /* one G192 frame per channel for lossless 2ch */
+            int32_t offset = 0;
+            for (int ch = 0; ch < nChannels; ch++)
+            {
+                write_bitstream_frame_G192(bitstream_file, bytes + offset, nBytes[ch]);
+                offset += nBytes[ch];
+            }
+        }
+        else
+        {
+            write_bitstream_frame_G192(bitstream_file, bytes, size);
+        }
+#else
         write_bitstream_frame_G192(bitstream_file, bytes, size);
+#endif
     }
     else
     {
         int      i      = 0;
         uint16_t nbytes = size;
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        uint16_t total_numbytes = 0;
+        for (int k = 0; k < nChannels; k++)
+        {
+            nbytes = nBytes[k];
+            total_numbytes += nbytes;
+
+            fwrite( &nbytes, sizeof( nbytes ), 1, bitstream_file );
+
+            for ( ; i < total_numbytes; i++ )
+            {
+                putc( bytes[i], bitstream_file );
+            }
+        }
+#else
         fwrite(&nbytes, sizeof(nbytes), 1, bitstream_file);
         for (i = 0; i < size; i++)
         {
             putc(bytes[i], bitstream_file);
         }
+#endif
     }
 }
 
-static int read_bitstream_frame_G192(FILE *bitstream_file, int size, uint8_t *bytes, int *bfi_ext)
+static int read_bitstream_frame_G192(FILE *bitstream_file, 
+                                     int size, 
+                                     uint8_t *bytes, int *bfi_ext)
 {
     int      i = 0, j = 0, read = 0;
     uint16_t nbits      = 0;
@@ -1142,16 +1651,73 @@ static int read_bitstream_frame_G192(FILE *bitstream_file, int size, uint8_t *by
     return nbytes;
 }
 
-static int read_bitstream_frame(FILE *bitstream_file, uint8_t *bytes, int size, int g192, int *bfi_ext)
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+static void 
+#else
+static int 
+#endif
+read_bitstream_frame(FILE *bitstream_file, uint8_t *bytes,
+                     int size,
+                     int g192, int *bfi_ext
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+, int *nBytes, int nChannels, int lossless
+#endif
+)
 {
     if (g192)
     {
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        if (lossless && nChannels > 1)
+        {
+            int32_t offset = 0;
+            for (int ch = 0; ch < nChannels; ch++)
+            {
+                int32_t got = read_bitstream_frame_G192(bitstream_file, size - offset, bytes + offset, bfi_ext);
+                if (got < 0)
+                {
+                    for (int j = ch; j < nChannels; j++) { nBytes[j] = -1; }
+                    return;
+                }
+                nBytes[ch] = got;
+                offset += got;
+            }
+        }
+        else
+        {
+            nBytes[0] = read_bitstream_frame_G192(bitstream_file, size, bytes, bfi_ext);
+        }
+#else
         return read_bitstream_frame_G192(bitstream_file, size, bytes, bfi_ext);
+#endif
     }
     else
     {
         int      i      = 0;
         uint16_t nbytes = 0;
+      
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        uint16_t total_numbytes = 0;
+        for (int k = 0; k < nChannels; k++)
+        {
+            if ( fread( &nBytes[k], sizeof( nbytes ), 1, bitstream_file ) != 1 )
+            {
+                nBytes[k] = -1;
+                return; /* End of file reached */
+            }
+            
+            total_numbytes += nBytes[k];
+
+            for ( ; i < total_numbytes && i < size; i++ )
+            {
+                bytes[i] = (uint8_t) getc( bitstream_file );
+            }
+
+            if ( total_numbytes != i )
+            {
+                nBytes[k] = -1;
+            }
+        }
+#else
         if (fread(&nbytes, sizeof(nbytes), 1, bitstream_file) != 1)
         {
             return -1; /* End of file reached */
@@ -1161,6 +1727,7 @@ static int read_bitstream_frame(FILE *bitstream_file, uint8_t *bytes, int size, 
             bytes[i] = getc(bitstream_file);
         }
         return nbytes;
+#endif
     }
 }
 

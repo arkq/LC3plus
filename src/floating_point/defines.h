@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -37,20 +37,23 @@ typedef uint32_t LC3_UINT32;
 #define ENABLE_FRAME_MS_FLAG
 #define ENABLE_HR_MODE_FL_FLAG
 
-#ifndef NO_POST_REL_CHANGES
-/* Post-release non-bitexact changes */
-
+#define CR9_C_ADD_1p25MS
 #define CR13_B_FIX_PC_BINS
 #define CR13_C_RESET_CLASSIFIER_AFTER_BAD_FRAMES
 #define CR12_D_FIX_BITRATE_LIMITS
 
-#define CR9_C_ADD_1p25MS
 #ifdef CR9_C_ADD_1p25MS
 #  define ENABLE_12p5_DMS_MODE
 #  define CR9_C_ADD_1p25MS_LRSNS
 #  define FIX_LTPF_PITCH_1p25
-
 #endif
+
+#ifndef NO_POST_REL_CHANGES
+/* Post-release non-bitexact changes */
+
+#define CR14_A_ADD_1p25MS_HR
+
+#define CR15_B_MISC_FIXES
 
 #endif /* NO_POST_REL_CHANGES */
 
@@ -64,8 +67,6 @@ typedef uint32_t LC3_UINT32;
 #define SNSLR_N_FIXENV_SHIFTS   4       /* 2 bits */
 #define SNSLR_MAX_PVQ_CAND  6           /* splitLF(0), full(1), fixed_env 2+{0,1,2,3 },  */
 #define SNSLR_MAX_PVQ_SEARCH_CAND (SNSLR_MAX_PVQ_CAND-SNSLR_N_FIXENV+1)     /* 3 = splitLF(0), full(1), fixed_envs(2), */
-
-
 
 #endif
 
@@ -115,7 +116,7 @@ typedef uint32_t LC3_UINT32;
 
 #ifdef CR9_C_ADD_1p25MS
 
-/* master integration fixes for 1p25  */
+/* integration fixes for 1p25  */
 #  define FIX_FLOAT_ENC_QUANTIZE_1P25MS_512KBPS  /* add  two last MDCT coeffs into the last quadruple for global_gain _energy_ analysis   */
 #  define FIX_FLOAT_LT_NORMCORR_INIT             /*align state to BASOP start value  of ~.5 as it has an effect on SNS_compute */
 
@@ -267,6 +268,8 @@ typedef int32_t  LC3_INT32;
 #  define FEC_SLOT_BYTES_MAX 400
 #  ifdef CR12_D_FIX_BITRATE_LIMITS
 #    ifdef ENABLE_HR_MODE_FL
+#      define FEC_SLOT_BYTES_MIN_125DMS_48KHZ_HR 40
+#      define FEC_SLOT_BYTES_MIN_125DMS_96KHZ_HR 40
 #      define FEC_SLOT_BYTES_MIN_025DMS_48KHZ_HR 54
 #      define FEC_SLOT_BYTES_MIN_025DMS_96KHZ_HR 61
 #      define FEC_SLOT_BYTES_MIN_050DMS_48KHZ_HR 87
@@ -340,6 +343,8 @@ typedef int32_t  LC3_INT32;
 #define MAX_NBYTES_100 400  /* any dms: 320  kbps at !=44.1kHz, 294  kbps at 44.1kHz */
 
 #ifdef ENABLE_HR_MODE_FL
+#    define MIN_BR_125MS_48KHZ_HR ((int)204800/6400/2)*6400
+#    define MIN_BR_125MS_96KHZ_HR ((int)230400/6400/2)*6400
 #    define MIN_BR_25MS_48KHZ_HR ((int)172800/3200/2)*3200
 #    define MIN_BR_25MS_96KHZ_HR ((int)198400/3200/2)*3200
 #    define MIN_BR_50MS_48KHZ_HR ((int)148800/1600/2)*1600
@@ -386,9 +391,6 @@ typedef int32_t  LC3_INT32;
 #  define SNSLR_ST1_INVSCALEC    (round((2.0/3.0)*(32768.0))/32768.0)     /*  SNSLR_ST1_INVSCALEC  0.66667  in  Q0.15  */
 
 #endif /* CR9_C_ADD_1p25MS */
-
-/* RESIDUAL CODING */
-#define NPRM_RESQ 5 * MAX_LEN
 
 /* MDCT */
 #define MDCT_MEM_LEN_MAX (MAX_LEN - ((180 * MAX_LEN) / 480))

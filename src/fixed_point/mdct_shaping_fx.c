@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -11,7 +11,7 @@
 
 void processMdctShaping_fx(Word32 x[],
 #ifdef ENABLE_HR_MODE
-                           Word32 scf[], 
+                           Word32 scf[],
 #else
                            Word16 scf[],
 #endif
@@ -40,7 +40,6 @@ void processMdctShaping_fx(Word32 x[],
     Dyn_Mem_Out();
 #endif
 }
-
 
 void processScfScaling(Word16 scf_exp[], Word16 fdns_npts, Word16 *x_e)
 {
@@ -71,4 +70,3 @@ void processScfScaling(Word16 scf_exp[], Word16 fdns_npts, Word16 *x_e)
     Dyn_Mem_Out();
 #endif
 }
-

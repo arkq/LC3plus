@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -16,7 +16,7 @@ void plc_phEcu_LF_peak_analysis_fx(Word16 *      plocs,      /* i/o  0 ... Lprot
                                    const Word16 *mag,        /* i: Qx    */
                                    const Word16 stPhECU_f0hzLtpBinQ7, const Word16 stPhECU_f0gainLtpQ15,
                                    const Word16 nSubm, Word16 maxPlocs,
-                                   Word8 *scratchBuffer /* Size = 6 * MAX_PLOCS + 42 */
+                                   lc3_scratch_t scratch /* Size = 6 * MAX_PLOCS + 42 */
 )
 
 {
@@ -41,12 +41,10 @@ void plc_phEcu_LF_peak_analysis_fx(Word16 *      plocs,      /* i/o  0 ... Lprot
                }));
 #endif
 
-     
-
-    L_f0est_prelQ16 = (Word32 *)scratchAlign(scratchBuffer, 0);                              /* Size = 4 * 7 */
-    plocs_prel      = (Word16 *)scratchAlign(L_f0est_prelQ16, sizeof(*L_f0est_prelQ16) * 7); /* Size = 2 * 7 */
-    plocs_old       = (Word16 *)scratchAlign(plocs_prel, sizeof(*plocs_prel) * 7);           /* Size = 2 * MAX_PLOCS */
-    L_plocsi_old    = (Word32 *)scratchAlign(plocs_old, sizeof(*plocs_old) * maxPlocs);      /* Size = 4 * MAX_PLOCS */
+    L_f0est_prelQ16 = (Word32*) lc3_scratch_push( scratch, sizeof( *L_f0est_prelQ16 ) * 7 );
+    plocs_prel = (Word16*) lc3_scratch_push( scratch, sizeof( *plocs_prel ) * 7 );
+    plocs_old = (Word16*) lc3_scratch_push( scratch, sizeof( *plocs_old ) * maxPlocs );
+    L_plocsi_old = (Word32*) lc3_scratch_push( scratch, sizeof( *L_plocsi_old ) * maxPlocs );
 
     test(); test();
     IF ((*n_plocs > 0) && sub(stPhECU_f0gainLtpQ15, ((Word16)(0.25 * 32768.0))) > 0 &&
@@ -192,11 +190,13 @@ void plc_phEcu_LF_peak_analysis_fx(Word16 *      plocs,      /* i/o  0 ... Lprot
         *n_plocs = j; move16(); /* update total length   */
     }                            /* num_prel >0*/
 } /* gain/hz Limits */
+  
+    L_plocsi_old = (Word32*) lc3_scratch_pop( scratch, L_plocsi_old );
+    plocs_old = (Word16*) lc3_scratch_pop( scratch, plocs_old );
+    plocs_prel = (Word16*) lc3_scratch_pop( scratch, plocs_prel );
+    L_f0est_prelQ16 = (Word32*) lc3_scratch_pop( scratch, L_f0est_prelQ16 );
 
 #ifdef DYNMEM_COUNT
 Dyn_Mem_Out();
 #endif
-    
 }
-
-

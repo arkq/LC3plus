@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -15,7 +15,7 @@
 void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[], Word16 *pitch, Word16 *s12k8,
                      Word16 len, Word16 *normcorr, Word16 *mem_pitch, 
                      Word16 *pitch_flag,                   
-                     Word16 s12k8_exp, LC3PLUS_FrameDuration frame_dms, Word8 *scratchBuffer)
+                     Word16 s12k8_exp, LC3PLUS_FrameDuration frame_dms, lc3_scratch_t scratch)
 {
     Word32  sum, sum0, sum1, sum2, prod, inv;
     Word16  shift, s6k4_exp, prod_exp, min_pitch, max_pitch;
@@ -24,10 +24,8 @@ void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[]
     Word32 *ac;
     Word16 *s6k4;
     Counter n;
-
     Counter m;
     Word32  L_tmp, L_tmp2;
-
 
 #ifdef DYNMEM_COUNT
     Dyn_Mem_In("process_olpa_fx", sizeof(struct {
@@ -44,8 +42,7 @@ void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[]
                }));
 #endif
 
-    /* Buffer alignment */
-    ac = (Word32 *)scratchAlign(scratchBuffer, 0); /* Size = 4 * RANGE_PITCH_6K4 = 392 bytes */
+    ac = (Word32*) lc3_scratch_push( scratch, RANGE_PITCH_6K4 * sizeof( *ac ) );
 
     /* Downsample input signal by a factor of 2 (12.8kHz -> 6.4kHz) */
     mem_in_len = MAX_PITCH_6K4;  move16();
@@ -287,6 +284,8 @@ void process_olpa_fx(Word16 *mem_s6k4_exp, Word16 mem_s12k8[], Word16 mem_s6k4[]
 
     /* Upsample pitch by a factor of 2 (6.4kHz -> 12.8kHz) */
     *pitch = shl_pos(*pitch, 1); move16();
+  
+    ac = (Word32*) lc3_scratch_pop( scratch, ac );
 
 #ifdef DYNMEM_COUNT
     Dyn_Mem_Out();

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -417,7 +417,10 @@ static void enc_push_sign(Word16 val, UWord32 *next_sign_ind, UWord32 *index)
     }
 }
 
-static void vec2mind_fx(Word16        dim_in,        /* i :  dim                       */
+#ifndef LL_INCL_HPVC
+static
+#endif
+       void vec2mind_fx(Word16        dim_in,        /* i :  dim                       */
                         Word16        k_val_in,      /* i :  number of unit pulses     */
                         const Word16 *vec_in,        /* i :  PVQ pulse train           */
                         UWord32 *     next_sign_ind, /* o :  pushed leading sign       */

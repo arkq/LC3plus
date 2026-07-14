@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -12,21 +12,26 @@
 #ifdef CR9_C_ADD_1p25MS
 static LC3_INT16 get_continuation (LC3_INT32 fading_case, LC3PLUS_FrameDuration frame_dms, LC3_INT32 pos, LC3_INT32 total) 
 {
+    LC3_INT16 retval;
+
+    retval = 0;
     if ( frame_dms != LC3PLUS_FRAME_DURATION_1p25MS )
     {
-        return 0;
+        retval = 0;
     }
     else
     {
         if ( pos == total )
         {
-            return 0;
+            retval = 0;
         }
         else
         {
-            return fading_case;
+            retval = fading_case;
         }
     }
+    
+    return retval;
 }
 #endif
 
@@ -222,7 +227,11 @@ void process_ltpf_decoder_fl(LC3_FLOAT* x, LC3_INT xLen, LC3_FLOAT* y, LC3_INT f
     }
 #endif
 
-    if ( fs <= 48000 )
+#ifdef CR14_A_ADD_1p25MS_HR
+    if ( fs <= 48000 || (frame_dms == LC3PLUS_FRAME_DURATION_1p25MS && hrmode))
+#else
+    if ( fs <= 48000)
+#endif
     {
             if (fs == 8000 || fs == 16000) {
                 tilt_len = 4 - 2;

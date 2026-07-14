@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -12,6 +12,13 @@
 
 #include "defines.h"
 #include "structs.h"
+
+#ifdef CR14_A_ADD_1p25MS_HR
+extern const LC3_INT* ACC_COEFF_PER_BAND_1_25ms_HR[6];
+extern const LC3_INT* ACC_COEFF_PER_BAND_PLC_1_25ms_HR[6];
+extern const LC3_INT16 bands_number_1_25ms_HR[6];
+extern const LC3_INT32 TD_HR_thresh_1_25ms;
+#endif
 
 #ifdef CR9_C_ADD_1p25MS_LRSNS 
 extern const LC3_FLOAT lrsns_st1A_topTab_1bitNoDC[2 * 16];

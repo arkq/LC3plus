@@ -1,5 +1,6 @@
+
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -17,8 +18,13 @@ void processEstimateGlobalGain_fx(Word32 x[], Word16 x_e, Word16 lg, Word16 nbit
 #endif
                                   Word16 *gain_e,
                                   Word16 *quantizedGain, Word16 *quantizedGainMin, Word16 quantizedGainOff,
-                                  Word32 *targetBitsOff, Word16 *old_targetBits, Word16 old_specBits,
-                                  Word8 *scratchBuffer
+                                  Word32 *targetBitsOff, Word16 *old_targetBits, 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                   Word32 old_specBits,
+#else
+                                   Word16 old_specBits,
+#endif 
+                                   lc3_scratch_t scratch
 #ifdef ENABLE_HR_MODE
                                   , Word16 hrmode, Word16 regBits, LC3PLUS_FrameDuration frame_dms
 #else
@@ -111,7 +117,15 @@ void processEstimateGlobalGain_fx(Word32 x[], Word16 x_e, Word16 lg, Word16 nbit
     lg_4 = shr_pos_pos(lg, 2);
 
     test();
+#ifdef CR14_A_ADD_1p25MS_HR
+#ifdef ENABLE_HR_MODE
+    IF(frame_dms == LC3PLUS_FRAME_DURATION_1p25MS && !hrmode)
+#else
     IF(frame_dms == LC3PLUS_FRAME_DURATION_1p25MS)
+#endif
+#else
+    IF(frame_dms == LC3PLUS_FRAME_DURATION_1p25MS)
+#endif
     {   
         bwIdx = mult(lg, 3276);
         assert(bwIdx == ((lg - 1) / 10));
@@ -160,16 +174,14 @@ void processEstimateGlobalGain_fx(Word32 x[], Word16 x_e, Word16 lg, Word16 nbit
     }
 #  endif
   
-
-    en = (Word32 *)scratchAlign(scratchBuffer, 0); /* Size = MAX_LEN bytes */
-
+    en = (Word32*) lc3_scratch_push( scratch, sizeof( *en ) * lg );
 
 #ifdef ENABLE_HR_MODE
     if (hrmode)
     {
         M0 = 1;
         M1 = 1; /* Regularization factor; needs´to be 1e-5, but 1e-5 is 0 in Q15 */
-        en_exp = (Word16 *) scratchAlign(en, sizeof(*en) * MAX_LEN);
+        en_exp = (Word16*) lc3_scratch_push( scratch, sizeof( *en_exp ) * lg );
     }
 #endif
     IF (*old_targetBits < 0)
@@ -179,7 +191,11 @@ void processEstimateGlobalGain_fx(Word32 x[], Word16 x_e, Word16 lg, Word16 nbit
     }
     ELSE
     {
-        tmp32          = L_add(*targetBitsOff, L_deposit_h(sub(*old_targetBits, old_specBits)));
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        tmp32 = L_add_sat( *targetBitsOff, L_deposit_h( L_sub( *old_targetBits, old_specBits ) ) ); //tmp32 will be limited anyway
+#else
+        tmp32 = L_add( *targetBitsOff, L_deposit_h( sub( *old_targetBits, old_specBits ) ) );
+#endif 
         tmp32          = L_min((40 << 16), L_max(-(40 << 16), tmp32));
         *targetBitsOff = L_add(Mpy_32_16(*targetBitsOff, 26214), Mpy_32_16(tmp32, 6554));
         move16();
@@ -198,6 +214,9 @@ void processEstimateGlobalGain_fx(Word32 x[], Word16 x_e, Word16 lg, Word16 nbit
 #ifdef ENABLE_HR_MODE
     IF (hrmode)
     {
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        Word16 headroom = lg_4 >= 480 ? 2 : 0;
+#endif 
         FOR (i = 0; i < lg_4; i++)
         {
             Word32 absval;
@@ -211,21 +230,33 @@ void processEstimateGlobalGain_fx(Word32 x[], Word16 x_e, Word16 lg, Word16 nbit
             idx = shl(i, 2);
 
             tmp32  = L_abs(x[0]);
-            absval = L_shr(tmp32, 16);
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            absval = L_shr( tmp32, 16 + headroom );
+#else
+            absval = L_shr( tmp32, 16 );
+#endif
             M0     = L_add(M0, absval);              /* M0 += fabs(x[idx])*/
             M1     = L_add(M1, L_mult(absval, idx)); /* M1 += i*fabs(x[idx])*/
             idx    = add(idx, 1);
 
             absval = L_abs(x[1]);
             tmp32  = L_max(tmp32, absval);
-            absval = L_shr(tmp32, 16);
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            absval = L_shr( tmp32, 16 + headroom);
+#else
+            absval = L_shr( tmp32, 16 );
+#endif
             M0     = L_add(M0, absval);              /* M0 += fabs(x[idx])*/
             M1     = L_add(M1, L_mult(absval, idx)); /* M1 += idx*fabs(x[idx])*/
             idx    = add(idx, 1);
 
             absval = L_abs(x[2]);
             tmp32  = L_max(tmp32, absval);
-            absval = L_shr(tmp32, 16);
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            absval = L_shr( tmp32, 16 + headroom);
+#else
+            absval = L_shr( tmp32, 16 );
+#endif
             M0     = L_add(M0, absval);              /* M0 += fabs(x[idx])*/
             M1     = L_add(M1, L_mult(absval, idx)); /* M1 += idx*fabs(x[idx])*/
             idx    = add(idx, 1);
@@ -554,11 +585,22 @@ void processEstimateGlobalGain_fx(Word32 x[], Word16 x_e, Word16 lg, Word16 nbit
             regterm = MIN ( ratio * 5, frame_dms) / frame_dms
             */
 
+#ifdef CR14_A_ADD_1p25MS_HR
+            ratio_prod = L_mult(ratio, 50);
+#else
             ratio_prod = L_mult(ratio, 5);
+#endif
 
             int frame_dms_val = 0;
             SWITCH (frame_dms) /* 1 / frame_dms in Q15 */
             {
+#ifdef CR14_A_ADD_1p25MS_HR
+                case LC3PLUS_FRAME_DURATION_1p25MS: frame_dms_val = 125; BREAK;
+                case LC3PLUS_FRAME_DURATION_2p5MS: frame_dms_val = 250; BREAK;
+                case LC3PLUS_FRAME_DURATION_5MS: frame_dms_val = 500; BREAK;
+                case  LC3PLUS_FRAME_DURATION_7p5MS: frame_dms_val = 750; BREAK;
+                case LC3PLUS_FRAME_DURATION_10MS: frame_dms_val = 1000; BREAK;
+#else
 #ifdef CR9_C_ADD_1p25MS
                 case LC3PLUS_FRAME_DURATION_1p25MS: assert(0); frame_dms_val = 13; BREAK;
 #endif
@@ -566,6 +608,7 @@ void processEstimateGlobalGain_fx(Word32 x[], Word16 x_e, Word16 lg, Word16 nbit
                 case LC3PLUS_FRAME_DURATION_5MS: frame_dms_val = 50; BREAK;
                 case  LC3PLUS_FRAME_DURATION_7p5MS: frame_dms_val =  75; BREAK;
                 case LC3PLUS_FRAME_DURATION_10MS: frame_dms_val = 100; BREAK;
+#endif
                 case LC3PLUS_FRAME_DURATION_UNDEFINED: assert(0);
             }
             
@@ -587,6 +630,9 @@ void processEstimateGlobalGain_fx(Word32 x[], Word16 x_e, Word16 lg, Word16 nbit
 
                 /* ratio_prod < frame_dms. Hence Word16 can be used */
 
+#ifdef CR14_A_ADD_1p25MS_HR
+            ratio_prod = L_mult(ratio, 5);
+#endif
                 regterm = L_shl(L_mult(extract_l(ratio_prod), mult_factor), 15); /* result in Q31 */
             }
 
@@ -653,8 +699,21 @@ void processEstimateGlobalGain_fx(Word32 x[], Word16 x_e, Word16 lg, Word16 nbit
                     s    = reg_val_e;
                 }
 
-                tmp32 = L_add(BASOP_Util_Log2(ener), L_shl_pos(L_deposit_l(s), 25)); /* log2, 6Q25 */
-                tmp32 = L_add(L_shr_pos(Mpy_32_32(tmp32, 0x436E439A), 7), 0x4E666); /* -> (28/20)*(7+10*tmp32/log2(10)), 15Q16 */
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                // prevent overflow below in L_shl_pos( L_deposit_l( s ), 25) for s > 63: 64<<25 = 0x80000000
+                // better use less shift and compensate accordingly:
+                IF( sub( s, 63 ) > 0 )
+                {
+                    tmp32 = L_add( L_shr_pos(BASOP_Util_Log2( ener ),1), /* log2, (6+1)Q(25-1) */
+                                   L_shl_pos( L_deposit_l( s ), 25-1 ) );
+                    tmp32 = L_add( L_shr_pos( Mpy_32_32( tmp32, 0x436E439A ), 7-1 ), 0x4E666 );    /* -> (28/20)*(7+10*tmp32/log2(10)), 15Q16 */
+                }
+                ELSE
+#endif
+                {
+                    tmp32 = L_add(BASOP_Util_Log2(ener), L_shl_pos(L_deposit_l(s), 25)); /* log2, 6Q25 */
+                    tmp32 = L_add(L_shr_pos(Mpy_32_32(tmp32, 0x436E439A), 7), 0x4E666); /* -> (28/20)*(7+10*tmp32/log2(10)), 15Q16 */
+                }
                 en[i] = tmp32;                 move32();
             }
         }
@@ -929,6 +988,14 @@ void processEstimateGlobalGain_fx(Word32 x[], Word16 x_e, Word16 lg, Word16 nbit
 #else
     *gain   = round_fx(BASOP_Util_InvLog2(L_or(tmp32,(Word32) 0xFE000000)));
 #endif
+
+#  ifdef ENABLE_HR_MODE
+    if ( hrmode )
+    {
+        en_exp = (Word16*) lc3_scratch_pop( scratch, en_exp );
+    }
+#  endif
+    en = (Word32*) lc3_scratch_pop( scratch, en );
 
 #ifdef DYNMEM_COUNT
     Dyn_Mem_Out();

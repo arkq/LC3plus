@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -9,6 +9,19 @@
 
 #ifndef DEFINES_H
 #define DEFINES_H
+
+//#    define VERBOSE_SCRATCH_ALLOC
+
+#ifdef DEBUG
+#  if 0
+#    define VERBOSE_SCRATCH_ALLOC
+#  endif
+#endif
+
+#ifdef VERBOSE_SCRATCH_ALLOC
+#    define lc3_scratch_push( x, y ) _lc3_scratch_push( x, y, __func__, __FILE__, __LINE__ )
+#    define lc3_scratch_pop( x, y )  _lc3_scratch_pop( x, y, __func__, __FILE__, __LINE__ )
+#endif
 
 #ifndef DISABLE_HR_MODE
 #  define ENABLE_HR_MODE
@@ -32,7 +45,7 @@
 
 #define FRAME2FS_IDX(x) (x / 100) /*   80 -> 0, 160 -> 1, 240 -> 2, 320 -> 3, 480 -> 4 */
 #ifdef ENABLE_HR_MODE
-#  define FS2FS_IDX(x) ((x) == 96000 ? 5 : (x) / 10000) /* 8000 -> 0, 16000 -> 1, 24000 -> 2, 32000 -> 3, 48000 -> 4, 96000 -> 5 */
+#define FS2FS_IDX( x )            ( ( x ) == 96000 ? 5 : ( ( x ) == 192000 ? 6 : ( x ) / 10000 ) ) /* 8000 -> 0, 16000 -> 1, 24000 -> 2, 32000 -> 3, 48000 -> 4, 96000 -> 5, 192000 -> 6 */
 #else
 #  define FS2FS_IDX(x) (x / 10000)  /*   8000 -> 0, 16000 -> 1, 24000 -> 2, 32000 -> 3, 48000 -> 4 */
 #endif
@@ -71,6 +84,11 @@
 #  define DYN_MAX_LEN_PCM_PLC(fs) MAX(DYN_MAX_LEN_PCM_PLC_CLASSIFIER(fs), DYN_MAX_LEN_PCM_PLC_TDCAPPLYFILTER(fs))
 #endif
 
+#define SCRATCH_BUFFER_ALIGNMENT      4
+#define SCRATCH_BUFFER_ALIGNMENT_BITS 2
+#define SCRATCH_ALLOCATOR_NORMAL_OPERATION 0
+#define SCRATCH_ALLOCATOR_CALCULATE_MAX    1
+
 #define FRAME_MS_BLOCK 25
 
 /* OPTIONS */
@@ -88,18 +106,112 @@
 #define ENABLE_EP_MODE_FLAG
 #define ENABLE_FRAME_MS_FLAG
 
-#ifndef NO_POST_REL_CHANGES
-/* Post-release non-bitexact changes */
+#define CR9_C_ADD_1p25MS
+#define CR12_B_STOP_DC_RINGING   
+#define CR12_D_FIX_BITRATE_LIMITS   
 #define CR13_B_FIX_PC_BINS
 #define CR13_C_RESET_CLASSIFIER_AFTER_BAD_FRAMES
 
-#define CR12_B_STOP_DC_RINGING   
-#define CR12_D_FIX_BITRATE_LIMITS   
+#ifndef NO_POST_REL_CHANGES
+/* Post-release non-bitexact changes */
+#define CR14_A_ADD_1p25MS_HR
+#define CR14_B_REMOVE_FLOAT_IN_BASOP_CODE
 
-#define CR9_C_ADD_1p25MS
+#ifdef ENABLE_HR_MODE
+#  define CR14_A_ADD_LOSSLESS_MODE
+#  define G192_BITSTREAM_SPLIT
+#  define CR15_C_VARIOUS_LOSSLESS_FIXES
+
+#  define CR15_D_LL_INCL_HPVC   /*   HPVC arith. coder variant for Lossless TCX */
+
+#  ifdef CR15_D_LL_INCL_HPVC
+#    define LL_INCL_HPVC
+#    define LL_INCL_HPVC_ARICODEC                 /* enable jointTCX+HPVC TX in ari_codec ENC */
+#    define LL_INCL_HPVC_ARICODEC_DEC             /* enable jointTCX+HPVC TX in ari DEC */
+#    define LL_HPVC_GLOBAL_FRAC                   /* fractional ternary HPVC global flag */
+#    define LL_HPVC_KP_FRAC                       /* fractional Kp table */
+#    define LL_HPVC_ALIGN_STARTCOEFF_TO_LASTNZ
+#    define LL_HPVC_EXPORT_TCX_BITRATE
+
+#    define LL_HPVC_LOWEST_FS         96000
+#    define LL_HPVC_N_SIGNAL          64
+#    define N_SIGNAL_LOG              6           /* log2(LL_HPVC_N_SIGNAL) */
+#    define LL_HPVC_NB_NP             2           /* N_SIGNAL=64 -> NB_NP=2 (64,128 -> 2) */
+#    define LL_HPVC_MIN_RANGE         8
+#    define LL_HPVC_MAX_RANGE         12
+#    define LL_HPVC_BW_STARTA_FB10MS  (4*64)      /* = 256 */
+#    define LL_HPVC_BW_STARTB_FB10MS  (5*64)      /* = 320 */
+
+#    define NP_LOG_MIN                N_SIGNAL_LOG          /* = 6 */
+#    define NP_LOG_MAX                7
+#    define TOPH                      (NP_LOG_MAX - NP_LOG_MIN)
+#    define LL_HPVC_NB_BLOCKTYPE      (LL_HPVC_NB_NP+1)
+#    define LL_HPVC_NP_MIN            (1<<NP_LOG_MIN)       /* = 64 */
+#    define LL_HPVC_NP_MAX            (1<<NP_LOG_MAX)       /* = 128 */
+#    define LL_HPVC_KP_MAX            36
+#    define LL_HPVC_NS_MAX            16
+#    define LL_HPVC_NSHDR_MAX         3
+
+#    define LL_HPVC_ADD_LEAF_SPLIT
+#    define LL_HPVC_SPLITRULE_GLOBAL_MAX    3
+#    define LL_HPVC_SPLITRULE_GLOBAL_NSMIN  3
+
+#    define LL_HPVC_GLOBCOST_Q9_TCX        (212)
+#    define LL_HPVC_GLOBCOST_Q9_MIXED      (3<<9)
+
+#    define LL_INCL_HPVC_UPDATES              /* updated code for mainly reducing WMOPS */
+#    ifdef LL_INCL_HPVC_UPDATES
+#      define LL_INCL_HPVC_OPT_AR_ENCODE     /* refactored ARI ENCODE CODE loop for lower WMOPS, flattened code for now kept for 2-tuples */
+#      ifdef  LL_INCL_HPVC_OPT_AR_ENCODE
+#        define  LL_INCL_HPVC_OPT_AR_ENCODE_FIX
+#      endif
+#      define LL_INCL_HPVC_FIX_RANGE_PREC    /* 128 table values + 8 postcheck was insufficient for 1/255, added xtra postcheck */
+#      define LL_INCL_HPVC_UNIW32_OPT        /* lower av-WMOPS, by identifying whole bits path */
+#      define LL_INCL_HPVC_AC_UNI_DECODE_FAST /* optimized wider binary split testing of the cdf boundaries */
+#      define HPVC_APPLY_TREE_LIMIT
+
+#      define HPVC_NOMTREE_COUNT_FB          7   /* constant for FB reduced for 96,192 */
+#      define HPVC_MAXTREE_LIMIT
+#      ifdef HPVC_MAXTREE_LIMIT
+#        define HPVC_MAXTREE_LIMIT_FB        7   /* constant for FB reduced for 192 */
+#      endif
+#      define HPVC_CORRECT7p5_START
+#      define HPVC_CORRECT7p5_START_PLUS
+
+#      define LL_HPVC_REQ_BIT_GAIN_PER_CEOFF_Q9 ((Word32)(64/512.0*(1<<9)))  /* 64/512 bits per coef, somewhat more aggressive per block */
+#    else
+#      define LL_HPVC_REQ_BIT_GAIN_PER_CEOFF_Q9 ((Word32)(1.0/512.0*(1<<9))) /* 1/512 bits per coef */
+#    endif
+
+#    define LL_HPVC_REQ_BIT_GAIN_GLOBAL_Q9     ((Word32)(0.125*(1<<9)))
+
+     /* #    define LL_INCL_HPVC_DEBUG              */
+     /* #    define LL_INCL_HPVC_DEBUG_MORE         */
+     /* #    define LL_INCL_HPVC_ARICODEC_DEBUG_SYNC*/
+     /* #    define LL_INCL_HPVC_ARICODEC_WRITE_SYNC*/
+     /* #    define LL_HPVC_SEGMENT_FILE_LOG        */
+     /* #    define LL_HPVC_FORCE_LEGACY_TCX_ENC    */
+     /* #    define LL_HPVC_FORCE_NP_TCX_ENC        */
+     /* #    define LL_HPVC_FORCE_NP_TCX_SKIP_TX_ENCDEC */
+     /* #    define LL_HPVC_FORCE_NP_TCX_TX_OLDPATH */
+     /* #    define LL_HPVC_FORCE_NP_TCX_RX_OLDPATH */
+
+
+#    define W32_UNI_RANGE_BITS_MAX 8       /* 8 bits or lower supported */
+#    define AC_ENCODE_UNI_FX_TAB128        /* odd-divisor ROM 1/1..1/255 for uniform vCDF encoding */
+#    define AC_DECODE_UNI_FX_TAB128        /* divisor ROM 1/128..1/255 for decoder search */
+#    define HPVC_PVQ_MAX_VEC_SIZE  LL_HPVC_NP_MAX
+#    define HPVC_KMAX_FX           36      /* N=8 leaf maximum */
+#  endif /* CR15_D_LL_INCL_HPVC */
+#endif
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+#  define CR15_A_LOSSLESS_1p25MS
+#endif
+
+#endif /* NO_POST_REL_CHANGES Post-release changes */
 
 #ifdef CR9_C_ADD_1p25MS
-
 #  define CR9_C_ADD_1p25MS_LRSNS
 #  define ENABLE_12p5_DMS_MODE
 #  define NOISEFILLWIDTH_1_25MS 1
@@ -120,7 +232,7 @@
 #    define LTPF_ADAPTIVE_GAIN_WITH_NORM_CORR
 #  endif
 
-/* master integration fixes for 1p25  */
+/* integration fixes for 1p25  */
 #ifdef CR9_C_ADD_1p25MS
 #  define FIX_BASOP_ENC_QUANTIZE_1P25MS_512KBPS  /* add  two last MDCT coeffs into the last quadruple for global_gain _xmax_ and energy  analysis    */
  
@@ -205,8 +317,6 @@
 
 #endif /* CR9_C_ADD_1p25MS */
 
-#endif /* NO_POST_REL_CHANGES Post-release changes */
-
 #  ifdef CR9_C_ADD_1p25MS
 #    define LEN_MEM_NORMCORR 5
 #  else
@@ -270,11 +380,6 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #  define GCC_VERSION 0
 #endif
 
-/* Define __forceinline as empty if ARM not activated to avoid any errors */
-#undef __forceinline
-/* The above undef is needed to compile using make_mex.m without the following warning in Matlab for windows */
-#define __forceinline
-
 /* SUBSETS */
 #if !(defined(SUBSET_NB) || defined(SUBSET_WB) || defined(SUBSET_SSWB) || defined(SUBSET_SWB) || defined(SUBSET_FB) || defined(SUBSET_UB))
 #  define SUBSET_NB
@@ -285,7 +390,47 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #  ifdef ENABLE_HR_MODE
 #    define SUBSET_UB
 #  endif
+#  ifdef CR14_A_ADD_LOSSLESS_MODE
+#    define SUBSET_UUB
+#  endif
 #endif
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+
+#define MIN_BR_025DMS_192KHZ_HR ( (int) 249600 / 3200 / 2 ) * 3200  /* 198400 + 2 * (198400 - 172800) */
+#ifdef CR15_A_LOSSLESS_1p25MS
+#define MIN_BR_125DMS_192KHZ_HR ( (int) 249600 / 6400 / 2 ) * 6400  /* 198400 + 2 * (198400 - 172800) */
+#endif
+#define MIN_BR_050DMS_192KHZ_HR ( (int) 225600 / 1600 / 2 ) * 1600  /* 174400 + 2 * (174400 - 148800) */
+#define MIN_BR_075DMS_192KHZ_HR ( (int) 199200 / 800 / 2 ) * 800    /* 149600 + 2 * (149600 - 124800) */
+#define MIN_BR_100DMS_192KHZ_HR ( (int) 199200 / 800 / 2 ) * 800
+
+#ifdef SUBSET_UUB
+#  define MAX_NBYTES_LOSSLESS    7000
+#else
+#  define MAX_NBYTES_LOSSLESS    4000
+#endif 
+
+#undef MAX_BW_HR
+#define MAX_BW_HR 1920
+
+#define LOSSLESS_192kHz
+#ifdef LOSSLESS_192kHz
+#define HIGH_BANDS_NUMBER 12
+#endif
+#define LOSSLESS_MDCT_FX
+#define LOSSLESS_MDCT_FX2
+#define NEW_HRMODE_MDCT_INPUT
+#define RATE_FLAG_TUNING
+#define LOSSLESS_FALLBACK
+#define PADDING_CBR
+#define LOSSLESS_MDCT
+#define LOSSLESS_RESBITS_RESTRUCTURE
+#define ADAPTIVE_TNS /* Estimate if TNS enables lossless.  */
+#define ADAPTIVE_TNS_H
+#define LOSSLESS_CBR
+
+#endif /* CR14_A_ADD_LOSSLESS_MODE */
 
 #  define MIN_BR_100DMS   16000  /*       20 * 800 * 100/100  */
 #  define MIN_BR_025DMS   64000          /*       20 * 800 * 100/ 25  */
@@ -320,7 +465,9 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #define PACK_RESBITS
 
 /* FRAME/BUFFER */
-#ifdef SUBSET_UB
+#ifdef SUBSET_UUB
+#  define MAX_LEN 1920 /* = 10ms at 192kHz */
+#elif defined SUBSET_UB
 #  define MAX_LEN 960 /* = 10ms at 96kHz */
 #elif defined SUBSET_FB
 #  define MAX_LEN 480 /* = 10ms at 48kHz */
@@ -340,7 +487,12 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #  define ENABLE_DCTIV_RESCALE
 
 #  define EXT_RES_ITER_MAX 20
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+#  define MAX_RESBITS 48000
+#else
 #  define MAX_RESBITS 5000
+#endif
 #  define HR_MODE_SCRATCH_SIZE 60
 #else /* ENABLE_HR_MODE */
 #  define MAX_RESBITS MAX_LEN
@@ -369,6 +521,8 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #define MAX_NBYTES_075 400  /* any dms: 320  kbps at !=44.1kHz, 294  kbps at 44.1kHz */
 #define MAX_NBYTES_100 400  /* any dms: 320  kbps at !=44.1kHz, 294  kbps at 44.1kHz */
 #ifdef ENABLE_HR_MODE
+#    define MIN_BR_125MS_48KHZ_HR ((int)204800/6400/2)*6400
+#    define MIN_BR_125MS_96KHZ_HR ((int)230400/6400/2)*6400
 #    define MIN_BR_25MS_48KHZ_HR ((int)172800/3200/2)*3200
 #    define MIN_BR_25MS_96KHZ_HR ((int)198400/3200/2)*3200
 #    define MIN_BR_50MS_48KHZ_HR ((int)148800/1600/2)*1600
@@ -385,6 +539,8 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #  define FEC_SLOT_BYTES_MAX 400
 #  ifdef CR12_D_FIX_BITRATE_LIMITS
 #    ifdef ENABLE_HR_MODE
+#      define FEC_SLOT_BYTES_MIN_125DMS_48KHZ_HR 40
+#      define FEC_SLOT_BYTES_MIN_125DMS_96KHZ_HR 40
 #      define FEC_SLOT_BYTES_MIN_025DMS_48KHZ_HR 54
 #      define FEC_SLOT_BYTES_MIN_025DMS_96KHZ_HR 61
 #      define FEC_SLOT_BYTES_MIN_050DMS_48KHZ_HR 87
@@ -401,8 +557,13 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #  define MAX_BW MAX_BW_BIN
 #endif
 
-#define NUM_OFFSETS 7
-#define NUM_SAMP_FREQ 6
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+#  define NUM_SAMP_FREQ 8
+#  define NUM_OFFSETS 8
+#else
+#  define NUM_SAMP_FREQ 6
+#  define NUM_OFFSETS 7
+#endif
 
 /* SCF */
 #define M 16 /* LPC_ORDER */
@@ -424,6 +585,7 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #    define SNS_DAMPING_HRMODE_UB_7_5MS 5898 /* 0.18 in Q15 */
 #    define SNS_DAMPING_HRMODE_UB_5MS   4915 /* 0.15 in Q15 */
 #    define SNS_DAMPING_HRMODE_UB_2_5MS 4915 /* 0.15 in Q15 */
+#    define SNS_DAMPING_HRMODE_UB_1_25MS 4915 /* 0.15 in Q15 */
 #endif
 
 #ifdef CR9_C_ADD_1p25MS_LRSNS
@@ -479,9 +641,6 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #define A_THRES (1 << A_THRES_SHIFT)
 #define VAL_ESC 16
 #define SYM_BITS_Q 11
-
-/* RESIDUAL CODING */
-#define NPRM_RESQ MAX_LEN
 
 /* NOISE FILLING */
 #define NOISEFILLWIDTH 3
@@ -558,7 +717,13 @@ do not change  __forceinline  for mex compilation using  gcc6.3.0 or larger
 #  define MAX_PITCH_96K ((MAX_PITCH_12K8 * 96000) / (12800)) /* exact integer */
 #endif
 
-#ifdef ENABLE_HR_MODE
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+#  define MAX_PITCH_192K ((MAX_PITCH_12K8 * 192000) / (12800)) /* exact integer */
+#endif
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+#  define MAX_PITCH MAX_PITCH_192K
+#elif defined(ENABLE_HR_MODE)
 #  define MAX_PITCH MAX_PITCH_96K
 #elif defined(SUBSET_FB)
 #  define MAX_PITCH MAX_PITCH_48K

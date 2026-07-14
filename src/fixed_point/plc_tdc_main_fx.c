@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -93,7 +93,7 @@ void processTimeDomainConcealment_Apply_fx(const Word16 pitch_int, const Word16 
                                            Word16 *seed_fx, 
                                            Word32 *gain_c_fx, Word16 *synth_fx, Word16 *Q_syn, Word16 *alpha, Word16 max_len_pcm_plc,
                                            Word16 harmonicBuf_fx[MAX_PITCH], Word16 synthHist_fx[M], Word16 *const harmonicBuf_Q,
-                                           Word8 *scratchBuffer
+                                           lc3_scratch_t scratch
                                            , UWord8 plc_fadeout_type
                                            ,Word16 * alpha_type_2_table
 )
@@ -227,13 +227,14 @@ void processTimeDomainConcealment_Apply_fx(const Word16 pitch_int, const Word16 
      *---------------------------------------------------------------*/
 
     /* pointer inits */
-    exc_fx       = (Word16 *)scratchAlign(scratchBuffer,
-                                    sizeof(Word16) * len_pi_lf_2); /* MAX_PITCH+MAX_LEN/2 + MAX_LEN+MDCT_MEM_LEN_MAX */
-    synth_mem_fx = (Word16 *)scratchAlign(exc_fx, sizeof(*exc_fx) * len);           /* M */
-    x_pre_fx     = (Word16 *)scratchAlign(synth_mem_fx, sizeof(*synth_mem_fx) * lpc_order); /* MAX_PITCH+MAX_LEN/2+M+1 */
-    exc2_fx      = (Word16 *)scratchAlign(synth_mem_fx, sizeof(*synth_mem_fx) * lpc_order); /* MAX_LEN+MDCT_MEM_LEN_MAX+TDC_L_FIR_HP-1 */
-    synth_tmp_fx = (Word16 *)scratchAlign(synth_mem_fx, sizeof(*synth_mem_fx) * lpc_order); /* MAX_LEN+MDCT_MEM_LEN_MAX */
-    /* Buffers 'overlap' since they are not used at the same time */
+    Word16* exc_fx_buf;
+    exc_fx_buf = (Word16*) lc3_scratch_push( scratch, sizeof( *exc_fx ) * ( len_pi_lf_2 + len ) );
+    x_pre_fx = (Word16*) lc3_scratch_push( scratch, sizeof( *x_pre_fx ) * ( len_pi_lf_2 + lpc_order + 1 ) );
+    exc2_fx = (Word16*) lc3_scratch_push( scratch, sizeof( *exc2_fx ) * ( len + TDC_L_FIR_HP - 1 ) );
+    Word16* synth_tmp_fx_buf = (Word16*) lc3_scratch_push( scratch, sizeof( *synth_tmp_fx ) * ( len + lpc_order ) );
+    synth_mem_fx = (Word16*) lc3_scratch_push( scratch, sizeof( *synth_mem_fx ) * lpc_order );
+    exc_fx = exc_fx_buf + len_pi_lf_2;
+    synth_tmp_fx = synth_tmp_fx_buf + lpc_order;
 
     /*---------------------------------------------------------------*
      * LPC Residual                                                  *
@@ -486,7 +487,14 @@ void processTimeDomainConcealment_Apply_fx(const Word16 pitch_int, const Word16 
     if (frame_length == 720)
     {
         ilen = BASOP_Util_Divide1616_Scale((Word16)1, 960, &ilen_exp);
-    } else {
+    } 
+    #ifdef CR14_A_ADD_LOSSLESS_MODE
+    else if (frame_length == 1440) 
+    {
+        ilen = BASOP_Util_Divide1616_Scale( (Word16) 1, 1920, &ilen_exp );
+    }
+    #endif 
+    else {
         ilen = BASOP_Util_Divide1616_Scale((Word16)1, frame_length, &ilen_exp);
     }
     step_fx = round_fx(L_shl(L_mult(sub(gain_h_fx, *alpha), ilen), ilen_exp));
@@ -545,6 +553,7 @@ void processTimeDomainConcealment_Apply_fx(const Word16 pitch_int, const Word16 
 
     IF (sub(nbLostFramesInRow, 1) != 0)
     {
+        synth_mem_fx = (Word16*) lc3_scratch_pop( scratch, synth_mem_fx );
         synth_mem_fx = synthHist_fx;
     }
     Copy_Scale_sig(synth_mem_fx, &synth_tmp_fx[-lpc_order], lpc_order, exp_scale);
@@ -590,6 +599,16 @@ void processTimeDomainConcealment_Apply_fx(const Word16 pitch_int, const Word16 
             basop_memset(&synth_fx[frame_length], 0, overlap * sizeof(Word16));
         }
     }
+    
+    IF( sub( nbLostFramesInRow, 1 ) == 0 )
+    {
+        synth_mem_fx = (Word16*) lc3_scratch_pop( scratch, synth_mem_fx );
+    }
+    
+    synth_tmp_fx_buf = (Word16*) lc3_scratch_pop( scratch, synth_tmp_fx_buf );
+    exc2_fx = (Word16*) lc3_scratch_pop( scratch, exc2_fx );
+    x_pre_fx = (Word16*) lc3_scratch_pop( scratch, x_pre_fx );
+    exc_fx_buf = (Word16*) lc3_scratch_pop( scratch, exc_fx_buf );
 
 #ifdef DYNMEM_COUNT
     Dyn_Mem_Out();
@@ -1199,6 +1218,75 @@ static Word16 type_2_alpha_long(Word16 nbLostFramesInRow, LC3PLUS_FrameDuration 
     Word16 n_help;
     Word32 n_shift;
 
+#ifdef CR14_B_REMOVE_FLOAT_IN_BASOP_CODE
+    Word16 selector = 0;
+    Word16 n_help_2 = 0;
+
+    SWITCH( frame_dms )
+    {
+#ifdef CR9_C_ADD_1p25MS
+        case LC3PLUS_FRAME_DURATION_1p25MS:
+            selector = 3 * ( 100.0 / ( LC3PLUS_FRAME_DURATION_1p25MS * 1.25 * 10 ) );
+            n_help = ( nbLostFramesInRow + ( 100 / ( LC3PLUS_FRAME_DURATION_1p25MS * 1.25 * 10 ) ) - 1 ) * ( LC3PLUS_FRAME_DURATION_1p25MS * 1.25 * 10 );
+            n_shift = ( nbLostFramesInRow - 3 * ( 100 / ( LC3PLUS_FRAME_DURATION_1p25MS * 1.25 * 10 ) ) ) * 50 / ( LC3PLUS_FRAME_DURATION_1p25MS * 1.25 * 10 );
+            n_help_2 = ( n_shift + ( 100 / ( LC3PLUS_FRAME_DURATION_1p25MS * 1.25 * 10 ) ) - 1 ) * ( LC3PLUS_FRAME_DURATION_1p25MS * 1.25 * 10 );
+        BREAK;
+#endif
+        case LC3PLUS_FRAME_DURATION_2p5MS:
+            selector = 3 * ( 100.0 / ( LC3PLUS_FRAME_DURATION_2p5MS * 1.25 * 10 ) );
+            n_help = ( nbLostFramesInRow + ( 100 / ( LC3PLUS_FRAME_DURATION_2p5MS * 1.25 * 10 ) ) - 1 ) * ( LC3PLUS_FRAME_DURATION_2p5MS * 1.25 * 10 );
+            n_shift = ( nbLostFramesInRow - 3 * ( 100 / ( LC3PLUS_FRAME_DURATION_2p5MS * 1.25 * 10 ) ) ) * 50 / ( LC3PLUS_FRAME_DURATION_2p5MS * 1.25 * 10 );
+            n_help_2 = ( n_shift + ( 100 / ( LC3PLUS_FRAME_DURATION_2p5MS * 1.25 * 10 ) ) - 1 ) * ( LC3PLUS_FRAME_DURATION_2p5MS * 1.25 * 10 );
+        BREAK;
+        case LC3PLUS_FRAME_DURATION_5MS:
+            selector = 3 * ( 100.0 / ( LC3PLUS_FRAME_DURATION_5MS * 1.25 * 10 ) );
+            n_help = ( nbLostFramesInRow + ( 100 / ( LC3PLUS_FRAME_DURATION_5MS * 1.25 * 10 ) ) - 1 ) * ( LC3PLUS_FRAME_DURATION_5MS * 1.25 * 10 );
+            n_shift = ( nbLostFramesInRow - 3 * ( 100 / ( LC3PLUS_FRAME_DURATION_5MS * 1.25 * 10 ) ) ) * 50 / ( LC3PLUS_FRAME_DURATION_5MS * 1.25 * 10 );
+            n_help_2 = ( n_shift + ( 100 / ( LC3PLUS_FRAME_DURATION_5MS * 1.25 * 10 ) ) - 1 ) * ( LC3PLUS_FRAME_DURATION_5MS * 1.25 * 10 );
+        BREAK;
+        case LC3PLUS_FRAME_DURATION_7p5MS:
+            selector = 3 * ( 100.0 / ( LC3PLUS_FRAME_DURATION_7p5MS * 1.25 * 10 ) );
+            n_help = ( nbLostFramesInRow + ( 100 / ( LC3PLUS_FRAME_DURATION_7p5MS * 1.25 * 10 ) ) - 1 ) * ( LC3PLUS_FRAME_DURATION_7p5MS * 1.25 * 10 );
+            n_shift = ( nbLostFramesInRow - 3 * ( 100 / ( LC3PLUS_FRAME_DURATION_7p5MS * 1.25 * 10 ) ) ) * 50 / ( LC3PLUS_FRAME_DURATION_7p5MS * 1.25 * 10 );
+            n_help_2 = ( n_shift + ( 100 / ( LC3PLUS_FRAME_DURATION_7p5MS * 1.25 * 10 ) ) - 1 ) * ( LC3PLUS_FRAME_DURATION_7p5MS * 1.25 * 10 );
+        BREAK;
+        case LC3PLUS_FRAME_DURATION_10MS:
+            selector = 3 * ( 100.0 / ( LC3PLUS_FRAME_DURATION_10MS * 1.25 * 10 ) );
+            n_help = ( nbLostFramesInRow + ( 100 / ( LC3PLUS_FRAME_DURATION_10MS * 1.25 * 10 ) ) - 1 ) * ( LC3PLUS_FRAME_DURATION_10MS * 1.25 * 10 );
+            n_shift = ( nbLostFramesInRow - 3 * ( 100 / ( LC3PLUS_FRAME_DURATION_10MS * 1.25 * 10 ) ) ) * 50 / ( LC3PLUS_FRAME_DURATION_10MS * 1.25 * 10 );
+            n_help_2 = ( n_shift + ( 100 / ( LC3PLUS_FRAME_DURATION_10MS * 1.25 * 10 ) ) - 1 ) * ( LC3PLUS_FRAME_DURATION_10MS * 1.25 * 10 );
+        BREAK;
+        case LC3PLUS_FRAME_DURATION_UNDEFINED:
+            n_help = 0;
+            n_shift = 0;
+            n_help_2 = 0;
+            ASSERT(0);
+        BREAK;
+    }
+
+    if ( nbLostFramesInRow <= selector )
+    {
+        Word16 tmp, exp, rest;
+        for( tmp = n_help, exp = -1; tmp >= 0; exp++ )
+        {
+            tmp -= 100;
+        }
+        rest = n_help - exp*100;
+
+        return powWord16rest( 31129, exp, rest );
+    }
+    else
+    {
+        Word16 tmp, exp, rest;
+        for( tmp = n_help_2, exp = -1; tmp >= 0; exp++ )
+        {
+            tmp -= 100;
+        }
+        rest = n_help_2 - exp*100;
+
+        return powWord16rest( 22937, exp, rest );
+    }
+#else // #ifdef CR14_B_REMOVE_FLOAT_IN_BASOP_CODE
     if (nbLostFramesInRow <= 3*(100.0/(frame_dms*1.25*10))){
         n_help = (nbLostFramesInRow + (100/(frame_dms*1.25*10)) - 1) * (frame_dms*1.25*10);
         return powWord16rest(31129,n_help/100,n_help%100);
@@ -1208,11 +1296,59 @@ static Word16 type_2_alpha_long(Word16 nbLostFramesInRow, LC3PLUS_FrameDuration 
         n_help = (n_shift + (100/(frame_dms*1.25*10)) - 1) * (frame_dms*1.25*10);
         return powWord16rest(22937,n_help/100,n_help%100);
     }
+#endif
 }
 
 Word16 type_2_fadeout_fx(Word16 nbLostFramesInRow, LC3PLUS_FrameDuration frame_dms)
 {   
     Word16 n_help;
+#ifdef CR14_B_REMOVE_FLOAT_IN_BASOP_CODE
+    Word16 selector = 0;
+    SWITCH( frame_dms )
+    {
+#ifdef CR9_C_ADD_1p25MS
+        case LC3PLUS_FRAME_DURATION_1p25MS:
+            selector = PLC_FADEOUT_TYPE_2_SELECTOR * 16;
+        BREAK;
+#endif
+        case LC3PLUS_FRAME_DURATION_2p5MS:
+            selector = PLC_FADEOUT_TYPE_2_SELECTOR * 8;
+        BREAK;
+        case LC3PLUS_FRAME_DURATION_5MS:
+            selector = PLC_FADEOUT_TYPE_2_SELECTOR * 4;
+        BREAK;
+        case LC3PLUS_FRAME_DURATION_7p5MS:
+        {
+            const Word16 selectorTable7p5[11] = {0, 2, 5, 8, 10, 13, 16, 18, 21, 24, 26}; // 0...10 * 2.667, cast to Word16
+            selector = selectorTable7p5[PLC_FADEOUT_TYPE_2_SELECTOR];
+        }
+        BREAK;
+        case LC3PLUS_FRAME_DURATION_10MS:
+            selector = PLC_FADEOUT_TYPE_2_SELECTOR * 2;
+        BREAK;
+        case LC3PLUS_FRAME_DURATION_UNDEFINED:
+            selector = 0;
+        ASSERT(0);
+        BREAK;
+    }
+
+    if ( selector >= nbLostFramesInRow )
+    {
+        return type_2_alpha_long( nbLostFramesInRow, frame_dms );
+    }
+    else
+    {
+        n_help = ((nbLostFramesInRow-1)*frame_dms*25 + 200)>>1;
+        Word16 tmp, exp, rest;
+        for( tmp = n_help, exp = -1; tmp >= 0; exp++ )
+        {
+            tmp -= 100;
+        }
+        rest = n_help - exp*100;
+
+        return powWord16rest( 16383, exp, rest );
+    }
+#else //#ifdef CR14_B_REMOVE_FLOAT_IN_BASOP_CODE
     Word16 selector = PLC_FADEOUT_TYPE_2_SELECTOR * 2 * (100/(frame_dms*1.25*10));
 
     if (selector >= nbLostFramesInRow){
@@ -1222,6 +1358,7 @@ Word16 type_2_fadeout_fx(Word16 nbLostFramesInRow, LC3PLUS_FrameDuration frame_d
         n_help = (nbLostFramesInRow + (100/(frame_dms*1.25*10)) - 1) * (frame_dms*1.25*10);
         return powWord16rest(16383,n_help/100, n_help%100);
     } 
+#endif
 }
 
 static Word16 powWord16rest(Word16 base, Word16 exp, Word16 rest) {

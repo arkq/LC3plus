@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -11,6 +11,60 @@
 #define SETUP_DEC_LC3_H
 
 #include "constants.h"
+#include "defines.h"
+
+#ifdef LL_INCL_HPVC
+typedef struct
+{
+    Word16 Np;           /*one of 8,16,32,64,128 */
+    Word16 Kp;           /*value := 0..36  */
+    Word16 NsSafe;           /* {-1, 0,}  1...16  */
+    Word16 NsHdrSafe;        /*  {0, 1, 3} */
+
+    Word16 splitRule;
+    Word16 Ns;           /* {-1, 0,}  1...16  */
+    Word16 NsHdr;        /* 0, 1, 3  */
+
+    /*************************************************************/
+    Word16 LS;              /* leading sign 1= negative, 0 positive */
+
+    Word16 hdrNdbg;           /*      1-16  or   3 */
+    Word16 hdrKdbg;           /*      always Kp ? */
+    Word32 hdrSz;
+    Word32 hdrIdx;
+
+    Word16 splitHdrNsDbg[3];
+    Word16 splitHdrKsDbg[3];
+    Word32 splitHdrLeafSz[3];
+    Word32 splitHdrLeafIdx[3];
+
+    Word32 flatLeafSz[16];   /*  N_MPVQ = Func(Nleaf,Kleaf)   */
+    Word32 flatLeafIdx[16];  /*   only Ns in use */
+
+
+    Word16 start_coeff_nb;   /*   start coeff for debugging */
+    Word32 *Xqm_ptr;        /*  ptr to the start of the integers to be encoded using a HPVC tree, mainly used for verifcation */
+    Word16 xDbg[LL_HPVC_NP_MAX]; /*input  to enum */
+    Word16 xDeEnumDbg[LL_HPVC_NP_MAX]; /* output from deenum Stepd */
+} HpvcTreeEnumCfg;
+
+/* per channel setup  for HPVC lossless decoding */
+typedef struct
+{
+    Word16 active_flag;
+    Word16 mode;             /* -1==TCX_only,  0=early start of HPVC, 1 late start of HPVC */
+    Word16 startCoefListNom[2];
+    Word16 startCoefNom;         /* e.g. 14000/50  => 280,   18000/50 => 360  */
+    Word16 startCoefList[2];  /* endpoint adjusted adjusted startcoefs */
+    Word16 startCoef;         /*  selected lastnz and Nsignal adjusted startcoef  */
+
+    Word16 nomTreeLim;             /* nominal number of HPVC trees allowed, WMOPS optimization */
+#ifdef HPVC_MAXTREE_LIMIT
+    Word16 maxTreeLim;             /* maximum number of HPVC trees allowed, hard limit */
+#endif
+    HpvcTreeEnumCfg* HpvcTreeEnumCfgPtr;  /* ptr to auxilliary singel tree   */
+} HpvcDecCfg;
+#endif /* LL_INCL_HPVC */
 
 typedef struct
 {
@@ -112,10 +166,18 @@ typedef struct
     Word16  prev_gg_e;
     Word16  prev_BW_cutoff_idx_nf;
     Word16 prev_fac_ns_fx;
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    Word32 total_bits;
+#else
     Word16 total_bits;
+#endif
     Word16 enable_lpc_weighting;
     Word16 stDec_ola_mem_fx_exp;
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    Word32 targetBytes;
+#else
     Word16 targetBytes;
+#endif
     Word16 ltpf_mem_e;
     Word16 ltpf_mem_pitch_int;
     Word16 ltpf_mem_pitch_fr;
@@ -145,6 +207,16 @@ typedef struct
 #ifdef NEW_SIGNALLING_SCHEME_1p25
     Word16 ltpfinfo_frame_cntr_fx;  /* individual cntr for each channel*/
 #endif
+#endif
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    Word16 quantizedGainOff_ll;
+#ifdef LL_INCL_HPVC
+    HpvcDecCfg hpvcDecCfg;
+#endif
+    Word16 ll_offQuant;
+    Word16 ll_ari_bits;
+    Word16 ll_adap_prev;
+    Word16 ScaleSignal_Memory;
 #endif
 } DecSetup;
 
@@ -199,6 +271,21 @@ struct LC3PLUS_Dec
     Word16           ltpf_pitch_stability_counter;
 #endif
 #endif
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    Word16 low_band_limit;
+    Word16 lossless;
+    Word16 ll_tns;
+    Word16 ll_tns_remove;
+    Word16 ll_adap_flag;
+    Word16 wavFormat;
+#endif
+  
+#ifdef DEBUG
+    Word16 max_dec_scratch;
+    Word16 max_dec_stack_index;
+#endif
+    Word16 lc3_scratch_initialized; /* Indicate if max. size has been calculated and scratch allocator has been initialized */
+    UWord32 scratch_max_size;       /* Maximum scratch size used throughout decoder */
 };
 
 #endif /* SETUP_DEC_LC3_H */

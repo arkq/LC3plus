@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -54,7 +54,11 @@ extern const UWord32 exp2x_tab_long[32];
  * \brief 1/x, x=[0,1,2,3...]  table
  */
 #ifdef ENABLE_HR_MODE
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+extern const Word16 InvIntTable[166];
+#else
 extern const Word16 InvIntTable[74];
+#endif
 #else
 extern const Word16 InvIntTable[32];
 #endif
@@ -165,6 +169,13 @@ extern const UWord16 rs16_elp_deg3_table[256];
 
 #ifdef ENABLE_HR_MODE
 extern const Word32 invSqrtTab[(128 + 2)];
+#endif
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+extern const Word32  RotVector_1440[2 * (720 - 60)];   /* 720-pt FFT (60x12) */
+extern const Word32  RotVector_1920[2 * (960 - 60)];   /* 960-pt FFT (60x16) */
+extern const PWord32 SineWindow1440[720];          /* DCT-IV L=1440 pre-twiddle */
+extern const PWord32 SineWindow1920[960];          /* DCT-IV L=1920 pre-twiddle */
 #endif
 
 #endif /* __BASOP_UTIL_ROM_H__ */

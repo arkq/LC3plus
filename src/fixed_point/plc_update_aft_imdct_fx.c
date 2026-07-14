@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -47,10 +47,18 @@ void processPLCUpdateAfterIMDCT_fx(Word16 x_fx[], Word16 q_fx_exp, Word16 concea
 
 
       logic16();
+#ifdef CR14_B_REMOVE_FLOAT_IN_BASOP_CODE
+      IF( (sub(bfi,1) == 0) && sub(concealMethod, LC3_CON_TEC_PHASE_ECU) == 0 && xLen == (LprotSzPtr[fs_idx]*5)/8 )
+#else
       IF( (sub(bfi,1) == 0) && sub(concealMethod, LC3_CON_TEC_PHASE_ECU) == 0 && xLen == (Word16)(((double)LprotSzPtr[fs_idx])*0.625))
+#endif
       {   /* % reduced buffering update length during concealment method 2 as Xsav_fx is stored in the  joint  q_old_fx and pcmbufHist buffer */
          usedHistlen = sub(usedHistlen, sub(LprotSzPtr[fs_idx], s_min(MAX_BW_BIN, xLen)));
+#ifdef CR14_B_REMOVE_FLOAT_IN_BASOP_CODE
+         ASSERT( xLen == (LprotSzPtr[fs_idx]*5)/8 ); /*/ only enter here for 10 ms cases */
+#else
          ASSERT(xLen == (Word16)(((double)LprotSzPtr[fs_idx])*0.625)); /*/ only enter here for 10 ms cases */
+#endif
 
          /* actually one can  select to always update xLen(10 ms)  less  samples of x_old_tot,  also in  TDC-PLC bfi frames ,, and for PhECU.PLC  */
       }

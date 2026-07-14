@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -16,7 +16,7 @@
 
 /* Global defines */
 /* K = 16 bit */
-#define RMS_MAX_BUF 1024
+#define RMS_MAX_BUF 4096
 #define SCALE_24 (1 << 23)
 #define MAX_DIFF 0.000061035
 #define MAX_RMS -101.1008

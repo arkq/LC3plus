@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -9,19 +9,21 @@
 
 #include "functions.h"
 
-void attack_detector_fx(LC3PLUS_Enc *enc, EncSetup *setup, Word16 *input, Word16 input_scaling, void *scratch)
+void attack_detector_fx(LC3PLUS_Enc *enc, EncSetup *setup, Word16 *input, Word16 input_scaling, lc3_scratch_t scratch)
 {
     Dyn_Mem_Deluxe_In(
         int    i, j, position;
         Word32 tmp, *block_energy;
         Word16 h16, l16, new_scaling, rescale, input_delta_scaling;
-        Word16 scales[3], *input_16k;
+        Word16 scales[3], *input_16k0, *input_16k;
         Word16 frame_length_16k;
     );
+  
+    frame_length_16k = i_mult( enc->attdec_nblocks, 40 );
 
-    block_energy = scratchAlign(scratch, 0);
-    input_16k    = scratchAlign(block_energy, 4 * 4 + 4);
-    frame_length_16k = i_mult(enc->attdec_nblocks, 40);
+    block_energy = (Word32*) lc3_scratch_push( scratch, 4 * sizeof( *block_energy ) );
+    input_16k0 = (Word16*) lc3_scratch_push( scratch, ( frame_length_16k + 2 ) * sizeof( *input_16k0 ) );
+    input_16k = input_16k0 + 2;
 
     IF (setup->attack_handling)
     {
@@ -114,6 +116,9 @@ void attack_detector_fx(LC3PLUS_Enc *enc, EncSetup *setup, Word16 *input, Word16
         }
         setup->attdec_position = position; move16();
     }
+  
+    input_16k0 = (Word16*) lc3_scratch_pop( scratch, input_16k0 );
+    block_energy = (Word32*) lc3_scratch_pop( scratch, block_energy );
 
     Dyn_Mem_Deluxe_Out();
 }

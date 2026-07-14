@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -88,8 +88,8 @@ static void array_calculate(Word32 *array_tdc, Word32 *array_ns, int length, Wor
     BASOP_sub_sub_end();
 }
 
-static Word16 spectral_centroid_fx_lc(Word16 old_scf_q[], const Word16 *band_offsets, Word16 bands_number, Word16 frame_length,
-                                      Word16 fs_idx, Word8 *scratchBuffer
+static Word32 spectral_centroid_fx_lc(Word16 old_scf_q[], const Word16 *band_offsets, Word16 bands_number, Word16 frame_length,
+                                      Word16 fs_idx, lc3_scratch_t scratch
 #      ifdef ENABLE_HR_MODE
                                       , Word16 hrmode
 #      endif
@@ -97,14 +97,14 @@ static Word16 spectral_centroid_fx_lc(Word16 old_scf_q[], const Word16 *band_off
 
 void processPLCclassify_fx(Word16 plcMeth, Word16 *concealMethod, Word16 *nbLostFramesInRow, Word16 bfi,
                            Word16 ltpf_mem_pitch_int, Word16 frame_length, LC3PLUS_FrameDuration frame_dms, Word16 fs_idx, Word16 yLen,
-                           Word16 q_old_d_fx[], const Word16 *band_offsets, Word16 bands_number, AplcSetup *plcAd, Word8 *scratchBuffer
+                           Word16 q_old_d_fx[], const Word16 *band_offsets, Word16 bands_number, AplcSetup *plcAd, lc3_scratch_t scratch
 #      ifdef ENABLE_HR_MODE
                            , Word16 hrmode
 #      endif
                            )
 {
     Dyn_Mem_Deluxe_In(
-        Word16 scQ15;
+        Word32 scQ32;
         Word32 class;
     );
 
@@ -154,7 +154,11 @@ void processPLCclassify_fx(Word16 plcMeth, Word16 *concealMethod, Word16 *nbLost
     
     /*  assert(bfi != 2 && "Error bfi flag value, state of fadeout cntr   is affected by PartialConcealment  here "); */
     /* Save statistics for 24 kHz, 48 kHz and 96 kHz */
-    IF((sub(bfi, 1) == 0) || (((bfi >= 0) && (sub(bfi, 2) <= 0)) && ((sub(fs_idx, 2) == 0) || (sub(fs_idx, 4) == 0) || (sub(fs_idx, 5) == 0))))  /* note  for PC  bfi==2  is possible */
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    IF((sub(bfi, 1) == 0) || (((bfi >= 0) && (sub(bfi, 2) <= 0)) && ((sub(fs_idx, 2) == 0) || (sub(fs_idx, 4) == 0) || (sub(fs_idx, 5) == 0) || ( sub( fs_idx, 6 ) == 0 )    )))  /* note  for PC  bfi==2  is possible */
+#else
+    IF((sub(bfi, 1) == 0) || (((bfi >= 0) && (sub(bfi, 2) <= 0)) && ((sub(fs_idx, 2) == 0) || (sub(fs_idx, 4) == 0) || (sub(fs_idx, 5) == 0)    )))  /* note  for PC  bfi==2  is possible */
+#endif
     {
         /* increase counter of lost-frames-in-a-row */
         IF (sub(bfi, 1) == 0)
@@ -176,8 +180,14 @@ void processPLCclassify_fx(Word16 plcMeth, Word16 *concealMethod, Word16 *nbLost
                     /* Calculate Features */
 
                     plcAd->norm_corrQ15_fx = plc_xcorr_lc_fx(plcAd->x_old_tot_fx, plcAd->max_len_pcm_plc, ltpf_mem_pitch_int, fs_idx);
-                    scQ15 = spectral_centroid_fx_lc(plcAd->old_scf_q, band_offsets, bands_number, frame_length,
-                        fs_idx, scratchBuffer
+                    
+                    if (scratch->max_scratch_calculation_only)
+                    {
+                        basop_memset(plcAd->old_scf_q, 0, sizeof(*plcAd->old_scf_q) * M);
+                    }
+                    
+                    scQ32 = spectral_centroid_fx_lc(plcAd->old_scf_q, band_offsets, bands_number, frame_length,
+                        fs_idx, scratch
 #ifdef ENABLE_HR_MODE
                         , hrmode
 #endif
@@ -185,7 +195,14 @@ void processPLCclassify_fx(Word16 plcMeth, Word16 *concealMethod, Word16 *nbLost
 
                     /* Classify */
                     class = L_mult(plcAd->norm_corrQ15_fx, 7640);
-                    class = L_mac(class, scQ15, -32768);
+              
+                    /*limitation for lossless*/
+                    scQ32 = MAX(MIN( INT16_MAX, scQ32 ), INT16_MIN + 1 ); 
+                    assert(scQ32 <= INT16_MAX );
+                    assert(scQ32 >  INT16_MIN );
+                    /* */
+                    
+                    class = L_add_sat( class, L_shl_sat(scQ32 * (-32768), 1));
                     class = L_add_sat(class, -335020208);
 
                     IF(class <= 0)
@@ -265,8 +282,8 @@ void processPLCclassify_fx(Word16 plcMeth, Word16 *concealMethod, Word16 *nbLost
     BASOP_sub_sub_end();
 }
 
-Word16 spectral_centroid_fx_lc(Word16 old_scf_q[], const Word16 *band_offsets, Word16 bands_number, Word16 frame_length,
-                               Word16 fs_idx, Word8 *scratchBuffer
+Word32 spectral_centroid_fx_lc(Word16 old_scf_q[], const Word16 *band_offsets, Word16 bands_number, Word16 frame_length,
+                               Word16 fs_idx, lc3_scratch_t scratch
 #ifdef ENABLE_HR_MODE
                                , Word16 hrmode
 #endif
@@ -274,7 +291,7 @@ Word16 spectral_centroid_fx_lc(Word16 old_scf_q[], const Word16 *band_offsets, W
 {
     Dyn_Mem_Deluxe_In(
         Counter i, j;
-        Word32  den32, num32, tmp32;
+        Word32  den32, num32, tmp32, sc32;
         Word16  s, sc, fac, freq, inv, startfreq, stopfreq;
         Word16  s2;
         Word16 *old_scf_q_mod;
@@ -289,10 +306,9 @@ Word16 spectral_centroid_fx_lc(Word16 old_scf_q[], const Word16 *band_offsets, W
     UNUSED(s2);
 #endif
 
-
-    old_scf_q_mod      = (Word16 *)scratchAlign(scratchBuffer, 0);                          /* Size = 2 * M */
-    old_scf_q_mod_exp  = (Word16 *)scratchAlign(old_scf_q_mod, sizeof(*old_scf_q_mod) * M); /* Size = 2 * M */
-    band_offsets_local = (Word16 *)scratchAlign(old_scf_q_mod_exp, sizeof(*old_scf_q_mod_exp) * (M)); /* Size = 2 * bands_number */
+    old_scf_q_mod = (Word16*) lc3_scratch_push( scratch, sizeof( *old_scf_q_mod ) * M );
+    old_scf_q_mod_exp = (Word16*) lc3_scratch_push( scratch, sizeof( *old_scf_q_mod_exp ) * M );
+    band_offsets_local = (Word16*) lc3_scratch_push( scratch, sizeof( *band_offsets_local ) * ( MAX_BANDS_NUMBER + 1 ) );
 
     /* Linear Domain */
     FOR (i = 0; i < M; i++)
@@ -418,16 +434,26 @@ Word16 spectral_centroid_fx_lc(Word16 old_scf_q[], const Word16 *band_offsets, W
         BREAK;
     }
     sc = round_fx(L_mult(sc, fac));
+    sc32 = L_deposit_l(sc);
 #      ifdef ENABLE_HR_MODE
     if (sub(fs_idx, 5) == 0)
     {
-        sc = shl_pos(sc, 1);
+        
+        sc32 = L_shl_pos( sc32, 1 );
+    }
+#      endif
+#      ifdef CR14_A_ADD_LOSSLESS_MODE
+    if ( sub( fs_idx, 6 ) == 0 )
+    {
+        sc32 = L_shl_pos( sc32, 2 );
     }
 #      endif
 
+    band_offsets_local = (Word16*) lc3_scratch_pop( scratch, band_offsets_local );
+    old_scf_q_mod_exp = (Word16*) lc3_scratch_pop( scratch, old_scf_q_mod_exp );
+    old_scf_q_mod = (Word16*) lc3_scratch_pop( scratch, old_scf_q_mod );
+
     Dyn_Mem_Deluxe_Out();
     BASOP_sub_sub_end();
-    return sc;
+    return sc32;
 }
-
-

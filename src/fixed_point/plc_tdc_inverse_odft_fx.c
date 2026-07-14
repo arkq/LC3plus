@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -11,7 +11,7 @@
 #include "functions.h"
 
 void processInverseODFT_fx(Word32 *r_fx, Word16 *r_fx_exp, Word32 *d2_fx, Word16 d2_fx_exp, Word16 n_bands,
-                           Word16 lpc_order, Word8 *scratchBuffer)
+                           Word16 lpc_order, lc3_scratch_t scratch)
 {
     Counter       i;
     Word16        s;
@@ -19,8 +19,6 @@ void processInverseODFT_fx(Word32 *r_fx, Word16 *r_fx_exp, Word32 *d2_fx, Word16
     Word32 *      x;
     const Word32 *inv_odft_twiddle_re;
     const Word32 *inv_odft_twiddle_im;
-    Word8 *       buffer_BASOP_rfftN;
-
 
 #ifdef DYNMEM_COUNT
     Dyn_Mem_In("processInverseODFT_fx", sizeof(struct {
@@ -30,13 +28,11 @@ void processInverseODFT_fx(Word32 *r_fx, Word16 *r_fx_exp, Word32 *d2_fx, Word16
                    Word32 *      x;
                    const Word32 *inv_odft_twiddle_re;
                    const Word32 *inv_odft_twiddle_im;
-                   Word8 *       buffer_BASOP_rfftN;
                    Word32 *      params[2];
                }));
 #endif
 
-    x                  = scratchAlign(scratchBuffer, 0);                     /* Size = 320 bytes */
-    buffer_BASOP_rfftN = scratchAlign(x, sizeof(*x) * (MAX_BANDS_NUMBER_PLC + MAX_BANDS_NUMBER_PLC/2)); /* Size = 480 bytes */
+    x = (Word32*) lc3_scratch_push( scratch, sizeof( *x ) * ( MAX_BANDS_NUMBER_PLC + MAX_BANDS_NUMBER_PLC / 2 ) );
 
     ASSERT(lpc_order <= M);
 #ifdef FIX_PLC_CONFORM_ISSUES
@@ -62,7 +58,7 @@ void processInverseODFT_fx(Word32 *r_fx, Word16 *r_fx_exp, Word32 *d2_fx, Word16
             x[n_bands + 2*i] = d2_fx[n_bands - 1 - 2 * i]; move32();
             x[n_bands + 2*i + 1] = 0;                      move32();
         }
-        BASOP_cfft(&x[0], &x[1], n_bands, 2, &d2_fx_exp, (Word32*)buffer_BASOP_rfftN);
+        BASOP_cfft(&x[0], &x[1], n_bands, 2, &d2_fx_exp, scratch);
     }
     ELSE
     {
@@ -73,7 +69,7 @@ void processInverseODFT_fx(Word32 *r_fx, Word16 *r_fx_exp, Word32 *d2_fx, Word16
             x[n_bands2 + i] = d2_fx[n_bands - 1 - 2 * i]; move32();
         }
 
-        BASOP_rfftN(x, n_bands, &d2_fx_exp, buffer_BASOP_rfftN);
+        BASOP_rfftN(x, n_bands, &d2_fx_exp, scratch);
     }
 
     inv_odft_twiddle_re = inv_odft_twiddle_80_re;
@@ -136,6 +132,8 @@ void processInverseODFT_fx(Word32 *r_fx, Word16 *r_fx_exp, Word32 *d2_fx, Word16
         }
         *r_fx_exp = 0; move16();
     }
+  
+    x = (Word32*) lc3_scratch_pop( scratch, x );
 
 #ifdef DYNMEM_COUNT
     Dyn_Mem_Out();

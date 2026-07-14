@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -50,11 +50,11 @@ static int   read_bitstream_frame(FILE *bitstream_file, uint8_t *bytes, int size
 static FILE *fopen_with_ext(const char *file, const char *ext, const char *mode);
 static void  cleanup(void);
 static void  exit_if(int condition, const char *message);
-LC3PLUS_Error    channel_coder_pack(LC3PLUS_Dec *decoder, UWord8 *input_bytes, int num_bytes_in, void *scratch, int bfi_ext,
+LC3PLUS_Error    channel_coder_pack(LC3PLUS_Dec *decoder, UWord8 *input_bytes, int num_bytes_in, void* scratch, int bfi_ext,
                                 int *lc3_num_bytes, int gross_bytes, int epmode);
-LC3PLUS_Error    channel_coder_unpack(LC3PLUS_Dec *decoder, UWord8 *input_bytes, int num_bytes_in, void *scratch, int bfi_ext,
+LC3PLUS_Error    channel_coder_unpack(LC3PLUS_Dec *decoder, UWord8 *input_bytes, int num_bytes_in, void* scratch, int bfi_ext,
                                   int *lc3_num_bytes);
-void processReorderBitstream_dec_fx(UWord8 *bytes, Word16 n_pccw, Word16 n_pc, Word16 b_left, Word8 *scratchBuffer);
+void processReorderBitstream_dec_fx(UWord8 *bytes, Word16 n_pccw, Word16 n_pc, Word16 b_left, lc3_scratch_t scratch);
 
 static FILE *output_bitstream;
 static FILE *input_bitstream;
@@ -144,13 +144,17 @@ int main(int ac, char **av)
 #endif
 
     /* Setup Decoder */
+    int scratch_size_dec = 0;
     decoder_size = lc3plus_dec_get_size(sampleRate, nChannels, (LC3PLUS_PlcMode)LC3PLUS_PLC_ADVANCED);
     decoder      = malloc(decoder_size);
     err          = lc3plus_dec_init(decoder, sampleRate, nChannels, (LC3PLUS_PlcMode)LC3PLUS_PLC_ADVANCED
 #ifdef ENABLE_HR_MODE
                                     , arg.hrmode
 #endif
-                                   );
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                    , 16 /* dummy value 16-bit */
+#endif
+                                    , &scratch_size_dec);
     exit_if(err, ERROR_MESSAGE[err]);
 
     err = lc3plus_dec_set_frame_dms(decoder, (int)( (arg.frame_ms * 100) / 125 ));
@@ -180,7 +184,7 @@ int main(int ac, char **av)
                                              arg.frame_ms, epmode_out, arg.formatG192, arg.configFilenameG192);
     exit_if(!output_bitstream, "Error creating bitstream file!");
 
-    scratch_size = lc3plus_dec_get_scratch_size(decoder);
+    scratch_size = lc3plus_dec_get_scratch_size(decoder, &scratch_size_dec);
     scratch      = malloc(scratch_size);
     exit_if(!scratch, "Failed to allocate scratch memory!");
 
@@ -535,7 +539,7 @@ static int read_bitstream_frame(FILE *bitstream_file, uint8_t *bytes, int size, 
     }
 }
 
-LC3PLUS_Error channel_coder_pack(LC3PLUS_Dec *decoder, UWord8 *bytes, int num_bytes_in, void *scratch, int bfi_ext,
+LC3PLUS_Error channel_coder_pack(LC3PLUS_Dec *decoder, UWord8 *bytes, int num_bytes_in, void* scratch, int bfi_ext,
                              int *lc3_num_bytes, int gross_bytes, int epmode)
 {
     int       ch = 0, bfi = bfi_ext;
@@ -563,13 +567,11 @@ LC3PLUS_Error channel_coder_pack(LC3PLUS_Dec *decoder, UWord8 *bytes, int num_by
     Word16 *int_scf_fx, /* *x_fx,*/ *indexes, *scf_q;
     Word32 *L_scf_idx;
     Word32 *q_d_fx;
-    Word8 * currentScratch;
-    // DecSetup *h_DecSetup = decoder->channel_setup[channel];
 
     /* BUFFER INITIALISATION. Some buffers may overlap since they are not used in the whole decoding process */
     q_d_fx = scratchAlign(scratch, 0); /* Size = 4 * MAX_LEN bytes */
     resBitBuf =
-        scratchAlign(q_d_fx, sizeof(*q_d_fx) * decoder->frame_length); /* Size = 2 * NPRM_RESQ = 2 * MAX_LEN bytes */
+        scratchAlign(q_d_fx, sizeof(*q_d_fx) * decoder->frame_length); /* Size = 2 * MAX_LEN bytes */
     indexes = scratchAlign(
         resBitBuf, sizeof(*resBitBuf) * decoder->frame_length); /* Size = 2 * TNS_NUMFILTERS_MAX * MAXLAG = 32 bytes */
     L_scf_idx      = scratchAlign(indexes, sizeof(*indexes) * TNS_NUMFILTERS_MAX *
@@ -579,7 +581,8 @@ LC3PLUS_Error channel_coder_pack(LC3PLUS_Dec *decoder, UWord8 *bytes, int num_by
     int_scf_fx_exp = scratchAlign(scf_q, sizeof(*scf_q) * M); /* Size = 2 * MAX_BANDS_NUMBER = 128 bytes */
     int_scf_fx     = scratchAlign(int_scf_fx_exp,
                               sizeof(*int_scf_fx_exp) * MAX_BANDS_NUMBER); /* Size = 2 * MAX_BANDS_NUMBER = 128 bytes */
-    currentScratch = scratchAlign(int_scf_fx, sizeof(*int_scf_fx) * MAX_BANDS_NUMBER); /* Size = 4 * MAX_LEN */
+  
+    UNUSED(int_scf_fx);
 
     if (bfi == 0)
     {
@@ -606,40 +609,79 @@ LC3PLUS_Error channel_coder_pack(LC3PLUS_Dec *decoder, UWord8 *bytes, int num_by
 
         Word16 ch_bfi = channel_bfi;
         nbbits        = shl_pos(h_DecSetup->targetBytes, 3);
+      
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        Word16 dummy_ll_adap_flag = 0;
+        Word16 dummy_b_relative = 0;
+        Word16 dummy_off_idx = 0;
+        Word16 dummy_tns_lsb_num_remove = 0;
+        Word16 dummy_fallback = 0;
+        UWord8* dummy_deltaCodedBits = NULL;
+        Word16 dummy_scaleSignal = 0;
+#endif
+
         processDecoderEntropy_fx(bytes, &bp_side, &mask_side, nbbits, decoder->yLen, decoder->fs_idx,
                                  decoder->BW_cutoff_bits, &tns_numfilters, &lsbMode, &lastnz, &ch_bfi, tns_order,
                                  &fac_ns_idx, &gg_idx, &gg_idx, ltpf_idx, L_scf_idx, decoder->frame_dms
-#ifdef CR9_C_ADD_1p25MS 
-#ifdef FIX_TX_RX_STRUCT_STEREO                
+#ifdef CR9_C_ADD_1p25MS
+#ifdef FIX_TX_RX_STRUCT_STEREO
                                  , h_DecSetup->ltpf_rx_status, &h_DecSetup->ltpf_mem_continuation
-#    ifdef NEW_SIGNALLING_SCHEME_1p25   
+#    ifdef NEW_SIGNALLING_SCHEME_1p25
                                  , &h_DecSetup->ltpfinfo_frame_cntr_fx
 #    endif
 #else
                                 , decoder->ltpf_rx_status, &decoder->ltpf_mem_continuation
-#endif 
-#endif 
+#endif
+#endif
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                               , 0, 0, 0, 0
+                               , &dummy_ll_adap_flag, &dummy_b_relative, &dummy_off_idx, &dummy_tns_lsb_num_remove
+                               , dummy_deltaCodedBits
+                               , 16
+                               , &dummy_fallback
+                               , &dummy_scaleSignal
+#ifdef LL_INCL_HPVC
+                               , NULL
+#endif
+#endif
                                 );
         channel_bfi = ch_bfi;
+      
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        UWord8 *dummy_det_curve = NULL;
+        Word16 dummy_ll_flag = 0;
+        Word16 dummy_lossless = 0;
+#endif
+      
+    UWord8 tmp_scratch[LC3PLUS_ENC_MAX_USER_SYSTEM_SCRATCH_SIZE]; /* temp/dummy scratch buffer needed to run the encoder with a zero-frame to calculate the max. used scratch size */
+
+    lc3_scratch_t enc_scratch = lc3_scratch_init( (void*) tmp_scratch, LC3PLUS_ENC_MAX_SCRATCH_SIZE, SCRATCH_BUFFER_ALIGNMENT_BITS, SCRATCH_ALLOCATOR_CALCULATE_MAX );
 
         processAriDecoder_fx(bytes, &bp_side, &mask_side, nbbits, decoder->yLen, decoder->fs_idx,
                              h_DecSetup->enable_lpc_weighting, tns_numfilters, lsbMode, lastnz, &gain, tns_order,
                              fac_ns_idx, gg_idx, decoder->frame_dms, decoder->n_pc, 0, shr_pos(nbbits, 3), 1, &gain,
-                             &b_left, &gain, sqQdec, &gain, resBitBuf, indexes, &gain, currentScratch
+                             &b_left, &gain, sqQdec, &gain, resBitBuf, indexes, &gain, enc_scratch
 #ifdef ENABLE_HR_MODE
                             , decoder->hrmode
+#endif
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                           , dummy_det_curve, dummy_ll_flag
+                           , dummy_lossless
+#endif
+#ifdef LL_INCL_HPVC
+                           , NULL
 #endif
         );
 
         IF (b_left > 0)
         {
-            processReorderBitstream_fx(bytes, decoder->n_pccw, decoder->n_pc, b_left, currentScratch);
+            processReorderBitstream_fx(bytes, decoder->n_pccw, decoder->n_pc, b_left, enc_scratch);
         }
         // end reordering
 
         if (epmode)
         { // target bytes = data bytes , gross_bytes = slot bytes
-            fec_encoder(epmode, decoder->epmr, bytes, data_bytes, gross_bytes, decoder->n_pccw, scratch);
+            fec_encoder(epmode, decoder->epmr, bytes, data_bytes, gross_bytes, decoder->n_pccw, enc_scratch);
 
             *lc3_num_bytes += gross_bytes;
             // output_size += gross_bytes;
@@ -656,8 +698,7 @@ LC3PLUS_Error channel_coder_pack(LC3PLUS_Dec *decoder, UWord8 *bytes, int num_by
     return bfi == 1 ? LC3PLUS_DECODE_ERROR : LC3PLUS_OK;
 }
 
-LC3PLUS_Error channel_coder_unpack(LC3PLUS_Dec *decoder, UWord8 *input_bytes, int num_bytes_in, void *scratch, int bfi_ext,
-                               int *lc3_num_bytes)
+LC3PLUS_Error channel_coder_unpack(LC3PLUS_Dec *decoder, UWord8 *input_bytes, int num_bytes_in, void *scratch, int bfi_ext, int *lc3_num_bytes)
 {
     int       ch = 0, bfi = bfi_ext;
     LC3PLUS_Error err = LC3PLUS_OK;
@@ -686,12 +727,13 @@ LC3PLUS_Error channel_coder_unpack(LC3PLUS_Dec *decoder, UWord8 *input_bytes, in
     Word16 *int_scf_fx, *indexes, *scf_q;
     Word32 *L_scf_idx;
     Word32 *q_d_fx;
-    Word8 * currentScratch;
+  
+    UNUSED(int_scf_fx);
 
     /* BUFFER INITIALISATION. Some buffers may overlap since they are not used in the whole decoding process */
     q_d_fx = scratchAlign(scratch, 0); /* Size = 4 * MAX_LEN bytes */
     resBitBuf =
-        scratchAlign(q_d_fx, sizeof(*q_d_fx) * decoder->frame_length); /* Size = 2 * NPRM_RESQ = 2 * MAX_LEN bytes */
+        scratchAlign(q_d_fx, sizeof(*q_d_fx) * decoder->frame_length); /* Size = 2 * MAX_LEN bytes */
     indexes = scratchAlign(
         resBitBuf, sizeof(*resBitBuf) * decoder->frame_length); /* Size = 2 * TNS_NUMFILTERS_MAX * MAXLAG = 32 bytes */
     L_scf_idx      = scratchAlign(indexes, sizeof(*indexes) * TNS_NUMFILTERS_MAX *
@@ -701,7 +743,6 @@ LC3PLUS_Error channel_coder_unpack(LC3PLUS_Dec *decoder, UWord8 *input_bytes, in
     int_scf_fx_exp = scratchAlign(scf_q, sizeof(*scf_q) * M); /* Size = 2 * MAX_BANDS_NUMBER = 128 bytes */
     int_scf_fx     = scratchAlign(int_scf_fx_exp,
                               sizeof(*int_scf_fx_exp) * MAX_BANDS_NUMBER); /* Size = 2 * MAX_BANDS_NUMBER = 128 bytes */
-    currentScratch = scratchAlign(int_scf_fx, sizeof(*int_scf_fx) * MAX_BANDS_NUMBER); /* Size = 4 * MAX_LEN */
 
     if (bfi == 0)
     {
@@ -710,6 +751,10 @@ LC3PLUS_Error channel_coder_unpack(LC3PLUS_Dec *decoder, UWord8 *input_bytes, in
 
     decoder->epmr = 12;
     out_bfi       = 0;
+  
+    UWord8 tmp_scratch[LC3PLUS_ENC_MAX_USER_SYSTEM_SCRATCH_SIZE]; /* temp/dummy scratch buffer needed to run the encoder with a zero-frame to calculate the max. used scratch size */
+
+    lc3_scratch_t enc_scratch = lc3_scratch_init( (void*) tmp_scratch, LC3PLUS_ENC_MAX_SCRATCH_SIZE, SCRATCH_BUFFER_ALIGNMENT_BITS, SCRATCH_ALLOCATOR_CALCULATE_MAX );
 
     for (ch = 0; ch < decoder->channels; ch++)
     {
@@ -741,19 +786,45 @@ LC3PLUS_Error channel_coder_unpack(LC3PLUS_Dec *decoder, UWord8 *input_bytes, in
         {
             Word16 ch_bfi = channel_bfi;
             nbbits        = shl_pos(*lc3_num_bytes, 3);
+          
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            Word16 dummy_lossless = 0;
+            Word16 dummy_ll_tns = 0;
+            Word16 dummy_ll_offQuant = 0;
+            Word16 dummy_ll_tns_remove = 0;
+            Word16 dummy_ll_adap_flag = 0;
+            Word16 dummy_b_relative = 0;
+            Word16 dummy_off_idx = 0;
+            Word16 dummy_tns_lsb_num_remove = 0;
+            Word16 dummy_fallback = 0;
+            UWord8* dummy_deltaCodedBits = NULL;
+            Word16 dummy_scaleSignal = 0;
+#endif
+
             processDecoderEntropy_fx(input_bytes, &bp_side, &mask_side, nbbits, decoder->yLen, decoder->fs_idx,
                                      decoder->BW_cutoff_bits, &tns_numfilters, &lsbMode, &lastnz, &ch_bfi, tns_order,
                                      &fac_ns_idx, &gg_idx, &gg_idx, ltpf_idx, L_scf_idx, decoder->frame_dms
-#ifdef CR9_C_ADD_1p25MS           
-#ifdef FIX_TX_RX_STRUCT_STEREO                      
+#ifdef CR9_C_ADD_1p25MS
+#ifdef FIX_TX_RX_STRUCT_STEREO
                                     , decoder->channel_setup[ch]->ltpf_rx_status, &decoder->channel_setup[ch]->ltpf_mem_continuation
-#    ifdef NEW_SIGNALLING_SCHEME_1p25   
+#    ifdef NEW_SIGNALLING_SCHEME_1p25
                                  , &h_DecSetup->ltpfinfo_frame_cntr_fx
 #    endif
 #else
                                     , decoder->ltpf_rx_status, ,&decoder->ltpf_mem_continuation
 #endif
-#endif   
+#endif
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                               , dummy_lossless, dummy_ll_tns, dummy_ll_offQuant, dummy_ll_tns_remove
+                               , &dummy_ll_adap_flag, &dummy_b_relative, &dummy_off_idx, &dummy_tns_lsb_num_remove
+                               , dummy_deltaCodedBits
+                               , 16
+                               , &dummy_fallback
+                               , &dummy_scaleSignal
+#ifdef LL_INCL_HPVC
+                               , NULL
+#endif
+#endif
                                     );
             
             channel_bfi = ch_bfi;
@@ -761,19 +832,31 @@ LC3PLUS_Error channel_coder_unpack(LC3PLUS_Dec *decoder, UWord8 *input_bytes, in
 
         IF (decoder->combined_channel_coding == 0 && decoder->n_pc > 0)
         {
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            UWord8* dummy_det_curve = NULL;
+            Word16 dummy_ll_flag = 0;
+            Word16 dummy_lossless = 0;
+#endif
             processAriDecoder_fx(input_bytes, &bp_side, &mask_side, nbbits, decoder->yLen, decoder->fs_idx,
                                  h_DecSetup->enable_lpc_weighting, tns_numfilters, lsbMode, lastnz, &gain, tns_order,
                                  fac_ns_idx, gg_idx, decoder->frame_dms, decoder->n_pc, 0, shr_pos(nbbits, 3), 2, &gain,
-                                 &b_left, &gain, sqQdec, &gain, resBitBuf, indexes, &gain, currentScratch
+                                 &b_left, &gain, sqQdec, &gain, resBitBuf, indexes, &gain, enc_scratch
 #ifdef ENABLE_HR_MODE
                                  , decoder->hrmode
+#endif
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                           , dummy_det_curve, dummy_ll_flag
+                           , dummy_lossless
+#endif
+#ifdef LL_INCL_HPVC
+                           , NULL
 #endif
             );
 
             IF (b_left > 0)
             {
                 processReorderBitstream_dec_fx(input_bytes, decoder->n_pccw, decoder->n_pc,
-                                               b_left - shr_sat(add(decoder->n_pc, 1), 1), currentScratch);
+                                               b_left - shr_sat(add(decoder->n_pc, 1), 1), enc_scratch);
             }
         }
         // end reordering
@@ -788,12 +871,12 @@ LC3PLUS_Error channel_coder_unpack(LC3PLUS_Dec *decoder, UWord8 *input_bytes, in
     return bfi == 1 ? LC3PLUS_DECODE_ERROR : LC3PLUS_OK;
 }
 
-void processReorderBitstream_dec_fx(UWord8 *bytes, Word16 n_pccw, Word16 n_pc, Word16 b_left, Word8 *scratchBuffer)
+void processReorderBitstream_dec_fx(UWord8 *bytes, Word16 n_pccw, Word16 n_pc, Word16 b_left, lc3_scratch_t scratch)
 {
     Word16  block_bytes;
     UWord8 *bytes_tmp;
 
-    bytes_tmp = (UWord8 *)scratchAlign(scratchBuffer, 0); /* Size = LC3PLUS_MAX_BYTES */
+    bytes_tmp = (UWord8*) lc3_scratch_push( scratch, sizeof( *bytes_tmp ) * MAX_LEN );
 
     if (n_pccw == 0)
     {
@@ -809,4 +892,6 @@ void processReorderBitstream_dec_fx(UWord8 *bytes, Word16 n_pccw, Word16 n_pc, W
     basop_memmove(&bytes_tmp[0], &bytes[block_bytes], b_left * sizeof(UWord8));
     basop_memmove(&bytes_tmp[b_left], &bytes[0], block_bytes * sizeof(UWord8));
     basop_memmove(&bytes[0], &bytes_tmp[0], add(block_bytes, b_left) * sizeof(UWord8));
+  
+    bytes_tmp = (UWord8*) lc3_scratch_pop( scratch, bytes_tmp );
 }

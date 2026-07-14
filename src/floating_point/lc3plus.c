@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -75,8 +75,10 @@ static int lc3plus_frame_size_supported(LC3PLUS_FrameDuration frame_dms)
     case LC3PLUS_FRAME_DURATION_7p5MS: /* fallthru */
     case LC3PLUS_FRAME_DURATION_10MS:
             return 1;
-    default: return 0;
+    default: break;
     }
+    
+    return 0;
 }
 
 static int null_in_list(void **list, int n)
@@ -202,6 +204,7 @@ LC3PLUS_Error lc3plus_enc_set_frame_dms(LC3PLUS_Enc *encoder, LC3PLUS_FrameDurat
 #ifdef CR9_C_ADD_1p25MS
     RETURN_IF(encoder->fs == 8000 && frame_dms == LC3PLUS_FRAME_DURATION_1p25MS, LC3PLUS_SAMPLERATE_ERROR);
 #endif
+    RETURN_IF(encoder->hrmode == 2 && frame_dms == LC3PLUS_FRAME_DURATION_1p25MS, LC3PLUS_FRAMEMS_ERROR);
   
     encoder->frame_dms = frame_dms;
     encoder->frame_ms = frame_dms;
@@ -265,6 +268,13 @@ LC3PLUS_Error lc3plus_enc_fl(LC3PLUS_Enc* encoder, void** input_samples, int bit
     return LC3PLUS_OK;
 }
 
+LC3PLUS_Error lc3plus_enc_get_lossless_status(LC3PLUS_Enc* const encoder, int16_t* const is_lossless)
+{
+    RETURN_IF(encoder == NULL, LC3PLUS_NULL_ERROR);
+    *is_lossless = 0;
+    return LC3PLUS_OK;
+}
+
 /* decoder functions *********************************************************/
 
 LC3PLUS_Error lc3plus_dec_init(LC3PLUS_Dec* decoder, int samplerate, int channels, LC3PLUS_PlcMode plc_mode, int hrmode)
@@ -275,6 +285,13 @@ LC3PLUS_Error lc3plus_dec_init(LC3PLUS_Dec* decoder, int samplerate, int channel
     RETURN_IF(!lc3plus_plc_mode_supported(plc_mode), LC3PLUS_PLCMODE_ERROR);
     RETURN_IF(samplerate==96000 && hrmode == 0, LC3PLUS_HRMODE_ERROR);
     return FillDecSetup(decoder, samplerate, channels, plc_mode, hrmode);
+}
+
+LC3PLUS_Error lc3plus_dec_get_lossless_status(LC3PLUS_Dec* const decoder, int16_t* const is_lossless)
+{
+    RETURN_IF(decoder == NULL, LC3PLUS_NULL_ERROR);
+    *is_lossless = 0;
+    return LC3PLUS_OK;
 }
 
 int lc3plus_dec_get_size(int samplerate, int channels)

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -10,7 +10,7 @@
 #include "defines.h"
 #include "functions.h"
 
-void processPreEmphasis_fx(Word32 *d2_fx, Word16 *d2_fx_exp, Word16 fs_idx, Word16 n_bands, LC3PLUS_FrameDuration frame_dms, Word8 *scratchBuffer)
+void processPreEmphasis_fx(Word32 *d2_fx, Word16 *d2_fx_exp, Word16 fs_idx, Word16 n_bands, LC3PLUS_FrameDuration frame_dms, lc3_scratch_t scratch)
 {
     Word16        s;
     Word32        nrg;
@@ -32,7 +32,7 @@ void processPreEmphasis_fx(Word32 *d2_fx, Word16 *d2_fx_exp, Word16 fs_idx, Word
                }));
 #endif
 
-    d2_band_fx_exp = (Word16 *)scratchAlign(scratchBuffer, 0); /* Size = 2 * MAX_BANDS_NUMBER_PLC = 160 bytes */
+    d2_band_fx_exp = (Word16*) lc3_scratch_push( scratch, sizeof( *d2_band_fx_exp ) * n_bands );
 
     pre_emph   = lpc_lin_pre_emphasis[fs_idx];
     pre_emph_e = lpc_lin_pre_emphasis_e[fs_idx];
@@ -99,10 +99,10 @@ void processPreEmphasis_fx(Word32 *d2_fx, Word16 *d2_fx_exp, Word16 fs_idx, Word
     }
     /* Save common exponent for all bands */
     *d2_fx_exp = add(*d2_fx_exp, smax); move16();
+  
+    d2_band_fx_exp = (Word16*) lc3_scratch_pop( scratch, d2_band_fx_exp );
 
 #ifdef DYNMEM_COUNT
     Dyn_Mem_Out();
 #endif
 }
-
-

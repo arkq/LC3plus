@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -280,8 +280,13 @@ void processEstimateGlobalGain_fl(LC3_FLOAT x[], LC3_INT lg, LC3_INT nbitsSQ, LC
                 {   /* 3 tuple loop */
                     N = 3 * (int)ceil(lg / 3.0);
 
+#ifdef CR14_A_ADD_1p25MS_HR
+                    assert( lg == 50 || lg == 40 || lg == 30 || lg == 20 || lg == 60 || lg == 120 );
+                    assert( N == ( 40 * 3 ) || N == ( 20 * 3 ) || N == ( 17 * 3 ) || N == ( 14 * 3 ) || N == ( 10 * 3 ) || N == ( 7 * 3 ) );
+#else
                     assert(lg == 50 || lg == 40 || lg == 30 || lg == 20);
                     assert(N == (17 * 3) || N == (14 * 3) || N == (10 * 3) || N == (7 * 3));
+#endif
 
                     j = 0;
                     for (i = 0; i < N; i = i + 3)

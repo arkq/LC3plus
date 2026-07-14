@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -37,7 +37,7 @@ typedef __int32       int32_t;
 #define LC3PLUS_VERSION_INT(major, minor, micro) (((major) << 16) | ((minor) << 8) | (micro))
 
 /*! Version number to ensure header and binary are matching. */
-#define LC3PLUS_VERSION LC3PLUS_VERSION_INT(1, 8, 0)
+#define LC3PLUS_VERSION LC3PLUS_VERSION_INT(1, 9, 2)
 
 /*! Maximum number of supported channels. The actual binary might support
  *  less, use lc3plus_channels_supported() to check. */
@@ -265,6 +265,16 @@ int lc3plus_enc_get_real_bitrate(const LC3PLUS_Enc* encoder);
  */
 int lc3plus_enc_get_num_bytes(const LC3PLUS_Enc *encoder);
 
+/*! Get the lossless coding status of the last encoded frame.
+ *  In the floating-point reference implementation, lossless mode is not supported,
+ *  so this function always returns 0.
+ *
+ *  \param[in]  encoder     Encoder handle.
+ *  \param[out] is_lossless Pointer to receive lossless status (always 0).
+ *  \return                 LC3PLUS_OK on success or appropriate error code.
+ */
+LC3PLUS_Error lc3plus_enc_get_lossless_status(LC3PLUS_Enc* const encoder, int16_t* const is_lossless);
+
 /*! Set encoder bitrate for all channels.
  *  This function must be called at least once before encoding the first frame, but
  *  after other configuration functions such as lc3plus_enc_set_frame_ms().
@@ -452,6 +462,16 @@ int lc3plus_dec_get_output_samples(const LC3PLUS_Dec* decoder);
  *  \return                 Delay in samples or 0 on error.
  */
 int lc3plus_dec_get_delay(const LC3PLUS_Dec* decoder);
+
+/*! Get the lossless coding status of the last decoded frame.
+ *  In the floating-point reference implementation, lossless mode is not supported,
+ *  so this function always returns 0.
+ *
+ *  \param[in]  decoder     Decoder handle.
+ *  \param[out] is_lossless Pointer to receive lossless status (always 0).
+ *  \return                 LC3PLUS_OK on success or appropriate error code.
+ */
+LC3PLUS_Error lc3plus_dec_get_lossless_status(LC3PLUS_Dec* const decoder, int16_t* const is_lossless);
 
 /*! Set the frame length for LC3plus encoder in deci milliseconds.
  *  Not all lengths may be enabled, in that case LC3PLUS_FRAMEMS_ERROR is returned.

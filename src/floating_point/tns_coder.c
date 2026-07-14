@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -236,8 +236,11 @@ void processTnsCoder_fl(LC3_FLOAT* x, LC3_INT bw_cutoff_idx, LC3_INT bw_fcbin, L
         for (sub = 1; sub <= nSubdivisions; sub++) {
             subdiv_startfreq = floor(subdiv_len * (sub - 1)) + startfreq[f] - 1;
             subdiv_stopfreq  = floor(subdiv_len * sub) + startfreq[f] - 1;
-            
+#ifdef CR15_B_MISC_FIXES
+            if (fs == 32000 && frame_dms == LC3PLUS_FRAME_DURATION_7p5MS)
+#else
             if (fs == 32000 && frame_dms == 75)
+#endif
             {
                 if (subdiv_startfreq == 83)
                 {

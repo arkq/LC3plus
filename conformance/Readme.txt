@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -13,6 +13,10 @@ LC3plus Conformance script V1.2.8
 
 Changelog
 ==============
+    - V1.3.1 2026-06-01
+        - Added stereo tests for lossless mode
+    - V1.3.0 2026-04-29
+        - Added tests for lossless mode
     - V1.2.8 2025-09-12
         - Added conditions to ensure stable conformance with different LTPF behaviour 
     - V1.2.7 2025-02-07
@@ -157,6 +161,7 @@ option_ep_debug  = -ep_dbg "{arg}"                         # command line option
 option_ep_mode   = -epmode {arg}                           # command line option to specify error protection mode, arg is value between 0 and 4
 delay            = 0                                       # global option to set delay between coded test and original signal (reference has delay=0)
 hrmode           = 0                                       # global option to set hrmode. set hrmode=1 for aktivation, default is 0.d
+lossless         = 0                                       # global option to set lossless mode. set lossless=1 for aktivation, default is 0.d
 
 Since all tests use the G192 format to create and decode bitstreams, be sure to
 add the '-formatG192' option to your encoder and decoder under test command line.

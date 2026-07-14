@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -9,7 +9,6 @@
 
 #include "functions.h"
 
-
 void processNoiseFactor_fx(Word16 *fac_ns_idx, Word16 x_e, Word32 x[],
 #    ifdef ENABLE_HR_MODE
                            Word32 xq[],
@@ -17,7 +16,7 @@ void processNoiseFactor_fx(Word16 *fac_ns_idx, Word16 x_e, Word32 x[],
                            Word16 xq[],
 #    endif
                            Word16 gg, Word16 gg_e, Word16 BW_cutoff_idx, LC3PLUS_FrameDuration frame_dms, Word16 target_bytes,
-                           Word8 *scratchBuffer
+                           lc3_scratch_t scratch
 #    ifdef ENABLE_HR_MODE
                            ,Word16 hrmode
 #    endif
@@ -25,10 +24,6 @@ void processNoiseFactor_fx(Word16 *fac_ns_idx, Word16 x_e, Word32 x[],
 {
     Dyn_Mem_Deluxe_In(Counter k; Word16 nzeros, s1, s2, s3, c, idx, fac_unq, *ind;
                       Word16 noisefillwidth, noisefillstart, N; Word32 Lsum;);
-
-
-
-    ind = (Word16 *)scratchAlign(scratchBuffer, 0); /* Size = 2 * MAX_LEN bytes */
 
     noisefillwidth = 0;
     noisefillstart = 0;
@@ -47,6 +42,8 @@ void processNoiseFactor_fx(Word16 *fac_ns_idx, Word16 x_e, Word32 x[],
         N = BW_cutoff_bin_all[BW_cutoff_idx];
         move16();
     }
+    
+    ind = (Word16*) lc3_scratch_push( scratch, N * sizeof( *ind ) );
 
     SWITCH (frame_dms)
     {
@@ -253,6 +250,8 @@ void processNoiseFactor_fx(Word16 *fac_ns_idx, Word16 x_e, Word32 x[],
     *fac_ns_idx = idx;
     move16();
 
+    ind = (Word16*) lc3_scratch_pop( scratch, ind );
+    
     Dyn_Mem_Deluxe_Out();
 }
 

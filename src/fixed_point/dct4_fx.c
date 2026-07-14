@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -17,7 +17,7 @@ void dct_IV(Word32 *pDat,       /* i/o: pointer to data buffer */
 #  ifdef ENABLE_HR_MODE
             Word16  hrmode,     /* indicate high precision usage */
 #  endif
-            Word32 *workBuffer) /* : size of L */
+            lc3_scratch_t scratch) /* : size of L */
             
 {
     Word16 sin_step;
@@ -138,7 +138,7 @@ void dct_IV(Word32 *pDat,       /* i/o: pointer to data buffer */
     }
 #endif
 
-    BASOP_cfft(&pDat[0], &pDat[1], M_var, 2, pDat_e, workBuffer);
+    BASOP_cfft(&pDat[0], &pDat[1], M_var, 2, pDat_e, scratch);
 
     pDat_0 = &pDat[0];
     pDat_1 = &pDat[L - 2];

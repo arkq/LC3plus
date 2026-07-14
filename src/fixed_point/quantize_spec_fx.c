@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -11,20 +11,44 @@
 
 #  ifdef ENABLE_HR_MODE
 void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word32 gain, Word16 gain_e, Word32 xq[], Word16 nt, Word16 target,
-                            Word16 totalBits, Word16 *nBits, Word16 *nBits2, Word16 fs_idx, Word16 *lastnzout,
-                            Word16 *codingdata, Word16 *lsbMode, Word16 mode, Word16 hrmode)
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                            Word32 totalBits, Word32 *nBits, Word32 *nBits2,          
+#else
+                            Word16 totalBits, Word16 *nBits, Word16 *nBits2, 
+#endif
+                            Word16 fs_idx, Word16 *lastnzout,
+                            Word16 *codingdata, Word16 *lsbMode, Word16 mode, Word16 hrmode
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                            , Word16 ll_adap_flag
+#ifdef RATE_FLAG_TUNING
+                            , Word16 lossless
+#endif
+#endif
+#ifdef LL_INCL_HPVC
+                          , HpvcEncCfg *hpvcEncCfgPtr
+                          , Word32* L_bits_tcxQ9
+#endif
+                            )
 {
-
     Word32  a1, b1, a1_i, b1_i;
     Word16  t, lev1;
     Word16  lastnz, lastnz2;
     Word16  rateFlag;
     Word32  nbits32, nbits232, target32;
+#ifdef LL_INCL_HPVC
+    Word32  nbits32_prev = 0;  /* used for TCX bit-rate export when HPVC active */
+    Word16  start_phase_delta = 2;
+#endif
     Word16  nt_half;
     Word32  c, ab_max, msb, a1_msb, b1_msb;
     Word16  levmax;
     Word16  s;
-    Word16  totBits, nbits_lsb;
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    Word32  totBits;
+#else
+    Word16  totBits;
+#endif
+    Word16 nbits_lsb;
     Counter k, lev;
     Word16  maxlevs;
 #    ifndef FUNCTION_quantizeSpec_func1
@@ -54,11 +78,26 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word32 gain, Word16 gain_e, 
 #    endif
 
     assert(target >= 0);
-    
+
     /* Quantization */
     gain = invFixp(gain, &gain_e);
 
     maxlevs = 21;
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    if (ll_adap_flag)
+    {
+        goto skip_quantization;
+    }
+#endif
+
+#ifdef LL_INCL_HPVC
+    if (L_bits_tcxQ9 != NULL)
+    {
+        L_bits_tcxQ9[0] = -1;
+    }
+#endif
+    
     IF (hrmode)
     {
         s = sub(add(x_e, gain_e), 23);
@@ -126,12 +165,31 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word32 gain, Word16 gain_e, 
             }
 #    endif /* FUNCTION_quantizeSpec_func1 */
     }
+    
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+if (ll_adap_flag)
+{
+    skip_quantization:
+    basop_memcpy(xq, x, sizeof(*x) * nt);
+}
+#endif
+    
     /* Rate flag */
     rateFlag = 0;
     move16();
+#ifdef CR14_A_ADD_LOSSLESS_MODE 
+    if ( fs_idx != 5 || ( fs_idx==5 && ll_adap_flag ) 
+        || (!ll_adap_flag && fs_idx >= 5 && lossless) 
+    )
+#else
     if (fs_idx != 5)
+#endif
     {
+#ifdef CR14_A_ADD_LOSSLESS_MODE 
+        if ( (L_sub( totalBits, (Word32)add( 160, i_mult( fs_idx, 160 ) ) ) > 0) || ll_adap_flag )
+#else
         if (sub(totalBits, add(160, i_mult(fs_idx, 160))) > 0)
+#endif
         {
             rateFlag = 2 << NBITS_CONTEXT;
             move16();
@@ -157,7 +215,11 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word32 gain, Word16 gain_e, 
 
     if (fs_idx != 5)
     {
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        IF( mode == 0 && L_sub( totalBits, (Word32)add( 480, i_mult( fs_idx, 160 ) ) ) >= 0 )
+#else
         IF (mode == 0 && sub(totalBits, add(480, i_mult(fs_idx, 160))) >= 0)
+#endif
         {
             mode = 1;
             move16();
@@ -177,6 +239,16 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word32 gain, Word16 gain_e, 
 
     IF (mode < 0)
     {
+#ifdef LL_INCL_HPVC
+        if (hpvcEncCfgPtr != NULL && hpvcEncCfgPtr->active_flag != 0 && L_bits_tcxQ9 != NULL)
+        {
+            Word16 start_phase_adjust;
+            start_phase_delta = 2;
+            hpvcEncCfgPtr->startCoef = hpvc_adjust_startcoefs(hpvcEncCfgPtr->startCoefListNom, lastnz, LL_HPVC_N_SIGNAL, N_SIGNAL_LOG, hpvcEncCfgPtr->startCoefList);
+            start_phase_adjust = sub(hpvcEncCfgPtr->startCoef, shl_pos(shr_pos(hpvcEncCfgPtr->startCoef, N_SIGNAL_LOG), N_SIGNAL_LOG));
+            start_phase_delta = sub(((2 * LL_HPVC_N_SIGNAL) + 2), start_phase_adjust);
+        }
+#endif
         /* Main Loop through the 2-tuples */
         FOR (k = 0; k < lastnz; k += 2)
         {
@@ -272,6 +344,42 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word32 gain, Word16 gain_e, 
                 }
                 c = add(shl_pos(s_and(c, 0xf), 4), add(12, s_min(levmax, 3)));
             }
+
+#ifdef LL_INCL_HPVC
+            /* Export per-block TCX bit-rate for HPVC vs TCX decision. */
+            IF (hpvcEncCfgPtr != NULL && hpvcEncCfgPtr->active_flag != 0 && L_bits_tcxQ9 != NULL)
+            {
+                Word16 mixed_start_coef = hpvcEncCfgPtr->startCoef;
+                Word16 k_tmp, mixed_block_idx;
+                Word16 k_plus_delta;
+                Word16 k_tmp_diff;
+
+                /* k_plus_delta provides positive integer for phase test. */
+                k_plus_delta = add(k, start_phase_delta);
+                k_tmp_diff = shl_pos(shr_pos(k_plus_delta, N_SIGNAL_LOG), N_SIGNAL_LOG);
+                k_tmp = sub(k_plus_delta, k_tmp_diff);
+
+                /* mixed_block_idx >= 0 only when at end of block AND k >= mixed_start_coef. */
+                mixed_block_idx = shr_pos(sub(k, mixed_start_coef), N_SIGNAL_LOG);
+                if (k_tmp != 0)
+                {
+                    mixed_block_idx = -32768;
+                    move16();
+                }
+
+                IF (mixed_block_idx >= 0)
+                {
+                    L_bits_tcxQ9[mixed_block_idx] = L_shr_pos(L_sub(nbits32, nbits32_prev), 2);
+                    move32();
+                }
+
+                if (k_tmp == 0)
+                {
+                    /* Store running total at every in-phase block boundary. */
+                    nbits32_prev = L_add(nbits32, 0);
+                }
+            }
+#endif
 
             a1_i += 2;
             b1_i += 2;
@@ -578,7 +686,11 @@ void processQuantizeSpec_fx(Word32 x[], Word16 x_e, Word32 gain, Word16 gain_e, 
 
     /* Number of consumed bits */
     nbits32 = L_add(nbits32, target32);
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    totBits = L_add(  L_shr_pos_pos( L_sub( nbits32, 1 ), SYM_BITS_Q  ), 1 );
+#else
     totBits = add(extract_l(L_shr_pos_pos(L_sub(nbits32, 1), SYM_BITS_Q)), 1);
+#endif
     IF (mode > 0)
     {
         totBits = add(totBits, nbits_lsb);

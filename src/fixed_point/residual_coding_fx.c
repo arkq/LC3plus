@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -14,7 +14,12 @@
 void processResidualCoding_fx(Word16 x_e, Word32 x[], 
                               Word32 xq[], Word32 gain,
                               Word16 gain_e, Word16 L_spec,
-                              Word16 targetBits, Word16 nBits, UWord8 *resBits, Word16 *numResBits
+                              Word16 targetBits, Word16 nBits, UWord8 *resBits, 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                              Word32 *numResBits                 
+#else
+                              Word16 *numResBits
+#endif
                               , Word16 hrmode
 #if defined (CR9_C_ADD_1p25MS)
                               , LC3PLUS_FrameDuration frame_dms                      
@@ -47,11 +52,12 @@ void processResidualCoding_fx(Word16 x_e, Word32 x[],
 
     n = 0;
     move16();
-    
     IF (hrmode)
     {
         m = add(sub(targetBits, nBits), 14);
+#ifndef CR14_A_ADD_LOSSLESS_MODE
         assert(m <= (MAX_RESBITS_LEN << RESBITS_PACK_SHIFT));
+#endif
     }
     ELSE
     {

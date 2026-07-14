@@ -167,7 +167,7 @@ static char* objectName[MAXCOUNTERS+1];
 static Word16 fwc_corr[MAXCOUNTERS+1];
 static long int nbTimeObjectIsCalled[MAXCOUNTERS+1];
 
-#define NbFuncMax  (5000L*20L)
+#define NbFuncMax  (50000L*20L)
 
 /**
  funcid: current function call for each counter

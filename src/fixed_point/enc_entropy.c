@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -14,15 +14,33 @@ static Word32 ac_enc_mux_st2VQ_cws(                    /*  o:  max 25 bits total
                                    const Word32 L_szB, /*  i:  max 4 bits  */
                                    const Word32 L_cwA, const Word32 L_cwB);
 
-void processEncoderEntropy(UWord8 *bytes, Word16 *bp_side, Word16 *mask_side, Word16 nbbits, Word16 targetBytes,
+void processEncoderEntropy(UWord8 *bytes, Word16 *bp_side, Word16 *mask_side,
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                           Word32 nbbits, Word32 targetBytes,
+#else
+                           Word16 nbbits, Word16 targetBytes,
+#endif
                            Word16 L_spec, Word16 BW_cutoff_bits, Word16 tns_numfilters,
                            Word16 lsbMode, Word16 lastnz, Word16 *tns_order, Word16 fac_ns_idx, Word16 gg_idx,
                            Word16 BW_cutoff_idx, Word16 *ltpf_idx, Word32 *L_scf_idx, Word16 bfi_ext, Word16 fs_idx
 #ifdef CR9_C_ADD_1p25MS
                            , LC3PLUS_FrameDuration frame_dms, Word16* Tx_ltpf
 #endif
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                            , Word16 lossless_val, Word16 ll_adap_flag, Word16 b_relative, Word16 ll_tns, Word16 off_idx, Word16 ll_offQuant, Word16 ll_tns_remove, Word16 tns_lsb_num_remove
+                            , UWord8* deltaCodedBits
+                            , int wavFormat
+                            , Word16 fallback
+                            , UWord16 scaleSignal
+#ifdef LL_INCL_HPVC
+                            , HpvcEncCfg* hpvcEncCfgPtr
+#endif
+#endif
                            )
 {
+#ifdef LL_INCL_HPVC
+    UNUSED(hpvcEncCfgPtr);
+#endif
     Word16  tmp;
     Word32  L_tmp;
     Word16  submode_LSB, submode_MSB, gain_MSBs;
@@ -49,16 +67,62 @@ void processEncoderEntropy(UWord8 *bytes, Word16 *bp_side, Word16 *mask_side, Wo
     UNUSED(L_gain_LSB); UNUSED(gain_MSBs); UNUSED(submode_MSB); UNUSED(submode_LSB); UNUSED(L_tmp);
 
     /* Init */
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    *bp_side   = L_shr_pos(L_sub(nbbits, 1), 3);
+    *mask_side = L_shl(1, L_sub(8, L_sub(nbbits, L_shl_pos(*bp_side, 3))));
+#else
     *bp_side   = shr_pos(sub(nbbits, 1), 3);
     *mask_side = shl(1, sub(8, sub(nbbits, shl_pos(*bp_side, 3))));
+#endif
+
     ptr        = bytes;
 
     basop_memset(bytes, 0, targetBytes * sizeof(*bytes));
-
-    /* Cutoff-detection */
-    IF (BW_cutoff_bits > 0)
+    
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    IF ( lossless_val )
     {
-        write_indice_backward(ptr, bp_side, mask_side, BW_cutoff_idx, BW_cutoff_bits);
+        write_bit_backward( ptr, bp_side, mask_side, ll_adap_flag );
+        IF( ll_adap_flag )
+        {
+            write_bit_backward( ptr, bp_side, mask_side, fallback);
+
+            IF( fallback )
+            {
+                write_indice_backward(ptr, bp_side, mask_side, 0, 6 );
+                #ifdef CR14_A_ADD_LOSSLESS_MODE
+                write_indice_backward( ptr, bp_side, mask_side, scaleSignal, 4 );
+                #endif 
+                return;
+            }
+
+            write_bit_backward( ptr, bp_side, mask_side, b_relative );
+        }
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+        write_indice_backward( ptr, bp_side, mask_side, scaleSignal, 4 );
+#endif
+
+        IF( fs_idx == 6 && wavFormat == 24 && ll_adap_flag )
+        {
+            FOR ( Word16 n = 0; n < HIGH_BANDS_NUMBER; n++ )
+            {
+                write_bit_backward( ptr, bp_side, mask_side, deltaCodedBits[n] );
+            }
+        }
+
+    }
+#endif
+
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    IF (lossless_val == 0 || ll_adap_flag == 0 || ll_tns == 1)
+#endif
+    /* Cutoff-detection */
+    {
+      IF (BW_cutoff_bits > 0)
+      {
+          write_indice_backward(ptr, bp_side, mask_side, BW_cutoff_idx, BW_cutoff_bits);
+      }
     }
 
     /* Encode last non-zero tuple */
@@ -78,12 +142,46 @@ void processEncoderEntropy(UWord8 *bytes, Word16 *bp_side, Word16 *mask_side, Wo
 
     /* Encode global-gain */
     write_indice_backward(ptr, bp_side, mask_side, gg_idx, 8);
+    
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    IF (ll_adap_flag && ll_offQuant)
+    {
+        write_indice_backward( ptr, bp_side, mask_side, off_idx, 3 );
+    }
+#endif
 
     /* TNS on/off flag */
-    FOR (n = 0; n < tns_numfilters; n++)
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    IF (lossless_val == 0 || ll_tns == 1)
+#endif
     {
-        write_bit_backward(ptr, bp_side, mask_side, s_min(tns_order[n], 1));
+      FOR (n = 0; n < tns_numfilters; n++)
+      {
+          write_bit_backward(ptr, bp_side, mask_side, s_min(tns_order[n], 1));
+      }
     }
+    
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    IF (ll_tns_remove && ((tns_order[0] + tns_order[1]) > 0))
+    {
+        assert(tns_lsb_num_remove >= 0);
+        
+        write_bit_backward( ptr, bp_side, mask_side, tns_lsb_num_remove > 0 );
+        
+        IF (tns_lsb_num_remove > 0)
+        {
+            IF (wavFormat == 16)
+            {
+                assert(tns_lsb_num_remove <= 4);
+                write_indice_backward(ptr, bp_side, mask_side, tns_lsb_num_remove-1, 2 );
+             } ELSE IF (wavFormat == 24)
+            {
+                assert(tns_lsb_num_remove <= 8);
+                write_indice_backward(ptr, bp_side, mask_side, tns_lsb_num_remove-1, 3 );
+            }
+        }
+    }
+#endif
 
     /* LTPF on/off*/
 #ifdef CR9_C_ADD_1p25MS
@@ -173,16 +271,20 @@ void processEncoderEntropy(UWord8 *bytes, Word16 *bp_side, Word16 *mask_side, Wo
           write_indice_backward(ptr, bp_side, mask_side, ltpf_idx[2], 9);
     }
 
-
     /* Encoder noise-fac */
-    write_indice_backward(ptr, bp_side, mask_side, fac_ns_idx, 3);
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    IF (lossless_val == 0 || ll_adap_flag == 0)
+#endif
+    {
+        write_indice_backward(ptr, bp_side, mask_side, fac_ns_idx, 3);
+    }
 
 #ifdef DYNMEM_COUNT
     Dyn_Mem_Out();
 #endif
 }
 
-static __forceinline Word32
+static Word32
 ac_enc_mux_st2VQ_cws(                    /*  o:  max 25 bits total codeword */
                      const Word32 L_szA, /*  i:  max 22 bits */
                      const Word32 L_szB, /*  i:  max 4 bits  0..13  */
@@ -528,9 +630,3 @@ void writeSNSData_fx(UWord8 *bytes, Word16 *bp_side, Word16 *mask_side, LC3PLUS_
     Dyn_Mem_Deluxe_Out();
 }
 #endif /* CR9_C_ADD_1p25MS_LRSNS  */
-
-
-
-#ifdef __cplusplus
-} /* NAMESPACE_VERSION */
-#endif

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -11,7 +11,12 @@
 
 #ifdef ENABLE_HR_MODE /* HRMODE enables packing of residual bits */
 
-void processResidualDecoding_fx(Word32 x[], Word16 x_e, Word16 L_spec, UWord8 prm[], Word16 resQBits
+void processResidualDecoding_fx(Word32 x[], Word16 x_e, Word16 L_spec, UWord8 prm[], 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                                Word32 resQBits                   
+#else
+                                Word16 resQBits
+#endif
 #ifdef ENABLE_HR_MODE
                                 , Word16 hrmode
 #endif
@@ -20,10 +25,14 @@ void processResidualDecoding_fx(Word32 x[], Word16 x_e, Word16 L_spec, UWord8 pr
 #endif
 )
 {
-
     Counter i;
     Word32  fac_m, fac_p;
-    Word16  s, bits;
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+    Word32 bits;
+#else
+    Word16 bits;
+#endif
+    Word16  s;
     Word32  tmp;
     Counter idx;
     Word16 N_nz = 0;
@@ -85,7 +94,11 @@ void processResidualDecoding_fx(Word32 x[], Word16 x_e, Word16 L_spec, UWord8 pr
         }
         FOR (iter = 0; iter < EXT_RES_ITER_MAX; iter++)
         {
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            IF (L_sub(bits, resQBits) >= 0)
+#else
             IF (sub(bits, resQBits) >= 0)
+#endif
             {
                 BREAK;
             }
@@ -93,12 +106,20 @@ void processResidualDecoding_fx(Word32 x[], Word16 x_e, Word16 L_spec, UWord8 pr
             {
                 idx = nz_idx[i]; move16();
 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                IF (L_sub(bits, resQBits) >= 0)
+#else
                 IF (sub(bits, resQBits) >= 0)
+#endif
                 {
                     BREAK;
                 }
 
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                IF( !( s_and( prm[L_shr( bits, RESBITS_PACK_SHIFT )], shl( 1, s_and( bits, RESBITS_PACK_MASK ) ) ) ) )
+#else
                 IF (! (s_and(prm[shr(bits, RESBITS_PACK_SHIFT)], shl(1, s_and(bits, RESBITS_PACK_MASK)))))
+#endif
                 {
                     tmp = L_sub_sat(x[idx], fac_hr);
                 }
@@ -108,7 +129,11 @@ void processResidualDecoding_fx(Word32 x[], Word16 x_e, Word16 L_spec, UWord8 pr
                 }
                 x[idx] = tmp;
                 move32();
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                bits = L_add(bits, 1);
+#else
                 bits = add(bits, 1);
+#endif
             }
             fac_hr = L_shr(fac_hr, 1);
         }
@@ -121,14 +146,22 @@ void processResidualDecoding_fx(Word32 x[], Word16 x_e, Word16 L_spec, UWord8 pr
     {
         FOR (i = 0; i < L_spec; i++)
         {
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+            IF (L_sub(bits, resQBits) >= 0)
+#else
             IF (sub(bits, resQBits) >= 0)
+#endif
             {
                 BREAK;
             }
 
             IF (x[i] != 0)
             {
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                IF( !( s_and( prm[L_shr( bits, RESBITS_PACK_SHIFT )], shl( 1, s_and( bits, RESBITS_PACK_MASK ) ) ) ) )
+#else
                 IF (! (s_and(prm[shr(bits, RESBITS_PACK_SHIFT)], shl(1, s_and(bits, RESBITS_PACK_MASK)))))
+#endif
                 {
                     if (x[i] > 0)
                         tmp = L_sub(x[i], fac_m);
@@ -144,7 +177,11 @@ void processResidualDecoding_fx(Word32 x[], Word16 x_e, Word16 L_spec, UWord8 pr
                 }
                 x[i] = tmp;
                 move32();
+#ifdef CR14_A_ADD_LOSSLESS_MODE
+                bits = L_add(bits, 1);
+#else
                 bits = add(bits, 1);
+#endif
             }
         }
     #if defined (CR9_C_ADD_1p25MS)

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -16,7 +16,7 @@ void processSnsInterpolateScf_fx(
                                  Word16 *scf_q, Word16 mdct_scf[],
 #endif
                                  Word16 mdct_scf_exp[], Word16 inv_scf,
-                                 Word16 n_bands, Word8 *scratchBuffer)
+                                 Word16 n_bands, lc3_scratch_t scratch)
 {
 #ifdef ENABLE_HR_MODE
     Dyn_Mem_Deluxe_In(
@@ -35,11 +35,11 @@ void processSnsInterpolateScf_fx(
 #endif
 
 #ifdef ENABLE_HR_MODE
-    scf_int = (Word32 *)scratchAlign(scratchBuffer, 0);              /* Size = 2 * MAX_BANDS_NUMBER = 128 bytes */
-    scf_tmp = (Word32 *)scratchAlign(scf_int, 4 * MAX_BANDS_NUMBER); /* 2 * MAX_BANDS_NUMBER = 128 bytes */
+    scf_int = (Word32*) lc3_scratch_push( scratch, sizeof( *scf_int ) * MAX_BANDS_NUMBER );
+    scf_tmp = (Word32*) lc3_scratch_push( scratch, sizeof( *scf_tmp ) * MAX_BANDS_NUMBER );
 #else
-    scf_int = (Word16 *)scratchAlign(scratchBuffer, 0);              /* Size = 2 * MAX_BANDS_NUMBER = 128 bytes */
-    scf_tmp = (Word16 *)scratchAlign(scf_int, 2 * MAX_BANDS_NUMBER); /* 2 * MAX_BANDS_NUMBER = 128 bytes */
+    scf_int = (Word16*) lc3_scratch_push( scratch, sizeof( *scf_int ) * MAX_BANDS_NUMBER );
+    scf_tmp = (Word16*) lc3_scratch_push( scratch, sizeof( *scf_tmp ) * MAX_BANDS_NUMBER );
 #endif
 
     /* Interpolation */
@@ -148,6 +148,14 @@ void processSnsInterpolateScf_fx(
         mdct_scf[i] = BASOP_Util_InvLog2_16(scf_int[i], &mdct_scf_exp[i]);
 #endif
     }
+  
+#ifdef ENABLE_HR_MODE
+    scf_tmp = (Word32*) lc3_scratch_pop( scratch, scf_tmp );
+    scf_int = (Word32*) lc3_scratch_pop( scratch, scf_int );
+#else
+    scf_tmp = (Word16*) lc3_scratch_pop( scratch, scf_tmp );
+    scf_int = (Word16*) lc3_scratch_pop( scratch, scf_int );
+#endif
     
     Dyn_Mem_Deluxe_Out();
 }

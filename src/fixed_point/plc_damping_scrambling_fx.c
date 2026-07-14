@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -15,7 +15,11 @@ void processPLCDampingScrambling_main_fx(Word16 bfi, Word16 concealMethod, Word1
                                          Word16 pitch_present_bfi2, Word32 spec[], Word16 *q_fx_exp, Word16 *q_old_d_fx,
                                          Word16 *q_old_fx_exp, Word16 L_spec, Word16 stabFac, LC3PLUS_FrameDuration frame_dms,
                                          Word16 *cum_fading_slow, Word16 *cum_fading_fast, Word16 spec_inv_idx
-                                         , UWord8 plc_fadeout_type                  
+                                         , UWord8 plc_fadeout_type
+                                        #ifdef CR14_A_ADD_LOSSLESS_MODE
+                                        , Word16 ll_adap_flag
+                                        , int wavformat
+                                        #endif
                                          )
 {
     Dyn_Mem_Deluxe_In(
@@ -56,7 +60,12 @@ void processPLCDampingScrambling_main_fx(Word16 bfi, Word16 concealMethod, Word1
                                            , plc_fadeout_type                  
                                           );
 
-            processPLCupdateSpec_fx(q_old_d_fx, q_old_fx_exp, spec, q_fx_exp, L_spec);
+            processPLCupdateSpec_fx(q_old_d_fx, q_old_fx_exp, spec, q_fx_exp, L_spec
+                #ifdef CR14_A_ADD_LOSSLESS_MODE
+                , ll_adap_flag
+                , wavformat
+                #endif 
+            );
         }
     }
     Dyn_Mem_Deluxe_Out();
@@ -275,13 +284,22 @@ void processPLCDampingScrambling_fx(Word32 spec[], Word16 L_spec, Word16 nbLostF
                   case LC3PLUS_FRAME_DURATION_UNDEFINED: assert(0);
               }
               
+#ifdef CR14_A_ADD_1p25MS_HR
+                lossDuration_dms = i_mult(nbLostFramesInRow, frame_dms_val);
+                IF (sub(lossDuration_dms, PLC_FADEOUT_IN_MS*100) > 0)
+#else
                 lossDuration_dms = i_mult(nbLostFramesInRow, frame_dms_val/10);
                 IF (sub(lossDuration_dms, PLC_FADEOUT_IN_MS*10) > 0)
+#endif
                 {
                     *cum_fflcAtten = 0;  move16();
                     fflcAtten = 0;  move16();
                 }
+#ifdef CR14_A_ADD_1p25MS_HR
+                ELSE IF (sub(lossDuration_dms, 2000) > 0)
+#else
                 ELSE IF (sub(lossDuration_dms, 200) > 0)
+#endif
                 {
                     SWITCH (frame_dms)
                     {

@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -13,7 +13,7 @@
 #include "functions.h"
 
 
-void processReorderBitstream_fx(UWord8 *bytes, Word16 n_pccw, Word16 n_pc, Word16 b_left, Word8 *scratchBuffer)
+void processReorderBitstream_fx(UWord8 *bytes, Word16 n_pccw, Word16 n_pc, Word16 b_left, lc3_scratch_t scratch)
 {
     Word16        block_bytes;
     UWord8 *      bytes_tmp;
@@ -27,7 +27,16 @@ void processReorderBitstream_fx(UWord8 *bytes, Word16 n_pccw, Word16 n_pc, Word1
     Dyn_Mem_In("processReorderBitstream_fx", sizeof(struct _dynmem));
 #endif
 
-    bytes_tmp = (UWord8 *)scratchAlign(scratchBuffer, 0); /* Size = LC3PLUS_MAX_BYTES */
+    bytes_tmp = (UWord8*) lc3_scratch_push( scratch, sizeof( *bytes_tmp ) * MAX_LEN );
+
+    if ( scratch->max_scratch_calculation_only )
+    {
+        bytes_tmp = (UWord8*) lc3_scratch_pop( scratch, bytes_tmp );
+#ifdef DYNMEM_COUNT
+        Dyn_Mem_Out();
+#endif
+        return;
+    }
 
     if (n_pccw == 0)
     {
@@ -47,6 +56,8 @@ void processReorderBitstream_fx(UWord8 *bytes, Word16 n_pccw, Word16 n_pc, Word1
     basop_memmove(&bytes_tmp[block_bytes], &bytes[0], b_left * sizeof(UWord8));
 
     basop_memmove(&bytes[0], &bytes_tmp[0], add(block_bytes, b_left) * sizeof(UWord8));
+  
+    bytes_tmp = (UWord8*) lc3_scratch_pop( scratch, bytes_tmp );
 
 #ifdef DYNMEM_COUNT
     Dyn_Mem_Out();

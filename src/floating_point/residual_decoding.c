@@ -1,5 +1,5 @@
 /******************************************************************************
-*                        ETSI TS 103 634 V1.6.1                               *
+*                        ETSI TS 103 634 V1.7.1                               *
 *              Low Complexity Communication Codec Plus (LC3plus)              *
 *                                                                             *
 * Copyright licence is solely granted through ETSI Intellectual Property      *
@@ -22,6 +22,13 @@ void processResidualDecoding_fl(LC3_INT* bitsRead, LC3_FLOAT x[], LC3_INT L_spec
     LC3_INT N_nz = 0, idx = 0;
 
     LC3_INT iter = 0, iter_max = 1;
+    
+#ifdef ENABLE_12p5_DMS_MODE
+    if (frame_dms == LC3PLUS_FRAME_DURATION_1p25MS) 
+    {
+        iter_max = 3;
+    }
+#endif
 
     if (hrmode)
     {
@@ -33,13 +40,6 @@ void processResidualDecoding_fl(LC3_INT* bitsRead, LC3_FLOAT x[], LC3_INT L_spec
         offset1 = 0.1875;
         offset2 = 0.3125;
     }
-    
-#ifdef ENABLE_12p5_DMS_MODE
-    if (frame_dms == LC3PLUS_FRAME_DURATION_1p25MS) 
-    {
-        iter_max = 3;
-    }
-#endif
 
         /* enumerat non-zero coefficients */
         for (k = 0; k < L_spec; k ++)
